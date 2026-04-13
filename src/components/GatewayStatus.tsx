@@ -1,96 +1,79 @@
 import { useState } from 'react';
-import { Wifi, X, Signal } from 'lucide-react';
-import { gateways } from '@/data/mockData';
+import { Cable, Signal, X } from 'lucide-react';
+import { useAppState } from '@/store/appState';
 import { cn } from '@/lib/utils';
 
 export function GatewayStatus() {
-    const [open, setOpen] = useState(false);
-    const onlineCount = gateways.filter(g => g.status === 'online').length;
-    const total = gateways.length;
+  const [open, setOpen] = useState(false);
+  const { state } = useAppState();
+  const active = state.posConnections.filter((connection) => connection.lastStatus === 'success').length;
+  const total = state.posConnections.length;
 
-    return (
-        <>
-            {/* Floating Indicator */}
-            <button
-                onClick={() => setOpen(true)}
-                className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full glass-card cursor-pointer hover:scale-105 transition-transform"
-                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}
-            >
-                <span className="relative flex h-2.5 w-2.5">
-                    <span className="pulse-dot absolute inline-flex h-full w-full rounded-full bg-emerald-500" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                </span>
-                <span className="text-sm font-medium">{onlineCount}/{total} gateways activos</span>
-            </button>
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 shadow-lg"
+      >
+        <span className={cn('h-2.5 w-2.5 rounded-full', active > 0 ? 'bg-emerald-500 pulse-dot' : 'bg-slate-400')} />
+        <span className="text-sm font-medium">{active}/{total} conectores listos</span>
+      </button>
 
-            {/* Modal */}
-            {open && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center overlay-backdrop" onClick={() => setOpen(false)}>
-                    <div
-                        className="glass-card w-full max-w-lg mx-4 scale-in"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-5 border-b border-[var(--border-color)]">
-                            <div className="flex items-center gap-2">
-                                <Wifi className="w-5 h-5 text-[#3B82F6]" />
-                                <h2 className="text-lg font-semibold">Estado de Gateways</h2>
-                            </div>
-                            <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-[var(--hover-bg)] transition-colors cursor-pointer">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-5">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="text-xs uppercase text-[var(--sidebar-fg)] border-b border-[var(--border-color)]">
-                                        <th className="text-left py-2 font-medium">Locatario</th>
-                                        <th className="text-left py-2 font-medium">Local</th>
-                                        <th className="text-center py-2 font-medium">Estado</th>
-                                        <th className="text-center py-2 font-medium">Señal</th>
-                                        <th className="text-right py-2 font-medium">Última Sync</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {gateways.map(gw => (
-                                        <tr key={gw.local} className="table-row-hover border-b border-[var(--border-color)] last:border-0">
-                                            <td className="py-3 font-medium text-sm">{gw.tenantName}</td>
-                                            <td className="py-3 text-sm text-[var(--sidebar-fg)]">{gw.local}</td>
-                                            <td className="py-3 text-center">
-                                                <span className={cn(
-                                                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                                                    gw.status === 'online' && 'badge-success',
-                                                    gw.status === 'warning' && 'badge-warning',
-                                                    gw.status === 'offline' && 'badge-danger',
-                                                )}>
-                                                    <span className={cn(
-                                                        'w-1.5 h-1.5 rounded-full',
-                                                        gw.status === 'online' && 'bg-emerald-500',
-                                                        gw.status === 'warning' && 'bg-amber-500',
-                                                        gw.status === 'offline' && 'bg-red-500',
-                                                    )} />
-                                                    {gw.status}
-                                                </span>
-                                            </td>
-                                            <td className="py-3 text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Signal className={cn(
-                                                        'w-3.5 h-3.5',
-                                                        gw.signalStrength > 80 ? 'text-emerald-500' : gw.signalStrength > 50 ? 'text-amber-500' : 'text-red-500'
-                                                    )} />
-                                                    <span className="text-xs">{gw.signalStrength}%</span>
-                                                </div>
-                                            </td>
-                                            <td className="py-3 text-right text-xs text-[var(--sidebar-fg)]">
-                                                {new Date(gw.lastSync).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
-    );
+      {open ? (
+        <div className="overlay-backdrop fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={() => setOpen(false)}>
+          <div className="glass-card w-full max-w-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] p-5">
+              <div className="flex items-center gap-2">
+                <Cable className="h-5 w-5 text-blue-600" />
+                <h2 className="text-lg font-semibold">Estado de conectores</h2>
+              </div>
+              <button onClick={() => setOpen(false)} className="rounded-lg p-1 transition-colors hover:bg-[var(--hover-bg)]">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              {state.posConnections.length === 0 ? (
+                <p className="text-sm text-[var(--sidebar-fg)]">Aún no hay conectores POS configurados.</p>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[var(--border-color)] text-xs uppercase text-[var(--sidebar-fg)]">
+                      <th className="py-2 text-left font-medium">Conector</th>
+                      <th className="py-2 text-left font-medium">Formato</th>
+                      <th className="py-2 text-left font-medium">Estado</th>
+                      <th className="py-2 text-right font-medium">Última sync</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.posConnections.map((connection) => (
+                      <tr key={connection.id} className="border-b border-[var(--border-color)] last:border-0">
+                        <td className="py-3 text-sm font-semibold">{connection.name}</td>
+                        <td className="py-3 text-sm text-[var(--sidebar-fg)]">{connection.dataFormat.toUpperCase()}</td>
+                        <td className="py-3">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                              connection.lastStatus === 'success' && 'badge-success',
+                              connection.lastStatus === 'error' && 'badge-danger',
+                              (!connection.lastStatus || connection.lastStatus === 'idle') && 'badge-info',
+                            )}
+                          >
+                            <Signal className="h-3.5 w-3.5" />
+                            {connection.lastStatus ?? 'idle'}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right text-xs text-[var(--sidebar-fg)]">
+                          {connection.lastSyncAt ? new Date(connection.lastSyncAt).toLocaleString('es-CL') : 'Sin sync'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
 }

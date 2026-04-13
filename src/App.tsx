@@ -1,41 +1,85 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider } from '@/lib/theme';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { HashRouter, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { AdminDashboard } from '@/pages/admin/Dashboard';
-import { Locatarios } from '@/pages/admin/Locatarios';
-import { LocatarioDetail } from '@/pages/admin/LocatarioDetail';
-import { RentasContratos } from '@/pages/admin/RentasContratos';
-import { Alertas } from '@/pages/admin/Alertas';
-import { Configuracion } from '@/pages/admin/Configuracion';
-import { LocatarioDashboard } from '@/pages/locatario/Dashboard';
-import { LocatarioContrato } from '@/pages/locatario/Contrato';
-import { LocatarioVentas } from '@/pages/locatario/Ventas';
+import { ToastProvider } from '@/components/Toast';
+import { ThemeProvider, useTheme } from '@/lib/theme';
+import { AppStateProvider, useAppState } from '@/store/appState';
+import { NotFound } from '@/pages/NotFound';
+import { PortalSelector } from '@/pages/PortalSelector';
+
+const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard').then((module) => ({ default: module.AdminDashboard })));
+const Portafolio = lazy(() => import('@/pages/admin/Portafolio').then((module) => ({ default: module.Portafolio })));
+const Locatarios = lazy(() => import('@/pages/admin/Locatarios').then((module) => ({ default: module.Locatarios })));
+const LocatarioDetail = lazy(() => import('@/pages/admin/LocatarioDetail').then((module) => ({ default: module.LocatarioDetail })));
+const RentasContratos = lazy(() => import('@/pages/admin/RentasContratos').then((module) => ({ default: module.RentasContratos })));
+const CargasDatos = lazy(() => import('@/pages/admin/CargasDatos').then((module) => ({ default: module.CargasDatos })));
+const Planeacion = lazy(() => import('@/pages/admin/Planeacion').then((module) => ({ default: module.Planeacion })));
+const Ecosistema = lazy(() => import('@/pages/admin/Ecosistema').then((module) => ({ default: module.Ecosistema })));
+const Alertas = lazy(() => import('@/pages/admin/Alertas').then((module) => ({ default: module.Alertas })));
+const Configuracion = lazy(() => import('@/pages/admin/Configuracion').then((module) => ({ default: module.Configuracion })));
+const LocatarioDashboard = lazy(() => import('@/pages/locatario/Dashboard').then((module) => ({ default: module.LocatarioDashboard })));
+const LocatarioContrato = lazy(() => import('@/pages/locatario/Contrato').then((module) => ({ default: module.LocatarioContrato })));
+const LocatarioVentas = lazy(() => import('@/pages/locatario/Ventas').then((module) => ({ default: module.LocatarioVentas })));
+
+function withSuspense(element: ReactNode) {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6">
+          <div className="glass-card p-6 text-sm text-[var(--sidebar-fg)]">Cargando módulo…</div>
+        </div>
+      }
+    >
+      {element}
+    </Suspense>
+  );
+}
+
+function ActiveMallThemeSync() {
+  const { state } = useAppState();
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    if (state.mall?.themePreference && state.mall.themePreference !== theme) {
+      setTheme(state.mall.themePreference);
+    }
+  }, [state.mall?.id, state.mall?.themePreference, theme, setTheme]);
+
+  return null;
+}
 
 function App() {
   return (
     <ThemeProvider>
-      <HashRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            {/* Admin routes */}
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/locatarios" element={<Locatarios />} />
-            <Route path="/admin/locatarios/:id" element={<LocatarioDetail />} />
-            <Route path="/admin/rentas" element={<RentasContratos />} />
-            <Route path="/admin/alertas" element={<Alertas />} />
-            <Route path="/admin/configuracion" element={<Configuracion />} />
+      <ToastProvider>
+        <AppStateProvider>
+          <HashRouter>
+            <ActiveMallThemeSync />
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/admin/dashboard" element={withSuspense(<AdminDashboard />)} />
+                <Route path="/admin/malls" element={withSuspense(<Portafolio />)} />
+                <Route path="/admin/locatarios" element={withSuspense(<Locatarios />)} />
+                <Route path="/admin/locatarios/:id" element={withSuspense(<LocatarioDetail />)} />
+                <Route path="/admin/rentas" element={withSuspense(<RentasContratos />)} />
+                <Route path="/admin/cargas" element={withSuspense(<CargasDatos />)} />
+                <Route path="/admin/planeacion" element={withSuspense(<Planeacion />)} />
+                <Route path="/admin/ecosistema" element={withSuspense(<Ecosistema />)} />
+                <Route path="/admin/alertas" element={withSuspense(<Alertas />)} />
+                <Route path="/admin/configuracion" element={withSuspense(<Configuracion />)} />
 
-            {/* Locatario routes */}
-            <Route path="/locatario/dashboard" element={<LocatarioDashboard />} />
-            <Route path="/locatario/contrato" element={<LocatarioContrato />} />
-            <Route path="/locatario/ventas" element={<LocatarioVentas />} />
+                <Route path="/locatario/dashboard" element={withSuspense(<LocatarioDashboard />)} />
+                <Route path="/locatario/contrato" element={withSuspense(<LocatarioContrato />)} />
+                <Route path="/locatario/ventas" element={withSuspense(<LocatarioVentas />)} />
+              </Route>
 
-            {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-          </Route>
-        </Routes>
-      </HashRouter>
+              {/* Standalone Views without Sidebar */}
+              <Route path="/" element={<PortalSelector />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </HashRouter>
+        </AppStateProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

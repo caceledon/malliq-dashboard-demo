@@ -1,118 +1,589 @@
-import { Users, Wifi, Building2, Shield, Database, Globe } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-const configSections = [
-    {
-        title: 'Usuarios y Roles',
-        icon: Users,
-        description: 'Gestión de accesos y permisos del sistema',
-        items: [
-            { name: 'Carlos Méndez', role: 'Administrador', email: 'cmendez@grupopatio.cl', active: true },
-            { name: 'María Fernández', role: 'Analista', email: 'mfernandez@grupopatio.cl', active: true },
-            { name: 'Pedro Soto', role: 'Operador', email: 'psoto@grupopatio.cl', active: true },
-            { name: 'Ana Torres', role: 'Viewer', email: 'atorres@grupopatio.cl', active: false },
-        ],
-    },
-];
-
-const integrations = [
-    { name: 'SAP Business One', status: 'connected', icon: Database, lastSync: '26/03/2026 08:30' },
-    { name: 'Gateway IoT', status: 'connected', icon: Wifi, lastSync: '26/03/2026 08:32' },
-    { name: 'API Facturación', status: 'connected', icon: Globe, lastSync: '26/03/2026 08:00' },
-    { name: 'CRM Salesforce', status: 'disconnected', icon: Shield, lastSync: 'N/A' },
-];
-
-const mallParams = [
-    { label: 'Nombre del Mall', value: 'Patio Outlet Maipú' },
-    { label: 'Superficie Total', value: '4.850 m²' },
-    { label: 'Total Locales', value: '52' },
-    { label: 'Horario', value: '10:00 - 21:00' },
-    { label: 'Región', value: 'Metropolitana' },
-    { label: 'Comuna', value: 'Maipú' },
-];
+import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Download, MapPinned, MoonStar, Plus, SlidersHorizontal, SunMedium, Trash2, Upload, Wifi } from 'lucide-react';
+import { useAppState } from '@/store/appState';
+import { useTheme } from '@/lib/theme';
+import { createId } from '@/lib/domain';
+import { formatPeso } from '@/lib/format';
+import {
+  downloadTextFile,
+  exportContractsCsv,
+  exportPlanningCsv,
+  exportProspectsCsv,
+  exportSalesCsv,
+  exportSuppliersCsv,
+} from '@/lib/exporters';
 
 export function Configuracion() {
-    return (
-        <div className="p-4 md:p-6 space-y-6 fade-in">
-            <div>
-                <h1 className="text-xl md:text-2xl font-bold">Configuración</h1>
-                <p className="text-sm text-[var(--sidebar-fg)] mt-1">
-                    Parámetros del sistema y gestión de integraciones
-                </p>
-            </div>
+  const navigate = useNavigate();
+  const { state, actions, mallSummaries, portfolioStats, activeMallId } = useAppState();
+  const { theme, setTheme } = useTheme();
+  const [mallName, setMallName] = useState(state.mall?.name ?? '');
+  const [city, setCity] = useState(state.mall?.city ?? '');
+  const [region, setRegion] = useState(state.mall?.region ?? '');
+  const [notes, setNotes] = useState(state.mall?.notes ?? '');
+  const [backendUrl, setBackendUrl] = useState(state.mall?.backendUrl ?? 'http://localhost:4000/api');
+  const [syncEnabled, setSyncEnabled] = useState(Boolean(state.mall?.syncEnabled));
+  const [units, setUnits] = useState(state.units);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMessage, setBackupMessage] = useState('');
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Users */}
-                <div className="glass-card p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Users className="w-4 h-4 text-blue-500" />
-                        <h3 className="text-sm font-semibold">Usuarios y Roles</h3>
-                    </div>
-                    <div className="space-y-3">
-                        {configSections[0].items.map(user => (
-                            <div key={user.email} className="flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--hover-bg)] transition-colors">
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
-                                    {user.name.split(' ').map(n => n[0]).join('')}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{user.name}</p>
-                                    <p className="text-xs text-[var(--sidebar-fg)]">{user.email}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-medium badge-info">{user.role}</span>
-                                    <span className={cn(
-                                        'w-2 h-2 rounded-full',
-                                        user.active ? 'bg-emerald-500' : 'bg-gray-400'
-                                    )} />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+  useEffect(() => {
+    setMallName(state.mall?.name ?? '');
+    setCity(state.mall?.city ?? '');
+    setRegion(state.mall?.region ?? '');
+    setNotes(state.mall?.notes ?? '');
+    setBackendUrl(state.mall?.backendUrl ?? 'http://localhost:4000/api');
+    setSyncEnabled(Boolean(state.mall?.syncEnabled));
+    setUnits(state.units);
+    if (state.mall?.themePreference) {
+      setTheme(state.mall.themePreference);
+    }
+  }, [activeMallId, setTheme, state.mall?.backendUrl, state.mall?.city, state.mall?.name, state.mall?.notes, state.mall?.region, state.mall?.syncEnabled, state.mall?.themePreference, state.units]);
 
-                {/* Integrations */}
-                <div className="glass-card p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Wifi className="w-4 h-4 text-emerald-500" />
-                        <h3 className="text-sm font-semibold">Integraciones</h3>
-                    </div>
-                    <div className="space-y-3">
-                        {integrations.map(int => (
-                            <div key={int.name} className="flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--hover-bg)] transition-colors">
-                                <div className="w-9 h-9 rounded-lg bg-[var(--hover-bg)] flex items-center justify-center">
-                                    <int.icon className="w-4 h-4 text-[var(--sidebar-fg)]" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium">{int.name}</p>
-                                    <p className="text-xs text-[var(--sidebar-fg)]">Última sync: {int.lastSync}</p>
-                                </div>
-                                <span className={cn(
-                                    'px-2 py-0.5 rounded-full text-[10px] font-medium',
-                                    int.status === 'connected' ? 'badge-success' : 'badge-danger',
-                                )}>
-                                    {int.status === 'connected' ? 'Conectado' : 'Desconectado'}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
+  const saveMall = () => {
+    actions.updateMallSettings({
+      name: mallName,
+      city,
+      region,
+      notes,
+      themePreference: theme,
+      backendUrl,
+      syncEnabled,
+    });
+    actions.replaceUnits(units);
+    setBackupMessage('Configuración del mall actualizada.');
+  };
 
-            {/* Mall Parameters */}
-            <div className="glass-card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                    <Building2 className="w-4 h-4 text-purple-500" />
-                    <h3 className="text-sm font-semibold">Parámetros del Mall</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {mallParams.map(p => (
-                        <div key={p.label} className="p-3 rounded-lg bg-[var(--hover-bg)]">
-                            <p className="text-xs text-[var(--sidebar-fg)] mb-1">{p.label}</p>
-                            <p className="text-sm font-semibold">{p.value}</p>
-                        </div>
-                    ))}
-                </div>
+  const exportReport = (filename: string, content: string) => {
+    downloadTextFile(filename, content);
+    setBackupMessage(`Reporte ${filename} exportado correctamente.`);
+  };
+
+  const exportBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const archive = await actions.exportBackup();
+      const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = `malliq-${(state.mall?.name ?? 'mall').replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(href);
+      setBackupMessage('Respaldo del mall activo exportado correctamente.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const exportPortfolioBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const archive = await actions.exportPortfolioBackup();
+      const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = `malliq-portafolio-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(href);
+      setBackupMessage('Respaldo del portafolio exportado correctamente.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const importMallBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setBackupBusy(true);
+    try {
+      const raw = await file.text();
+      const archive = JSON.parse(raw);
+      await actions.importBackup(archive);
+      setBackupMessage(`Respaldo del mall activo importado desde ${file.name}.`);
+    } catch (error) {
+      setBackupMessage(`No se pudo importar el respaldo: ${error instanceof Error ? error.message : 'archivo inválido'}`);
+    } finally {
+      setBackupBusy(false);
+      event.target.value = '';
+    }
+  };
+
+  const importPortfolioBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setBackupBusy(true);
+    try {
+      const raw = await file.text();
+      const archive = JSON.parse(raw);
+      await actions.importPortfolioBackup(archive);
+      setBackupMessage(`Portafolio importado desde ${file.name}.`);
+    } catch (error) {
+      setBackupMessage(`No se pudo importar el portafolio: ${error instanceof Error ? error.message : 'archivo inválido'}`);
+    } finally {
+      setBackupBusy(false);
+      event.target.value = '';
+    }
+  };
+
+  const checkServer = async () => {
+    setBackupBusy(true);
+    try {
+      const health = await actions.pingServer(backendUrl);
+      setBackupMessage(
+        health.ok
+          ? `Servidor disponible. Archivo remoto ${health.archiveExists ? 'detectado' : 'aún no creado'}. Revisión ${health.revision}${health.updatedAt ? `, actualizado ${new Date(health.updatedAt).toLocaleString('es-CL')}` : ''}.`
+          : 'El servidor no respondió correctamente.',
+      );
+    } catch (error) {
+      setBackupMessage(`No se pudo contactar el backend: ${error instanceof Error ? error.message : 'error desconocido'}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const pushServer = async () => {
+    setBackupBusy(true);
+    try {
+      await actions.pushToServer(backendUrl);
+      setSyncEnabled(true);
+      setBackupMessage('Estado local enviado al backend.');
+    } catch (error) {
+      setBackupMessage(`No se pudo publicar al backend: ${error instanceof Error ? error.message : 'error desconocido'}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const forcePushServer = async () => {
+    setBackupBusy(true);
+    try {
+      await actions.forcePushToServer(backendUrl);
+      setSyncEnabled(true);
+      setBackupMessage('La versión local reemplazó el estado remoto.');
+    } catch (error) {
+      setBackupMessage(`No se pudo forzar la publicación: ${error instanceof Error ? error.message : 'error desconocido'}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const pullServer = async () => {
+    setBackupBusy(true);
+    try {
+      await actions.pullFromServer(backendUrl);
+      setBackupMessage('Estado remoto cargado desde el backend.');
+    } catch (error) {
+      setBackupMessage(`No se pudo descargar desde el backend: ${error instanceof Error ? error.message : 'error desconocido'}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  return (
+    <div className="page-enter space-y-6 p-4 md:p-6">
+      <div>
+        <h1 className="text-xl font-bold md:text-2xl">Configuración</h1>
+        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
+          Ajustes del mall, estructura física, personalización visual e integraciones configuradas.
+        </p>
+      </div>
+
+      <div className="glass-card p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-blue-600" />
+              <h3 className="text-sm font-semibold">Portafolio operativo</h3>
             </div>
+            <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+              {portfolioStats.mallCount} mall(es) cargados en esta instalación. Cambia el mall activo desde la barra superior o administra el portafolio completo en su módulo dedicado.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/admin/malls')}
+            className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
+          >
+            Administrar portafolio
+          </button>
         </div>
-    );
+        <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Mall activo</p>
+            <p className="mt-2 text-lg font-semibold">{state.mall?.name ?? 'Sin selección'}</p>
+          </div>
+          <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Malls</p>
+            <p className="mt-2 text-lg font-semibold">{portfolioStats.mallCount}</p>
+          </div>
+          <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Locales del portafolio</p>
+            <p className="mt-2 text-lg font-semibold">{portfolioStats.totalUnits}</p>
+          </div>
+          <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Ventas consolidadas</p>
+            <p className="mt-2 text-lg font-semibold">{formatPeso(portfolioStats.monthlySales)}</p>
+          </div>
+        </div>
+        {mallSummaries.length > 1 ? (
+          <p className="mt-4 text-xs text-[var(--sidebar-fg)]">
+            Mall activo actual: {mallSummaries.find((mall) => mall.id === activeMallId)?.name ?? 'Sin selección'}.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+            <h3 className="text-sm font-semibold">Mall y apariencia</h3>
+          </div>
+          <div className="mt-4 space-y-3">
+            <Field label="Nombre del mall">
+              <input value={mallName} onChange={(event) => setMallName(event.target.value)} className="input-field" />
+            </Field>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Ciudad">
+                <input value={city} onChange={(event) => setCity(event.target.value)} className="input-field" />
+              </Field>
+              <Field label="Región">
+                <input value={region} onChange={(event) => setRegion(event.target.value)} className="input-field" />
+              </Field>
+            </div>
+            <Field label="Notas">
+              <textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} className="input-field" />
+            </Field>
+            <div className="rounded-2xl border border-[var(--border-color)] p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Backend compartido</p>
+              <div className="mt-3 space-y-3">
+                <Field label="URL API">
+                  <input value={backendUrl} onChange={(event) => setBackendUrl(event.target.value)} className="input-field" />
+                </Field>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />
+                  Habilitar sincronización multiusuario y documentos remotos
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={checkServer} disabled={backupBusy} className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
+                    Probar backend
+                  </button>
+                  <button onClick={pushServer} disabled={backupBusy} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    Subir estado
+                  </button>
+                  <button onClick={pullServer} disabled={backupBusy} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900">
+                    Bajar estado
+                  </button>
+                  {state.mall?.syncStatus === 'conflict' ? (
+                    <button onClick={forcePushServer} disabled={backupBusy} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                      Forzar subida local
+                    </button>
+                  ) : null}
+                </div>
+                {state.mall?.lastSyncedAt ? (
+                  <p className="text-xs text-[var(--sidebar-fg)]">Última sincronización: {new Date(state.mall.lastSyncedAt).toLocaleString('es-CL')}</p>
+                ) : null}
+                <div className="rounded-2xl bg-[var(--hover-bg)] px-4 py-3 text-sm">
+                  <p className="font-semibold">Estado: {state.mall?.syncStatus ?? 'idle'}</p>
+                  <p className="mt-1 text-[var(--sidebar-fg)]">{state.mall?.syncMessage || 'Sin eventos de sincronización todavía.'}</p>
+                  {typeof state.mall?.serverRevision === 'number' ? (
+                    <p className="mt-1 text-xs text-[var(--sidebar-fg)]">Revisión remota conocida: {state.mall.serverRevision}</p>
+                  ) : null}
+                  {syncEnabled ? (
+                    <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+                      Auto-sync activo: publica cambios locales tras 1.5 s de inactividad y revisa cambios remotos cada 15 s.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[var(--border-color)] p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Tema</p>
+              <button
+                onClick={() => {
+                  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+                  setTheme(nextTheme);
+                  actions.updateMallSettings({ themePreference: nextTheme });
+                }}
+                className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm"
+              >
+                {theme === 'dark' ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
+                {theme === 'dark' ? 'Usar modo claro' : 'Usar modo oscuro'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-2">
+            <Wifi className="h-4 w-4 text-emerald-600" />
+            <h3 className="text-sm font-semibold">Conectores POS y sincronización</h3>
+          </div>
+          <div className="mt-4 space-y-3">
+            {state.posConnections.length === 0 ? (
+              <p className="text-sm text-[var(--sidebar-fg)]">Los conectores se crean desde el módulo de carga de datos.</p>
+            ) : (
+              state.posConnections.map((profile) => (
+                <div key={profile.id} className="rounded-2xl border border-[var(--border-color)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{profile.name}</p>
+                      <p className="text-xs text-[var(--sidebar-fg)]">{profile.endpoint}</p>
+                    </div>
+                    <span
+                      className={
+                        profile.lastStatus === 'success'
+                          ? 'badge-success rounded-full px-2.5 py-1 text-xs font-medium'
+                          : profile.lastStatus === 'error'
+                            ? 'badge-danger rounded-full px-2.5 py-1 text-xs font-medium'
+                            : 'badge-info rounded-full px-2.5 py-1 text-xs font-medium'
+                      }
+                    >
+                      {profile.lastStatus ?? 'idle'}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--sidebar-fg)]">
+                    {profile.lastSyncAt ? `Última sync ${new Date(profile.lastSyncAt).toLocaleString('es-CL')}` : 'Sin sincronización aún'}
+                  </p>
+                  {profile.lastMessage ? <p className="mt-1 text-xs text-[var(--sidebar-fg)]">{profile.lastMessage}</p> : null}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2">
+          <Download className="h-4 w-4 text-indigo-600" />
+          <h3 className="text-sm font-semibold">Respaldo y restauración</h3>
+        </div>
+        <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+          Exporta o restaura el mall activo o todo el portafolio, incluyendo documentos adjuntos guardados en el navegador.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            onClick={exportBackup}
+            disabled={backupBusy}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            Exportar mall activo
+          </button>
+          <button
+            onClick={exportPortfolioBackup}
+            disabled={backupBusy}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            Exportar portafolio
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            <Upload className="h-4 w-4" />
+            Importar mall activo
+            <input type="file" accept=".json" className="hidden" onChange={importMallBackup} disabled={backupBusy} />
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            <Upload className="h-4 w-4" />
+            Importar portafolio
+            <input type="file" accept=".json" className="hidden" onChange={importPortfolioBackup} disabled={backupBusy} />
+          </label>
+        </div>
+        {backupMessage ? (
+          <div className="mt-4 rounded-2xl bg-[var(--hover-bg)] px-4 py-3 text-sm text-[var(--sidebar-fg)]">
+            {backupMessage}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2">
+          <Download className="h-4 w-4 text-emerald-600" />
+          <h3 className="text-sm font-semibold">Centro de reportes</h3>
+        </div>
+        <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+          Exporta CSV operativos para ventas, contratos, planeación, proveedores y prospectos.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button onClick={() => exportReport('malliq-contratos.csv', exportContractsCsv(state))} className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            Exportar contratos
+          </button>
+          <button onClick={() => exportReport('malliq-ventas.csv', exportSalesCsv(state))} className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            Exportar ventas
+          </button>
+          <button onClick={() => exportReport('malliq-planeacion.csv', exportPlanningCsv(state))} className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            Exportar planeación
+          </button>
+          <button onClick={() => exportReport('malliq-proveedores.csv', exportSuppliersCsv(state))} className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            Exportar proveedores
+          </button>
+          <button onClick={() => exportReport('malliq-prospectos.csv', exportProspectsCsv(state))} className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
+            Exportar prospectos
+          </button>
+        </div>
+      </div>
+
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2">
+          <MapPinned className="h-4 w-4 text-amber-600" />
+          <h3 className="text-sm font-semibold">Base física del mall</h3>
+        </div>
+        <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+          Edita manualmente los locales y sus m2. Estos valores controlan el plano, la superficie ocupada y los contratos multi-local.
+        </p>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() =>
+              setUnits((current) => [
+                ...current,
+                {
+                  id: createId('unit'),
+                  code: `L-${100 + current.length + 1}`,
+                  label: `Local ${100 + current.length + 1}`,
+                  areaM2: 0,
+                  level: 'Planta 1',
+                },
+              ])
+            }
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold"
+          >
+            <Plus className="h-4 w-4" />
+            Agregar local
+          </button>
+        </div>
+        <div className="mt-4 overflow-auto rounded-2xl border border-[var(--border-color)]">
+          <table className="w-full min-w-[760px]">
+            <thead className="bg-[var(--hover-bg)]">
+              <tr>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Código</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Etiqueta</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">m2</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Nivel</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Override manual</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Rubro manual</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {units.map((unit, index) => (
+                <tr key={unit.id} className="border-t border-[var(--border-color)]">
+                  <td className="px-3 py-2">
+                    <input
+                      value={unit.code}
+                      onChange={(event) =>
+                        setUnits((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, code: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      className="input-field"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={unit.label}
+                      onChange={(event) =>
+                        setUnits((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, label: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      className="input-field"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      value={unit.areaM2}
+                      onChange={(event) =>
+                        setUnits((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, areaM2: Number(event.target.value) } : item,
+                          ),
+                        )
+                      }
+                      className="input-field"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={unit.level}
+                      onChange={(event) =>
+                        setUnits((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, level: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      className="input-field"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={unit.manualDisplayName ?? ''}
+                      onChange={(event) =>
+                        setUnits((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, manualDisplayName: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      placeholder="Nombre manual opcional"
+                      className="input-field"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={unit.manualCategory ?? ''}
+                      onChange={(event) =>
+                        setUnits((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, manualCategory: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      placeholder="Rubro comercial opcional"
+                      className="input-field"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => setUnits((current) => current.filter((item) => item.id !== unit.id))}
+                      className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Quitar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button onClick={saveMall} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
+            Guardar configuración
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">{label}</span>
+      {children}
+    </label>
+  );
 }

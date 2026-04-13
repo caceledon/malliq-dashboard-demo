@@ -1,113 +1,101 @@
 import { useState } from 'react';
-import { Bell, X, AlertTriangle, AlertCircle, Info } from 'lucide-react';
-import { alerts } from '@/data/mockData';
-import { cn } from '@/lib/utils';
+import { AlertCircle, AlertTriangle, Bell, Info, X } from 'lucide-react';
+import { useAppState } from '@/store/appState';
 
 export function NotificationDrawer() {
-    const [open, setOpen] = useState(false);
-    const unreadCount = alerts.filter(a => !a.read).length;
+  const [open, setOpen] = useState(false);
+  const { insights, state } = useAppState();
+  const systemAlerts =
+    state.mall?.syncStatus === 'conflict'
+      ? [
+          {
+            id: 'sync-conflict',
+            type: 'critical',
+            title: 'Conflicto de sincronización',
+            description:
+              state.mall.syncMessage || 'El backend cambió mientras existían cambios locales pendientes.',
+          },
+        ]
+      : state.mall?.syncStatus === 'offline'
+        ? [
+            {
+              id: 'sync-offline',
+              type: 'warning',
+              title: 'Backend sin conexión',
+              description:
+                state.mall.syncMessage || 'La sincronización remota está caída; los cambios siguen guardándose en este navegador.',
+            },
+          ]
+        : state.mall?.syncStatus === 'syncing'
+          ? [
+              {
+                id: 'sync-running',
+                type: 'info',
+                title: 'Sincronización en curso',
+                description: state.mall.syncMessage || 'Se están publicando o descargando cambios desde el backend.',
+              },
+            ]
+          : [];
+  const alerts = [...systemAlerts, ...insights.alerts].slice(0, 12);
 
-    const getIcon = (type: string) => {
-        switch (type) {
-            case 'critical': return <AlertCircle className="w-4 h-4 text-red-500" />;
-            case 'warning': return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-            default: return <Info className="w-4 h-4 text-blue-500" />;
-        }
-    };
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'critical':
+        return <AlertCircle className="h-4 w-4 text-red-600" />;
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+      default:
+        return <Info className="h-4 w-4 text-blue-600" />;
+    }
+  };
 
-    const getTimeAgo = (timestamp: string) => {
-        const diff = Date.now() - new Date(timestamp).getTime();
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        if (hours < 1) return 'Hace unos minutos';
-        if (hours < 24) return `Hace ${hours}h`;
-        return `Hace ${Math.floor(hours / 24)}d`;
-    };
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="relative rounded-lg p-2 transition-colors hover:bg-[var(--hover-bg)]">
+        <Bell className="h-5 w-5" />
+        {alerts.length > 0 ? (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+            {Math.min(alerts.length, 9)}
+          </span>
+        ) : null}
+      </button>
 
-    return (
-        <>
-            <button
-                onClick={() => setOpen(true)}
-                className="relative p-2 rounded-lg hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-            >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
-                        {unreadCount}
-                    </span>
-                )}
-            </button>
-
-            {/* Drawer overlay */}
-            {open && (
-                <div className="fixed inset-0 z-[100]" onClick={() => setOpen(false)}>
-                    {/* Backdrop */}
-                    <div className="absolute inset-0 overlay-backdrop" />
-
-                    {/* Drawer */}
-                    <div
-                        className="absolute top-0 right-0 h-full w-full max-w-md slide-in-right"
-                        style={{ background: 'var(--card-bg)', borderLeft: '1px solid var(--border-color)' }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-5 border-b border-[var(--border-color)]">
-                            <div className="flex items-center gap-2">
-                                <Bell className="w-5 h-5 text-[#3B82F6]" />
-                                <h2 className="text-lg font-semibold">Notificaciones</h2>
-                                {unreadCount > 0 && (
-                                    <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                                        {unreadCount} nuevas
-                                    </span>
-                                )}
-                            </div>
-                            <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-[var(--hover-bg)] transition-colors cursor-pointer">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="overflow-y-auto" style={{ height: 'calc(100% - 73px)' }}>
-                            {alerts.map(alert => (
-                                <div
-                                    key={alert.id}
-                                    className={cn(
-                                        'p-4 border-b border-[var(--border-color)] transition-colors hover:bg-[var(--hover-bg)]',
-                                        !alert.read && 'bg-[var(--hover-bg)]'
-                                    )}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="mt-0.5">{getIcon(alert.type)}</div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <p className={cn('text-sm font-semibold', !alert.read && 'text-[var(--fg)]')}>
-                                                    {alert.title}
-                                                </p>
-                                                {!alert.read && (
-                                                    <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-                                                )}
-                                            </div>
-                                            <p className="text-xs text-[var(--sidebar-fg)] mb-2 leading-relaxed">
-                                                {alert.description}
-                                            </p>
-                                            <div className="flex items-center gap-2">
-                                                <span className={cn(
-                                                    'px-1.5 py-0.5 rounded text-[10px] font-medium uppercase',
-                                                    alert.type === 'critical' && 'badge-danger',
-                                                    alert.type === 'warning' && 'badge-warning',
-                                                    alert.type === 'info' && 'badge-info',
-                                                )}>
-                                                    {alert.type === 'critical' ? 'Crítico' : alert.type === 'warning' ? 'Advertencia' : 'Info'}
-                                                </span>
-                                                <span className="text-[10px] text-[var(--sidebar-fg)]">
-                                                    {getTimeAgo(alert.timestamp)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+      {open ? (
+        <div className="fixed inset-0 z-[100]" onClick={() => setOpen(false)}>
+          <div className="overlay-backdrop absolute inset-0" />
+          <div
+            className="slide-in-right absolute right-0 top-0 h-full w-full max-w-md border-l border-[var(--border-color)] bg-[var(--card-bg)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] p-5">
+              <div className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-blue-600" />
+                <h2 className="text-lg font-semibold">Notificaciones</h2>
+              </div>
+              <button onClick={() => setOpen(false)} className="rounded-lg p-1 transition-colors hover:bg-[var(--hover-bg)]">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="h-[calc(100%-76px)] overflow-y-auto">
+              {alerts.length === 0 ? (
+                <div className="p-5 text-sm text-[var(--sidebar-fg)]">Sin alertas activas.</div>
+              ) : (
+                alerts.map((alert) => (
+                  <div key={alert.id} className="border-b border-[var(--border-color)] p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">{getIcon(alert.type)}</div>
+                      <div>
+                        <p className="text-sm font-semibold">{alert.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-[var(--sidebar-fg)]">{alert.description}</p>
+                      </div>
                     </div>
-                </div>
-            )}
-        </>
-    );
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
 }

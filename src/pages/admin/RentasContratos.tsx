@@ -1,105 +1,186 @@
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { contracts, rentCollection } from '@/data/mockData';
-import { formatPeso, formatDate, formatUF } from '@/lib/format';
+import { FileText, ShieldCheck, Wallet } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { buildRenewalContractTemplate, getContractDisplayValues, getContractLifecycle } from '@/lib/domain';
+import { formatDate, formatPeso } from '@/lib/format';
+import { useAppState } from '@/store/appState';
 import { cn } from '@/lib/utils';
 
 export function RentasContratos() {
-    const collectionStats = { collected: 92.5, pending: 5.2, overdue: 2.3 };
+  const navigate = useNavigate();
+  const { state, insights } = useAppState();
+  const signed = state.contracts.filter((contract) => contract.signatureStatus === 'firmado').length;
+  const underReview = state.contracts.filter((contract) => contract.signatureStatus === 'en_revision').length;
+  const pending = state.contracts.filter((contract) => contract.signatureStatus === 'pendiente').length;
 
-    return (
-        <div className="p-4 md:p-6 space-y-6 fade-in">
-            <div>
-                <h1 className="text-xl md:text-2xl font-bold">Rentas y Contratos</h1>
-                <p className="text-sm text-[var(--sidebar-fg)] mt-1">Seguimiento financiero y gestión de contratos</p>
-            </div>
+  const chartData = insights.tenantSummaries.map((tenant) => ({
+    name: tenant.storeName,
+    fija: tenant.rentFixed,
+    variable: tenant.rentVariable,
+    total: tenant.rentTotal,
+  }));
 
-            {/* Collection Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                    { label: 'Recaudado', value: collectionStats.collected, color: '#10B981' },
-                    { label: 'Pendiente', value: collectionStats.pending, color: '#F59E0B' },
-                    { label: 'En Mora', value: collectionStats.overdue, color: '#EF4444' },
-                ].map(stat => (
-                    <div key={stat.label} className="glass-card p-5">
-                        <p className="text-xs font-medium text-[var(--sidebar-fg)] uppercase mb-2">{stat.label}</p>
-                        <div className="flex items-end gap-2 mb-3">
-                            <span className="text-2xl font-bold">{stat.value}%</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-[var(--hover-bg)]">
-                            <div
-                                className="h-full rounded-full transition-all duration-700"
-                                style={{ width: `${stat.value}%`, background: stat.color }}
-                            />
-                        </div>
-                    </div>
-                ))}
-            </div>
+  return (
+    <div className="page-enter space-y-6 p-4 md:p-6">
+      <div>
+        <h1 className="text-xl font-bold md:text-2xl">Rentas, firmas y contratos</h1>
+        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
+          Seguimiento consolidado de vigencias, renta fija/variable y respaldo documental por contrato.
+        </p>
+      </div>
 
-            {/* Rent Chart */}
-            <div className="glass-card p-5">
-                <h3 className="text-sm font-semibold mb-1">Recaudación Mensual</h3>
-                <p className="text-xs text-[var(--sidebar-fg)] mb-4">Renta fija vs variable</p>
-                <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={rentCollection}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.5} />
-                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--sidebar-fg)' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: 'var(--sidebar-fg)' }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000000).toFixed(0)}M`} />
-                        <Tooltip
-                            contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
-                            formatter={(value: number) => [formatPeso(value), '']}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="fixed" stackId="a" fill="#3B82F6" radius={[0, 0, 0, 0]} name="Renta Fija" />
-                        <Bar dataKey="variable" stackId="a" fill="#10B981" radius={[4, 4, 0, 0]} name="Renta Variable" />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Firmados" value={String(signed)} icon={<ShieldCheck className="h-4 w-4 text-emerald-600" />} />
+        <StatCard label="En revisión" value={String(underReview)} icon={<FileText className="h-4 w-4 text-amber-600" />} />
+        <StatCard label="Pendientes" value={String(pending)} icon={<Wallet className="h-4 w-4 text-red-600" />} />
+      </div>
 
-            {/* Contracts Table */}
-            <div className="glass-card p-5">
-                <h3 className="text-sm font-semibold mb-4">Contratos Vigentes</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[700px]">
-                        <thead>
-                            <tr className="border-b border-[var(--border-color)]">
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Locatario</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Local</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Inicio</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Término</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Renta UF</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Renta CLP</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Reajuste</th>
-                                <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {contracts.map(c => (
-                                <tr key={c.local} className="table-row-hover border-b border-[var(--border-color)] last:border-0">
-                                    <td className="px-4 py-3 text-sm font-semibold">{c.tenantName}</td>
-                                    <td className="px-4 py-3 text-sm font-mono text-[var(--sidebar-fg)]">{c.local}</td>
-                                    <td className="px-4 py-3 text-sm text-[var(--sidebar-fg)]">{formatDate(c.startDate)}</td>
-                                    <td className="px-4 py-3 text-sm text-[var(--sidebar-fg)]">{formatDate(c.endDate)}</td>
-                                    <td className="px-4 py-3 text-sm">{formatUF(c.rentUF)}</td>
-                                    <td className="px-4 py-3 text-sm font-semibold">{formatPeso(c.rentCLP)}</td>
-                                    <td className="px-4 py-3 text-sm text-[var(--sidebar-fg)]">{c.escalation}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={cn(
-                                            'px-2 py-0.5 rounded-full text-xs font-medium',
-                                            c.status === 'vigente' && 'badge-success',
-                                            c.status === 'por vencer' && 'badge-warning',
-                                            c.status === 'vencido' && 'badge-danger',
-                                        )}>
-                                            {c.status === 'vigente' ? 'Vigente' : c.status === 'por vencer' ? 'Por Vencer' : 'Vencido'}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+      <div className="glass-card p-5">
+        <h3 className="text-sm font-semibold">Composición de renta por contrato</h3>
+        <p className="mt-1 text-xs text-[var(--sidebar-fg)]">La porción variable se recalcula automáticamente según las ventas del mes cargadas.</p>
+        <div className="mt-4 h-[320px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.5} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `$${Math.round(value / 1000000)}M`}
+              />
+              <Tooltip
+                contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 14, fontSize: 12 }}
+                formatter={(value) => [formatPeso(Number(value ?? 0)), '']}
+              />
+              <Bar dataKey="fija" stackId="rent" fill="#2563EB" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="variable" stackId="rent" fill="#10B981" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-    );
+      </div>
+
+      <div className="glass-card overflow-hidden">
+        <table className="w-full min-w-[1080px]">
+          <thead className="bg-[var(--hover-bg)]">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Contrato</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Locales</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Vigencia</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Firma</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Anexos</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Renta total</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Condiciones</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {insights.tenantSummaries.map((tenant) => {
+              const contract = state.contracts.find((item) => item.id === tenant.id);
+              if (!contract) {
+                return null;
+              }
+
+              const lifecycle = getContractLifecycle(contract);
+              return (
+                <tr key={tenant.id} className="border-t border-[var(--border-color)]">
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-semibold">{tenant.storeName}</p>
+                    <p className="text-xs text-[var(--sidebar-fg)]">{tenant.companyName}</p>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{tenant.localCodes.join(', ')}</td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm">{formatDate(tenant.startDate)}</p>
+                    <p className="text-xs text-[var(--sidebar-fg)]">{formatDate(tenant.endDate)}</p>
+                    <span
+                      className={cn(
+                        'mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                        lifecycle === 'vigente' && 'badge-success',
+                        lifecycle === 'por_vencer' && 'badge-warning',
+                        lifecycle === 'vencido' && 'badge-danger',
+                        (lifecycle === 'borrador' || lifecycle === 'en_firma') && 'badge-info',
+                      )}
+                    >
+                      {lifecycle.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        'rounded-full px-2.5 py-1 text-xs font-medium',
+                        contract.signatureStatus === 'firmado' && 'badge-success',
+                        contract.signatureStatus === 'pendiente' && 'badge-danger',
+                        contract.signatureStatus === 'en_revision' && 'badge-warning',
+                        contract.signatureStatus === 'parcial' && 'badge-info',
+                      )}
+                    >
+                      {contract.signatureStatus.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{contract.annexCount}</td>
+                  <td className="px-4 py-3 text-sm font-semibold">{formatPeso(tenant.rentTotal)}</td>
+                  <td className="px-4 py-3 text-sm text-[var(--sidebar-fg)]">{contract.escalation}</td>
+                  <td className="px-4 py-3">
+                    {lifecycle === 'por_vencer' || lifecycle === 'vencido' ? (
+                      <button
+                        onClick={() =>
+                          navigate('/admin/locatarios', {
+                            state: {
+                              contractTemplate: buildRenewalContractTemplate(contract),
+                              flashMessage: `Borrador de renovación generado para ${getContractDisplayValues(contract).storeName}.`,
+                            },
+                          })
+                        }
+                        className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold"
+                      >
+                        Renovar
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => navigate(`/admin/locatarios/${contract.id}`)}
+                        className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold"
+                      >
+                        Abrir
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{label}</p>
+          <p className="mt-2 text-2xl font-semibold">{value}</p>
+        </div>
+        <div className="rounded-2xl bg-[var(--hover-bg)] p-3">{icon}</div>
+      </div>
+    </div>
+  );
 }

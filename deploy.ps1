@@ -24,6 +24,7 @@ try {
     npx gh-pages -d dist
     
     Write-Host "Deployment completed successfully!"
-} catch {
+}
+catch {
     Write-Error $_
 }

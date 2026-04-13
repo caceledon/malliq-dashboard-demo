@@ -1,130 +1,168 @@
-import { ArrowUpRight, ArrowDownRight, DollarSign, ShoppingCart, TrendingUp, Calendar } from 'lucide-react';
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { tenants } from '@/data/mockData';
-import { formatPeso, formatPercent, formatUF, formatDate } from '@/lib/format';
-import { cn } from '@/lib/utils';
-
-// Simulating "Mango" as the logged-in tenant
-const tenant = tenants[0];
-const salesDelta = ((tenant.salesCurrent - tenant.salesPrevious) / tenant.salesPrevious) * 100;
+import { CalendarRange, FileCheck2, ShoppingBag, SquareChartGantt, Wallet } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { diffInDays, getContractLifecycle, monthKey } from '@/lib/domain';
+import { formatDate, formatPercent, formatPeso } from '@/lib/format';
+import { useAppState } from '@/store/appState';
 
 export function LocatarioDashboard() {
+  const { currentTenantId, insights, state } = useAppState();
+  const summary = insights.tenantSummaries.find((item) => item.id === currentTenantId);
+  const contract = state.contracts.find((item) => item.id === currentTenantId);
+
+  if (!summary || !contract) {
     return (
-        <div className="p-4 md:p-6 space-y-6 fade-in">
-            <div>
-                <h1 className="text-xl md:text-2xl font-bold">Mi Dashboard</h1>
-                <p className="text-sm text-[var(--sidebar-fg)] mt-1">
-                    Bienvenido, {tenant.name} — Local {tenant.local}
-                </p>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="glass-card p-5 group">
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium text-[var(--sidebar-fg)] uppercase tracking-wide">Ventas del Mes</span>
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                            <ShoppingCart className="w-4 h-4 text-emerald-500" />
-                        </div>
-                    </div>
-                    <p className="text-2xl font-bold">{formatPeso(tenant.salesCurrent)}</p>
-                    <span className={cn('flex items-center gap-0.5 text-xs font-semibold mt-1', salesDelta >= 0 ? 'text-emerald-500' : 'text-red-500')}>
-                        {salesDelta >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        {salesDelta >= 0 ? '+' : ''}{formatPercent(salesDelta)} vs mes anterior
-                    </span>
-                </div>
-
-                <div className="glass-card p-5 group">
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium text-[var(--sidebar-fg)] uppercase tracking-wide">Renta Mensual</span>
-                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                            <DollarSign className="w-4 h-4 text-blue-500" />
-                        </div>
-                    </div>
-                    <p className="text-2xl font-bold">{formatPeso(tenant.rentTotal)}</p>
-                    <p className="text-xs text-[var(--sidebar-fg)] mt-1">{formatUF(tenant.rentUF)}</p>
-                </div>
-
-                <div className="glass-card p-5 group">
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium text-[var(--sidebar-fg)] uppercase tracking-wide">Ventas/m²</span>
-                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                            <TrendingUp className="w-4 h-4 text-purple-500" />
-                        </div>
-                    </div>
-                    <p className="text-2xl font-bold">{formatPeso(tenant.salesPerM2)}</p>
-                    <p className="text-xs text-[var(--sidebar-fg)] mt-1">{tenant.areaM2} m² de superficie</p>
-                </div>
-
-                <div className="glass-card p-5 group">
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium text-[var(--sidebar-fg)] uppercase tracking-wide">Fin de Contrato</span>
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                            <Calendar className="w-4 h-4 text-amber-500" />
-                        </div>
-                    </div>
-                    <p className="text-lg font-bold">{formatDate(tenant.contractEnd)}</p>
-                    <p className="text-xs text-[var(--sidebar-fg)] mt-1">Desde {formatDate(tenant.contractStart)}</p>
-                </div>
-            </div>
-
-            {/* Sales Chart */}
-            <div className="glass-card p-5">
-                <h3 className="text-sm font-semibold mb-1">Evolución de Ventas</h3>
-                <p className="text-xs text-[var(--sidebar-fg)] mb-4">Últimos 6 meses</p>
-                <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={tenant.monthlySales}>
-                        <defs>
-                            <linearGradient id="locGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.5} />
-                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--sidebar-fg)' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: 'var(--sidebar-fg)' }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000000).toFixed(0)}M`} />
-                        <Tooltip
-                            contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}
-                            formatter={(value: number) => [formatPeso(value), 'Ventas']}
-                        />
-                        <Area type="monotone" dataKey="sales" stroke="#10B981" strokeWidth={2.5} fill="url(#locGrad)" />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
-
-            {/* Payment History */}
-            <div className="glass-card p-5">
-                <h3 className="text-sm font-semibold mb-4">Últimos Pagos</h3>
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b border-[var(--border-color)]">
-                            <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Período</th>
-                            <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Monto</th>
-                            <th className="text-left px-4 py-2 text-xs font-medium text-[var(--sidebar-fg)] uppercase">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tenant.paymentHistory.map(p => (
-                            <tr key={p.month} className="table-row-hover border-b border-[var(--border-color)] last:border-0">
-                                <td className="px-4 py-3 text-sm">{p.month}</td>
-                                <td className="px-4 py-3 text-sm font-semibold">{formatPeso(p.amount)}</td>
-                                <td className="px-4 py-3">
-                                    <span className={cn(
-                                        'px-2 py-0.5 rounded-full text-xs font-medium',
-                                        p.status === 'pagado' && 'badge-success',
-                                        p.status === 'pendiente' && 'badge-warning',
-                                        p.status === 'atrasado' && 'badge-danger',
-                                    )}>
-                                        {p.status === 'pagado' ? 'Pagado' : p.status === 'pendiente' ? 'Pendiente' : 'Atrasado'}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+      <div className="p-6">
+        <div className="glass-card p-6 text-sm text-[var(--sidebar-fg)]">
+          Aún no existe un contrato activo visible para el panel de locatario.
         </div>
+      </div>
     );
+  }
+
+  const salesHistory = state.sales
+    .filter((sale) => sale.contractId === contract.id)
+    .reduce<Record<string, number>>((accumulator, sale) => {
+      const month = monthKey(sale.occurredAt);
+      accumulator[month] = (accumulator[month] ?? 0) + sale.grossAmount;
+      return accumulator;
+    }, {});
+
+  const chartData = Object.entries(salesHistory)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([month, sales]) => ({ month, sales }));
+  const currentMonth = monthKey(new Date());
+  const currentBudget = state.planning.find((entry) => entry.type === 'budget' && entry.month === currentMonth);
+  const currentForecast = state.planning.find((entry) => entry.type === 'forecast' && entry.month === currentMonth);
+  const daysRemaining = diffInDays(new Date(), new Date(contract.endDate));
+  const lifecycle = getContractLifecycle(contract);
+  const contractDocuments = state.documents.filter((document) => document.entityType === 'contract' && document.entityId === contract.id);
+  const varianceVsBudget = currentBudget?.salesAmount
+    ? ((summary.salesCurrent - currentBudget.salesAmount) / currentBudget.salesAmount) * 100
+    : undefined;
+  const varianceVsForecast = currentForecast?.salesAmount
+    ? ((summary.salesCurrent - currentForecast.salesAmount) / currentForecast.salesAmount) * 100
+    : undefined;
+
+  return (
+    <div className="page-enter space-y-6 p-4 md:p-6">
+      <div>
+        <h1 className="text-xl font-bold md:text-2xl">Mi dashboard</h1>
+        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
+          {summary.storeName} · {summary.localCodes.join(', ')} · {summary.areaM2} m2
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Kpi label="Ventas del mes" value={formatPeso(summary.salesCurrent)} icon={<ShoppingBag className="h-4 w-4 text-emerald-600" />} />
+        <Kpi label="Ventas / m2" value={formatPeso(summary.salesPerM2)} icon={<SquareChartGantt className="h-4 w-4 text-blue-600" />} />
+        <Kpi label="Renta estimada" value={formatPeso(summary.rentTotal)} icon={<Wallet className="h-4 w-4 text-amber-600" />} />
+        <Kpi label="Firma" value={contract.signatureStatus.replace('_', ' ')} icon={<FileCheck2 className="h-4 w-4 text-indigo-600" />} />
+        <Kpi label="Fin contrato" value={formatDate(summary.endDate)} icon={<CalendarRange className="h-4 w-4 text-rose-600" />} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+        <div className="glass-card p-5">
+          <h3 className="text-sm font-semibold">Evolución de ventas</h3>
+          <div className="mt-4 h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="tenant-panel-gradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.5} />
+                <XAxis dataKey="month" tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => `$${Math.round(value / 1000000)}M`}
+                />
+                <Tooltip
+                  contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 14, fontSize: 12 }}
+                  formatter={(value) => [formatPeso(Number(value ?? 0)), 'Ventas']}
+                />
+                <Area type="monotone" dataKey="sales" stroke="#2563EB" strokeWidth={2.5} fill="url(#tenant-panel-gradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="glass-card p-5">
+            <h3 className="text-sm font-semibold">Seguimiento del mes</h3>
+            <div className="mt-4 space-y-3">
+              <StatusRow
+                label="Presupuesto"
+                value={currentBudget ? formatPeso(currentBudget.salesAmount) : 'Sin presupuesto'}
+                meta={typeof varianceVsBudget === 'number' ? `Desvío ${formatPercent(varianceVsBudget)}` : 'No hay referencia cargada'}
+              />
+              <StatusRow
+                label="Forecast"
+                value={currentForecast ? formatPeso(currentForecast.salesAmount) : 'Sin forecast'}
+                meta={typeof varianceVsForecast === 'number' ? `Desvío ${formatPercent(varianceVsForecast)}` : 'No hay referencia cargada'}
+              />
+              <StatusRow
+                label="Documentos"
+                value={String(contractDocuments.length)}
+                meta={`${contract.annexCount} anexo(s) registrados`}
+              />
+            </div>
+          </div>
+
+          <div className="glass-card p-5">
+            <h3 className="text-sm font-semibold">Estado contractual</h3>
+            <div className="mt-4 space-y-3">
+              <StatusRow label="Ciclo" value={lifecycle.replace('_', ' ')} meta={`Firma ${contract.signatureStatus.replace('_', ' ')}`} />
+              <StatusRow label="Días restantes" value={String(daysRemaining)} meta={`Vence el ${formatDate(contract.endDate)}`} />
+              <StatusRow label="Locales" value={summary.localCodes.join(', ')} meta={`${summary.areaM2} m2 totales`} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{label}</p>
+          <p className="mt-2 text-2xl font-semibold">{value}</p>
+        </div>
+        <div className="rounded-2xl bg-[var(--hover-bg)] p-3">{icon}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatusRow({ label, value, meta }: { label: string; value: string; meta: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border-color)] p-4">
+      <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{label}</p>
+      <p className="mt-2 text-lg font-semibold">{value}</p>
+      <p className="mt-1 text-xs text-[var(--sidebar-fg)]">{meta}</p>
+    </div>
+  );
 }
