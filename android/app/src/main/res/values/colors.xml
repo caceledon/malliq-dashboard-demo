@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_night">#FF0B0F1A</color>
+    <color name="surface_night">#FF131826</color>
+    <color name="accent_ambar">#FFF5A524</color>
+    <color name="verde_pino">#FF1F6F5C</color>
+    <color name="rojo_terracota">#FFC64545</color>
+    <color name="texto_primario">#FFECEEF3</color>
+    <color name="texto_secundario">#FF8C92A6</color>
+</resources>

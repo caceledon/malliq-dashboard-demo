@@ -2,11 +2,13 @@ import { useDeferredValue, useState } from 'react';
 import { Search, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SalesIngestionCenter } from '@/components/app/SalesIngestionCenter';
-import { formatDate, formatPeso } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 
 export function CargasDatos() {
   const { state, actions } = useAppState();
+  const { formatCurrency } = useCurrency();
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection'>('all');
   const deferredSearch = useDeferredValue(search);
@@ -120,7 +122,7 @@ export function CargasDatos() {
                   <td className="px-4 py-3 text-sm">{sale.source}</td>
                   <td className="px-4 py-3 text-sm">{sale.ticketNumber ?? 'N/D'}</td>
                   <td className="px-4 py-3 text-sm">{sale.importReference ?? 'N/D'}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatPeso(sale.grossAmount)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatCurrency(sale.grossAmount)}</td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => setDeleteTarget({ id: sale.id, label: sale.storeLabel })}

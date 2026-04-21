@@ -12,6 +12,32 @@ export function Alertas() {
   const warning = insights.alerts.filter((alert) => alert.type === 'warning');
   const info = insights.alerts.filter((alert) => alert.type === 'info');
 
+  const handleOpenAlert = (alert: (typeof insights.alerts)[number]) => {
+    if (alert.contractId) {
+      navigate(`/admin/locatarios/${alert.contractId}`);
+      return;
+    }
+    if (alert.unitId) {
+      navigate('/admin/ecosistema', { state: { focusUnitId: alert.unitId } });
+    }
+  };
+
+  const handleRenewAlert = (alert: (typeof insights.alerts)[number]) => {
+    if (!alert.contractId) {
+      return;
+    }
+    const contract = state.contracts.find((item) => item.id === alert.contractId);
+    if (!contract) {
+      return;
+    }
+    navigate('/admin/locatarios', {
+      state: {
+        contractTemplate: buildRenewalContractTemplate(contract),
+        flashMessage: `Borrador de renovación generado para ${contract.storeName}.`,
+      },
+    });
+  };
+
   return (
     <div className="page-enter space-y-6 p-4 md:p-6">
       <div>
@@ -28,75 +54,9 @@ export function Alertas() {
       </div>
 
       <div className="space-y-4">
-        <AlertGroup title="Críticas" alerts={critical} onOpen={(alert) => {
-          if (alert.contractId) {
-            navigate(`/admin/locatarios/${alert.contractId}`);
-            return;
-          }
-          if (alert.unitId) {
-            navigate('/admin/ecosistema', { state: { focusUnitId: alert.unitId } });
-          }
-        }} onRenew={(alert) => {
-          if (!alert.contractId) {
-            return;
-          }
-          const contract = state.contracts.find((item) => item.id === alert.contractId);
-          if (!contract) {
-            return;
-          }
-          navigate('/admin/locatarios', {
-            state: {
-              contractTemplate: buildRenewalContractTemplate(contract),
-              flashMessage: `Borrador de renovación generado para ${contract.storeName}.`,
-            },
-          });
-        }} contracts={state.contracts} />
-        <AlertGroup title="Advertencias" alerts={warning} onOpen={(alert) => {
-          if (alert.contractId) {
-            navigate(`/admin/locatarios/${alert.contractId}`);
-            return;
-          }
-          if (alert.unitId) {
-            navigate('/admin/ecosistema', { state: { focusUnitId: alert.unitId } });
-          }
-        }} onRenew={(alert) => {
-          if (!alert.contractId) {
-            return;
-          }
-          const contract = state.contracts.find((item) => item.id === alert.contractId);
-          if (!contract) {
-            return;
-          }
-          navigate('/admin/locatarios', {
-            state: {
-              contractTemplate: buildRenewalContractTemplate(contract),
-              flashMessage: `Borrador de renovación generado para ${contract.storeName}.`,
-            },
-          });
-        }} contracts={state.contracts} />
-        <AlertGroup title="Informativas" alerts={info} onOpen={(alert) => {
-          if (alert.contractId) {
-            navigate(`/admin/locatarios/${alert.contractId}`);
-            return;
-          }
-          if (alert.unitId) {
-            navigate('/admin/ecosistema', { state: { focusUnitId: alert.unitId } });
-          }
-        }} onRenew={(alert) => {
-          if (!alert.contractId) {
-            return;
-          }
-          const contract = state.contracts.find((item) => item.id === alert.contractId);
-          if (!contract) {
-            return;
-          }
-          navigate('/admin/locatarios', {
-            state: {
-              contractTemplate: buildRenewalContractTemplate(contract),
-              flashMessage: `Borrador de renovación generado para ${contract.storeName}.`,
-            },
-          });
-        }} contracts={state.contracts} />
+        <AlertGroup title="Críticas" alerts={critical} onOpen={handleOpenAlert} onRenew={handleRenewAlert} contracts={state.contracts} />
+        <AlertGroup title="Advertencias" alerts={warning} onOpen={handleOpenAlert} onRenew={handleRenewAlert} contracts={state.contracts} />
+        <AlertGroup title="Informativas" alerts={info} onOpen={handleOpenAlert} onRenew={handleRenewAlert} contracts={state.contracts} />
       </div>
     </div>
   );

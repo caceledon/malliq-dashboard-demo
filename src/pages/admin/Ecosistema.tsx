@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { FileUp, Pencil, Search, Trash2 } from 'lucide-react';
 import { buildProspectContractTemplate, createId, getContractLifecycle, type Prospect, type ProspectStage, type Supplier, type SupplierStatus } from '@/lib/domain';
 import { useAppState } from '@/store/appState';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const supplierStatuses: SupplierStatus[] = ['activo', 'inactivo'];
 const prospectStages: ProspectStage[] = ['nuevo', 'contactado', 'negociacion', 'oferta', 'cerrado', 'descartado'];
@@ -78,6 +79,25 @@ export function Ecosistema() {
   const [focusedUnitId, setFocusedUnitId] = useState('');
   const [message, setMessage] = useState('');
   const deferredSearch = useDeferredValue(search);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  const promptDelete = (title: string, name: string, onConfirm: () => void) => {
+    setConfirmDialog({
+      open: true,
+      title: `Eliminar ${title}`,
+      message: `¿Estás seguro de eliminar ${name}? Esta acción no se puede deshacer.`,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+      },
+    });
+  };
 
   const occupiedUnits = new Set(
     state.contracts
@@ -187,7 +207,7 @@ export function Ecosistema() {
         <div>
           <h1 className="text-xl font-bold md:text-2xl">Proveedores y prospectos</h1>
           <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-            Base comercial y operativa con edición completa y sugerencias de encaje para vacancias del mall.
+            Base comercial y operativa con edición completa y sugerencias de encaje para vacancias del activo.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2">
@@ -371,7 +391,7 @@ export function Ecosistema() {
             meta: `${item.status} · ${item.email || 'sin email'}`,
             extra: item.phone || item.notes || '',
             onEdit: () => setSupplier(item),
-            onDelete: () => actions.deleteSupplier(item.id),
+            onDelete: () => promptDelete('proveedor', item.name, () => actions.deleteSupplier(item.id)),
           }))}
         />
         <DatabaseList
@@ -383,11 +403,20 @@ export function Ecosistema() {
             meta: `${item.stage} · ${item.contactName}`,
             extra: item.email || item.notes || '',
             onEdit: () => setProspect(item),
-            onDelete: () => actions.deleteProspect(item.id),
+            onDelete: () => promptDelete('prospecto', item.brandName, () => actions.deleteProspect(item.id)),
             onConvert: () => createDraftFromProspect(item),
           }))}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant="danger"
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

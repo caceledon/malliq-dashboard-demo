@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MallIQ</string>
+
+    <string name="portal_admin">Administrador</string>
+    <string name="portal_locatario">Locatario</string>
+
+    <string name="nav_dashboard">Resumen</string>
+    <string name="nav_locatarios">Locatarios</string>
+    <string name="nav_contratos">Contratos</string>
+    <string name="nav_scanner">Escanear</string>
+    <string name="nav_alertas">Alertas</string>
+    <string name="nav_ecosistema">Ecosistema</string>
+
+    <string name="tenant_home_reportar">Reportar Ventas del Día</string>
+    <string name="tenant_home_contrato">Mi Contrato</string>
+    <string name="tenant_home_historial">Histórico</string>
+
+    <string name="scanner_cta">Apunta al recibo</string>
+    <string name="scanner_stable">Mantén estable</string>
+    <string name="scanner_capturing">Capturando…</string>
+
+    <string name="biometric_title">Acceso seguro</string>
+    <string name="biometric_subtitle">Confirma tu identidad para ingresar a MallIQ</string>
+    <string name="biometric_negative">Cancelar</string>
+
+    <string name="channel_garantias_name">Garantías por vencer</string>
+    <string name="channel_garantias_desc">Alertas de garantías próximas a su vencimiento</string>
+    <string name="channel_rentas_name">Rentas atrasadas</string>
+    <string name="channel_rentas_desc">Notificaciones de pagos de renta fuera de plazo</string>
+    <string name="channel_ventas_name">Ventas sin reportar</string>
+    <string name="channel_ventas_desc">Recordatorios para que locatarios reporten ventas</string>
+    <string name="channel_sync_name">Conflictos de sincronización</string>
+    <string name="channel_sync_desc">Conflictos detectados entre datos locales y servidor</string>
+</resources>

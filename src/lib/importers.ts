@@ -144,7 +144,7 @@ export function parseReceiptText(text: string, source: SaleSource): ParsedSaleDr
   ];
 }
 
-function parseCsvRows(raw: string): Record<string, string>[] {
+export function parseCsvRows(raw: string): Record<string, string>[] {
   const lines = raw
     .split(/\r?\n/g)
     .map((line) => line.trim())

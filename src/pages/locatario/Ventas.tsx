@@ -11,11 +11,13 @@ import {
 import { Download, Search } from 'lucide-react';
 import { monthKey } from '@/lib/domain';
 import { downloadTextFile, exportFilteredSalesCsv } from '@/lib/exporters';
-import { formatDate, formatPeso } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 
 export function LocatarioVentas() {
   const { currentTenantId, state, insights } = useAppState();
+  const { formatCurrency } = useCurrency();
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection'>('all');
   const deferredSearch = useDeferredValue(search);
@@ -65,9 +67,9 @@ export function LocatarioVentas() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat title="Mes actual" value={formatPeso(summary.salesCurrent)} />
-        <Stat title="Mes anterior" value={formatPeso(summary.salesPrevious)} />
-        <Stat title="Ventas / m2" value={formatPeso(summary.salesPerM2)} />
+        <Stat title="Mes actual" value={formatCurrency(summary.salesCurrent)} />
+        <Stat title="Mes anterior" value={formatCurrency(summary.salesPrevious)} />
+        <Stat title="Ventas / m2" value={formatCurrency(summary.salesPerM2)} />
       </div>
 
       <div className="glass-card p-5">
@@ -85,7 +87,7 @@ export function LocatarioVentas() {
               />
               <Tooltip
                 contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 14, fontSize: 12 }}
-                formatter={(value) => [formatPeso(Number(value ?? 0)), 'Ventas']}
+                formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Ventas']}
               />
               <Bar dataKey="amount" fill="#10B981" radius={[8, 8, 0, 0]} />
             </BarChart>
@@ -115,7 +117,8 @@ export function LocatarioVentas() {
             </select>
           </div>
         </div>
-        <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border-color)]">
+        {/* Desktop table */}
+        <div className="mt-4 hidden overflow-hidden rounded-2xl border border-[var(--border-color)] md:block">
           <table className="w-full min-w-[760px]">
             <thead className="bg-[var(--hover-bg)]">
               <tr>
@@ -133,7 +136,7 @@ export function LocatarioVentas() {
                   <td className="px-4 py-3 text-sm">{sale.source}</td>
                   <td className="px-4 py-3 text-sm">{sale.ticketNumber ?? 'N/D'}</td>
                   <td className="px-4 py-3 text-sm">{sale.importReference ?? 'N/D'}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatPeso(sale.grossAmount)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatCurrency(sale.grossAmount)}</td>
                 </tr>
               ))}
               {filteredSales.length === 0 ? (
@@ -145,6 +148,26 @@ export function LocatarioVentas() {
               ) : null}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="mt-4 space-y-3 md:hidden">
+          {filteredSales.map((sale) => (
+            <div key={sale.id} className="rounded-2xl border border-[var(--border-color)] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">{formatDate(sale.occurredAt)}</p>
+                <p className="text-sm font-semibold">{formatCurrency(sale.grossAmount)}</p>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--sidebar-fg)]">
+                <span className="rounded-full bg-[var(--hover-bg)] px-2 py-0.5">{sale.source}</span>
+                {sale.ticketNumber ? <span>Ticket: {sale.ticketNumber}</span> : null}
+                {sale.importReference ? <span>Ref: {sale.importReference}</span> : null}
+              </div>
+            </div>
+          ))}
+          {filteredSales.length === 0 ? (
+            <p className="text-center text-sm text-[var(--sidebar-fg)]">No hay ventas que coincidan con los filtros.</p>
+          ) : null}
         </div>
       </div>
     </div>

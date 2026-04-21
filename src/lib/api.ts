@@ -1,10 +1,22 @@
-import type { BackupArchive, DocumentKind, DocumentRecord } from '@/lib/domain';
+import type { BackupArchive, Contract, DocumentKind, DocumentRecord } from '@/lib/domain';
 
 export interface ServerHealth {
   ok: boolean;
   archiveExists: boolean;
   updatedAt: string | null;
   revision: number;
+  aiMode?: 'openai' | 'moonshot' | 'mock_local';
+  summary?: {
+    units: number;
+    contracts: number;
+    sales: number;
+    planning: number;
+    documents: number;
+    suppliers: number;
+    prospects: number;
+    posConnections: number;
+    importLogs: number;
+  };
 }
 
 export interface RemoteDocumentMutationResult {
@@ -16,18 +28,77 @@ export interface RemoteDocumentUploadResult extends RemoteDocumentMutationResult
   record: DocumentRecord;
 }
 
+export interface ContractAutofillResult {
+  companyName?: Contract['companyName'] | null;
+  storeName?: Contract['storeName'] | null;
+  category?: Contract['category'] | null;
+  baseRentUF?: Contract['baseRentUF'] | null;
+  fixedRent?: Contract['fixedRent'] | null;
+  variableRentPct?: Contract['variableRentPct'] | null;
+  commonExpenses?: Contract['commonExpenses'] | null;
+  escalation?: Contract['escalation'] | null;
+  startDate?: Contract['startDate'] | null;
+  endDate?: Contract['endDate'] | null;
+  fondoPromocion?: Contract['fondoPromocion'] | null;
+  garantiaMonto?: Contract['garantiaMonto'] | null;
+  garantiaVencimiento?: Contract['garantiaVencimiento'] | null;
+  feeIngreso?: Contract['feeIngreso'] | null;
+  rentSteps?: Array<{
+    startDate?: string | null;
+    endDate?: string | null;
+    rentaFijaUfM2?: number | null;
+    evidence?: {
+      startDate?: string | null;
+      endDate?: string | null;
+      rentaFijaUfM2?: string | null;
+    };
+  }>;
+  evidence?: {
+    companyName?: string | null;
+    storeName?: string | null;
+    category?: string | null;
+    baseRentUF?: string | null;
+    fixedRent?: string | null;
+    variableRentPct?: string | null;
+    commonExpenses?: string | null;
+    fondoPromocion?: string | null;
+    escalation?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    garantiaMonto?: string | null;
+    garantiaVencimiento?: string | null;
+    feeIngreso?: string | null;
+  };
+  missingFields?: string[];
+  mocked?: boolean;
+  source?: 'openai' | 'moonshot' | 'mock_local';
+}
+
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
 }
 
 export function resolveApiBase(raw?: string): string {
-  const fallback = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+  const fallback = import.meta.env.VITE_API_BASE_URL || '/api';
   return trimTrailingSlash((raw || fallback).trim());
 }
 
 async function assertJson(response: Response) {
   if (!response.ok) {
     const text = await response.text();
+    if (text) {
+      try {
+        const payload = JSON.parse(text) as { error?: unknown };
+        if (typeof payload.error === 'string' && payload.error.trim()) {
+          throw new Error(payload.error);
+        }
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) {
+          throw error;
+        }
+      }
+    }
+
     throw new Error(text || `HTTP ${response.status}`);
   }
 
@@ -134,3 +205,32 @@ export async function ingestFiscalText(
   });
   return assertJson(response);
 }
+
+export async function autofillContractFromPdf(apiBase: string, file: File): Promise<ContractAutofillResult> {
+  const body = new FormData();
+  body.set('file', file);
+
+  const response = await fetch(`${resolveApiBase(apiBase)}/contracts/autofill`, {
+    method: 'POST',
+    body,
+  });
+
+  return assertJson(response);
+}
+
+export interface ActivityItem {
+  id: number;
+  action: string;
+  entity_type?: string;
+  entity_id?: string;
+  actor?: string;
+  details?: string | null;
+  created_at: string;
+}
+
+
+export async function fetchRecentActivities(apiBase: string): Promise<{ activities: ActivityItem[] }> {
+  const response = await fetch(`${resolveApiBase(apiBase)}/activities`);
+  return assertJson(response);
+}
+

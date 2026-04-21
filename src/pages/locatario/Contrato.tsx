@@ -1,12 +1,15 @@
 import { CalendarDays, FileText, Landmark, Stamp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DocumentManager } from '@/components/app/DocumentManager';
+import { RentStepGantt } from '@/components/app/RentStepGantt';
 import { diffInDays, getContractLifecycle } from '@/lib/domain';
-import { formatDate, formatPeso } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 
 export function LocatarioContrato() {
   const { currentTenantId, insights, state } = useAppState();
+  const { formatCurrency } = useCurrency();
   const summary = insights.tenantSummaries.find((item) => item.id === currentTenantId);
   const contract = state.contracts.find((item) => item.id === currentTenantId);
   const linkedUnits = contract ? state.units.filter((unit) => contract.localIds.includes(unit.id)) : [];
@@ -32,26 +35,38 @@ export function LocatarioContrato() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Vigencia" value={`${formatDate(contract.startDate)} - ${formatDate(contract.endDate)}`} icon={<CalendarDays className="h-4 w-4 text-blue-600" />} />
-        <Metric label="Renta fija" value={formatPeso(contract.fixedRent)} icon={<Landmark className="h-4 w-4 text-emerald-600" />} />
-        <Metric label="Renta variable" value={`${contract.variableRentPct}% venta`} icon={<Stamp className="h-4 w-4 text-amber-600" />} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Inicio" value={formatDate(contract.startDate)} icon={<CalendarDays className="h-4 w-4 text-blue-600" />} />
+        <Metric label="Fin" value={formatDate(contract.endDate)} icon={<CalendarDays className="h-4 w-4 text-indigo-600" />} />
         <Metric label="Firma" value={contract.signatureStatus.replace('_', ' ')} icon={<FileText className="h-4 w-4 text-rose-600" />} />
-        <Metric label="Días restantes" value={String(daysRemaining)} icon={<CalendarDays className="h-4 w-4 text-indigo-600" />} />
+        <Metric label="Días restantes" value={String(daysRemaining)} icon={<CalendarDays className="h-4 w-4 text-purple-600" />} />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Renta fija UF/m²" value={contract.baseRentUF > 0 ? `${contract.baseRentUF.toFixed(1)} UF/m²` : 'No definida'} icon={<Landmark className="h-4 w-4 text-pink-600" />} />
+        <Metric label="Renta variable" value={`${contract.variableRentPct}% venta`} icon={<Stamp className="h-4 w-4 text-amber-600" />} />
+        <Metric label="Renta fija estimada" value={formatCurrency(summary.rentFixed)} icon={<Landmark className="h-4 w-4 text-emerald-600" />} />
+        <Metric label="Reajuste" value={contract.escalation || 'N/D'} icon={<Stamp className="h-4 w-4 text-cyan-600" />} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold">Condiciones comerciales</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Info label="Locales asociados" value={summary.localCodes.join(', ')} />
             <Info label="Superficie total" value={`${summary.areaM2} m2`} />
-            <Info label="Base UF" value={`${contract.baseRentUF.toFixed(1)} UF`} />
-            <Info label="Reajuste" value={contract.escalation} />
             <Info label="Estado contractual" value={lifecycle.replace('_', ' ')} />
             <Info label="Documentos asociados" value={String(contractDocuments.length)} />
           </div>
-          <div className="mt-4 rounded-2xl bg-[var(--hover-bg)] p-4">
+          {contract.rentSteps.length > 0 ? (
+            <div className="mt-5">
+              <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Escalonado de renta</p>
+              <div className="mt-3">
+                <RentStepGantt steps={contract.rentSteps} contractStart={contract.startDate} contractEnd={contract.endDate} />
+              </div>
+            </div>
+          ) : null}
+          <div className="mt-5 rounded-2xl bg-[var(--hover-bg)] p-4">
             <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Cláusulas y observaciones</p>
             <p className="mt-2 text-sm leading-relaxed">{contract.conditions || 'No hay observaciones cargadas.'}</p>
             {contract.signedAt ? (
@@ -62,7 +77,7 @@ export function LocatarioContrato() {
 
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold">Locales cubiertos</h3>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {linkedUnits.map((unit) => (
               <div key={unit.id} className="rounded-2xl border border-[var(--border-color)] p-4">
                 <p className="text-sm font-semibold">{unit.code}</p>

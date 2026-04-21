@@ -4,7 +4,8 @@ import { Building2, Download, MapPinned, MoonStar, Plus, SlidersHorizontal, SunM
 import { useAppState } from '@/store/appState';
 import { useTheme } from '@/lib/theme';
 import { createId } from '@/lib/domain';
-import { formatPeso } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
+import type { ServerHealth } from '@/lib/api';
 import {
   downloadTextFile,
   exportContractsCsv,
@@ -13,37 +14,41 @@ import {
   exportSalesCsv,
   exportSuppliersCsv,
 } from '@/lib/exporters';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 export function Configuracion() {
   const navigate = useNavigate();
-  const { state, actions, mallSummaries, portfolioStats, activeMallId } = useAppState();
+  const { state, actions, assetSummaries, portfolioStats, activeAssetId } = useAppState();
+  const { formatCurrency } = useCurrency();
   const { theme, setTheme } = useTheme();
-  const [mallName, setMallName] = useState(state.mall?.name ?? '');
-  const [city, setCity] = useState(state.mall?.city ?? '');
-  const [region, setRegion] = useState(state.mall?.region ?? '');
-  const [notes, setNotes] = useState(state.mall?.notes ?? '');
-  const [backendUrl, setBackendUrl] = useState(state.mall?.backendUrl ?? 'http://localhost:4000/api');
-  const [syncEnabled, setSyncEnabled] = useState(Boolean(state.mall?.syncEnabled));
+  const [assetName, setAssetName] = useState(state.asset?.name ?? '');
+  const [city, setCity] = useState(state.asset?.city ?? '');
+  const [region, setRegion] = useState(state.asset?.region ?? '');
+  const [notes, setNotes] = useState(state.asset?.notes ?? '');
+  const [backendUrl, setBackendUrl] = useState(state.asset?.backendUrl ?? '/api');
+  const [syncEnabled, setSyncEnabled] = useState(Boolean(state.asset?.syncEnabled));
   const [units, setUnits] = useState(state.units);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMessage, setBackupMessage] = useState('');
+  const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
+  const [deleteUnitConfirm, setDeleteUnitConfirm] = useState<{ open: boolean; unitId: string }>({ open: false, unitId: '' });
 
   useEffect(() => {
-    setMallName(state.mall?.name ?? '');
-    setCity(state.mall?.city ?? '');
-    setRegion(state.mall?.region ?? '');
-    setNotes(state.mall?.notes ?? '');
-    setBackendUrl(state.mall?.backendUrl ?? 'http://localhost:4000/api');
-    setSyncEnabled(Boolean(state.mall?.syncEnabled));
+    setAssetName(state.asset?.name ?? '');
+    setCity(state.asset?.city ?? '');
+    setRegion(state.asset?.region ?? '');
+    setNotes(state.asset?.notes ?? '');
+    setBackendUrl(state.asset?.backendUrl ?? '/api');
+    setSyncEnabled(Boolean(state.asset?.syncEnabled));
     setUnits(state.units);
-    if (state.mall?.themePreference) {
-      setTheme(state.mall.themePreference);
+    if (state.asset?.themePreference) {
+      setTheme(state.asset.themePreference);
     }
-  }, [activeMallId, setTheme, state.mall?.backendUrl, state.mall?.city, state.mall?.name, state.mall?.notes, state.mall?.region, state.mall?.syncEnabled, state.mall?.themePreference, state.units]);
+  }, [activeAssetId, setTheme, state.asset?.backendUrl, state.asset?.city, state.asset?.name, state.asset?.notes, state.asset?.region, state.asset?.syncEnabled, state.asset?.themePreference, state.units]);
 
-  const saveMall = () => {
-    actions.updateMallSettings({
-      name: mallName,
+  const saveAsset = () => {
+    actions.updateAssetSettings({
+      name: assetName,
       city,
       region,
       notes,
@@ -52,7 +57,7 @@ export function Configuracion() {
       syncEnabled,
     });
     actions.replaceUnits(units);
-    setBackupMessage('Configuración del mall actualizada.');
+    setBackupMessage('Configuración del activo actualizada.');
   };
 
   const exportReport = (filename: string, content: string) => {
@@ -68,10 +73,10 @@ export function Configuracion() {
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = href;
-      link.download = `malliq-${(state.mall?.name ?? 'mall').replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `malliq-${(state.asset?.name ?? 'activo').replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(href);
-      setBackupMessage('Respaldo del mall activo exportado correctamente.');
+      setBackupMessage('Respaldo del activo activo exportado correctamente.');
     } finally {
       setBackupBusy(false);
     }
@@ -105,7 +110,7 @@ export function Configuracion() {
       const raw = await file.text();
       const archive = JSON.parse(raw);
       await actions.importBackup(archive);
-      setBackupMessage(`Respaldo del mall activo importado desde ${file.name}.`);
+      setBackupMessage(`Respaldo del activo activo importado desde ${file.name}.`);
     } catch (error) {
       setBackupMessage(`No se pudo importar el respaldo: ${error instanceof Error ? error.message : 'archivo inválido'}`);
     } finally {
@@ -138,12 +143,15 @@ export function Configuracion() {
     setBackupBusy(true);
     try {
       const health = await actions.pingServer(backendUrl);
+      setServerHealth(health);
+      const summary = health.summary;
       setBackupMessage(
         health.ok
-          ? `Servidor disponible. Archivo remoto ${health.archiveExists ? 'detectado' : 'aún no creado'}. Revisión ${health.revision}${health.updatedAt ? `, actualizado ${new Date(health.updatedAt).toLocaleString('es-CL')}` : ''}.`
+          ? `Servidor disponible. Archivo remoto ${health.archiveExists ? 'detectado' : 'aún no creado'}. Revisión ${health.revision}${health.updatedAt ? `, actualizado ${new Date(health.updatedAt).toLocaleString('es-CL')}` : ''}.${summary ? ` Contratos ${summary.contracts}, ventas ${summary.sales}, documentos ${summary.documents}.` : ''}`
           : 'El servidor no respondió correctamente.',
       );
     } catch (error) {
+      setServerHealth(null);
       setBackupMessage(`No se pudo contactar el backend: ${error instanceof Error ? error.message : 'error desconocido'}`);
     } finally {
       setBackupBusy(false);
@@ -193,7 +201,7 @@ export function Configuracion() {
       <div>
         <h1 className="text-xl font-bold md:text-2xl">Configuración</h1>
         <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-          Ajustes del mall, estructura física, personalización visual e integraciones configuradas.
+          Ajustes del activo, estructura física, personalización visual e integraciones configuradas.
         </p>
       </div>
 
@@ -205,11 +213,11 @@ export function Configuracion() {
               <h3 className="text-sm font-semibold">Portafolio operativo</h3>
             </div>
             <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
-              {portfolioStats.mallCount} mall(es) cargados en esta instalación. Cambia el mall activo desde la barra superior o administra el portafolio completo en su módulo dedicado.
+              {portfolioStats.assetCount} activo(s) cargados en esta instalación. Cambia el activo activo desde la barra superior o administra el portafolio completo en su módulo dedicado.
             </p>
           </div>
           <button
-            onClick={() => navigate('/admin/malls')}
+            onClick={() => navigate('/admin/activos')}
             className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
           >
             Administrar portafolio
@@ -217,12 +225,12 @@ export function Configuracion() {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
           <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
-            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Mall activo</p>
-            <p className="mt-2 text-lg font-semibold">{state.mall?.name ?? 'Sin selección'}</p>
+            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Activo activo</p>
+            <p className="mt-2 text-lg font-semibold">{state.asset?.name ?? 'Sin selección'}</p>
           </div>
           <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
-            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Malls</p>
-            <p className="mt-2 text-lg font-semibold">{portfolioStats.mallCount}</p>
+            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Activos</p>
+            <p className="mt-2 text-lg font-semibold">{portfolioStats.assetCount}</p>
           </div>
           <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
             <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Locales del portafolio</p>
@@ -230,12 +238,12 @@ export function Configuracion() {
           </div>
           <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
             <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Ventas consolidadas</p>
-            <p className="mt-2 text-lg font-semibold">{formatPeso(portfolioStats.monthlySales)}</p>
+            <p className="mt-2 text-lg font-semibold">{formatCurrency(portfolioStats.monthlySales)}</p>
           </div>
         </div>
-        {mallSummaries.length > 1 ? (
+        {assetSummaries.length > 1 ? (
           <p className="mt-4 text-xs text-[var(--sidebar-fg)]">
-            Mall activo actual: {mallSummaries.find((mall) => mall.id === activeMallId)?.name ?? 'Sin selección'}.
+            Activo activo actual: {assetSummaries.find((a) => a.id === activeAssetId)?.name ?? 'Sin selección'}.
           </p>
         ) : null}
       </div>
@@ -244,11 +252,11 @@ export function Configuracion() {
         <div className="glass-card p-5">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="h-4 w-4 text-blue-600" />
-            <h3 className="text-sm font-semibold">Mall y apariencia</h3>
+            <h3 className="text-sm font-semibold">Activo y apariencia</h3>
           </div>
           <div className="mt-4 space-y-3">
-            <Field label="Nombre del mall">
-              <input value={mallName} onChange={(event) => setMallName(event.target.value)} className="input-field" />
+            <Field label="Nombre del activo">
+              <input value={assetName} onChange={(event) => setAssetName(event.target.value)} className="input-field" />
             </Field>
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Ciudad">
@@ -281,20 +289,20 @@ export function Configuracion() {
                   <button onClick={pullServer} disabled={backupBusy} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900">
                     Bajar estado
                   </button>
-                  {state.mall?.syncStatus === 'conflict' ? (
+                  {state.asset?.syncStatus === 'conflict' ? (
                     <button onClick={forcePushServer} disabled={backupBusy} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
                       Forzar subida local
                     </button>
                   ) : null}
                 </div>
-                {state.mall?.lastSyncedAt ? (
-                  <p className="text-xs text-[var(--sidebar-fg)]">Última sincronización: {new Date(state.mall.lastSyncedAt).toLocaleString('es-CL')}</p>
+                {state.asset?.lastSyncedAt ? (
+                  <p className="text-xs text-[var(--sidebar-fg)]">Última sincronización: {new Date(state.asset.lastSyncedAt).toLocaleString('es-CL')}</p>
                 ) : null}
                 <div className="rounded-2xl bg-[var(--hover-bg)] px-4 py-3 text-sm">
-                  <p className="font-semibold">Estado: {state.mall?.syncStatus ?? 'idle'}</p>
-                  <p className="mt-1 text-[var(--sidebar-fg)]">{state.mall?.syncMessage || 'Sin eventos de sincronización todavía.'}</p>
-                  {typeof state.mall?.serverRevision === 'number' ? (
-                    <p className="mt-1 text-xs text-[var(--sidebar-fg)]">Revisión remota conocida: {state.mall.serverRevision}</p>
+                  <p className="font-semibold">Estado: {state.asset?.syncStatus ?? 'idle'}</p>
+                  <p className="mt-1 text-[var(--sidebar-fg)]">{state.asset?.syncMessage || 'Sin eventos de sincronización todavía.'}</p>
+                  {typeof state.asset?.serverRevision === 'number' ? (
+                    <p className="mt-1 text-xs text-[var(--sidebar-fg)]">Revisión remota conocida: {state.asset.serverRevision}</p>
                   ) : null}
                   {syncEnabled ? (
                     <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
@@ -302,6 +310,19 @@ export function Configuracion() {
                     </p>
                   ) : null}
                 </div>
+                {serverHealth ? (
+                  <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-3 text-sm">
+                    <p className="font-semibold">Diagnóstico del backend</p>
+                    <p className="mt-1 text-[var(--sidebar-fg)]">
+                      IA contratos: {serverHealth.aiMode === 'openai' ? 'OpenAI' : serverHealth.aiMode === 'moonshot' ? 'Moonshot' : 'Mock local'}.
+                    </p>
+                    {serverHealth.summary ? (
+                      <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+                        {serverHealth.summary.units} locales, {serverHealth.summary.contracts} contratos, {serverHealth.summary.sales} ventas, {serverHealth.summary.documents} documentos remotos.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="rounded-2xl border border-[var(--border-color)] p-4">
@@ -310,7 +331,7 @@ export function Configuracion() {
                 onClick={() => {
                   const nextTheme = theme === 'dark' ? 'light' : 'dark';
                   setTheme(nextTheme);
-                  actions.updateMallSettings({ themePreference: nextTheme });
+                  actions.updateAssetSettings({ themePreference: nextTheme });
                 }}
                 className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm"
               >
@@ -366,7 +387,7 @@ export function Configuracion() {
           <h3 className="text-sm font-semibold">Respaldo y restauración</h3>
         </div>
         <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
-          Exporta o restaura el mall activo o todo el portafolio, incluyendo documentos adjuntos guardados en el navegador.
+          Exporta o restaura el activo activo o todo el portafolio, incluyendo documentos adjuntos guardados en el navegador.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
@@ -375,7 +396,7 @@ export function Configuracion() {
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            Exportar mall activo
+            Exportar activo activo
           </button>
           <button
             onClick={exportPortfolioBackup}
@@ -387,7 +408,7 @@ export function Configuracion() {
           </button>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
             <Upload className="h-4 w-4" />
-            Importar mall activo
+            Importar activo activo
             <input type="file" accept=".json" className="hidden" onChange={importMallBackup} disabled={backupBusy} />
           </label>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold">
@@ -433,7 +454,7 @@ export function Configuracion() {
       <div className="glass-card p-5">
         <div className="flex items-center gap-2">
           <MapPinned className="h-4 w-4 text-amber-600" />
-          <h3 className="text-sm font-semibold">Base física del mall</h3>
+          <h3 className="text-sm font-semibold">Base física del activo</h3>
         </div>
         <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
           Edita manualmente los locales y sus m2. Estos valores controlan el plano, la superficie ocupada y los contratos multi-local.
@@ -557,7 +578,7 @@ export function Configuracion() {
                   </td>
                   <td className="px-3 py-2">
                     <button
-                      onClick={() => setUnits((current) => current.filter((item) => item.id !== unit.id))}
+                      onClick={() => setDeleteUnitConfirm({ open: true, unitId: unit.id })}
                       className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -570,11 +591,23 @@ export function Configuracion() {
           </table>
         </div>
         <div className="mt-4 flex justify-end">
-          <button onClick={saveMall} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
+          <button onClick={saveAsset} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
             Guardar configuración
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteUnitConfirm.open}
+        title="Quitar local"
+        message="¿Estás seguro de quitar este local? Se desvinculará de contratos y ventas asociadas."
+        variant="danger"
+        onConfirm={() => {
+          setUnits((current) => current.filter((item) => item.id !== deleteUnitConfirm.unitId));
+          setDeleteUnitConfirm({ open: false, unitId: '' });
+        }}
+        onCancel={() => setDeleteUnitConfirm({ open: false, unitId: '' })}
+      />
     </div>
   );
 }

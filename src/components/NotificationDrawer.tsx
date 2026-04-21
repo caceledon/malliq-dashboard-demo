@@ -6,33 +6,33 @@ export function NotificationDrawer() {
   const [open, setOpen] = useState(false);
   const { insights, state } = useAppState();
   const systemAlerts =
-    state.mall?.syncStatus === 'conflict'
+    state.asset?.syncStatus === 'conflict'
       ? [
           {
             id: 'sync-conflict',
             type: 'critical',
             title: 'Conflicto de sincronización',
             description:
-              state.mall.syncMessage || 'El backend cambió mientras existían cambios locales pendientes.',
+              state.asset.syncMessage || 'El backend cambió mientras existían cambios locales pendientes.',
           },
         ]
-      : state.mall?.syncStatus === 'offline'
+      : state.asset?.syncStatus === 'offline'
         ? [
             {
               id: 'sync-offline',
               type: 'warning',
               title: 'Backend sin conexión',
               description:
-                state.mall.syncMessage || 'La sincronización remota está caída; los cambios siguen guardándose en este navegador.',
+                state.asset.syncMessage || 'La sincronización remota está caída; los cambios siguen guardándose en este navegador.',
             },
           ]
-        : state.mall?.syncStatus === 'syncing'
+        : state.asset?.syncStatus === 'syncing'
           ? [
               {
                 id: 'sync-running',
                 type: 'info',
                 title: 'Sincronización en curso',
-                description: state.mall.syncMessage || 'Se están publicando o descargando cambios desde el backend.',
+                description: state.asset.syncMessage || 'Se están publicando o descargando cambios desde el backend.',
               },
             ]
           : [];

@@ -1,3 +1,4 @@
+
 import { useNavigate } from 'react-router-dom';
 import {
   Area,
@@ -15,29 +16,33 @@ import {
 } from 'recharts';
 import {
   Activity,
-  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   Building2,
-  CircleArrowRight,
   FileCheck2,
-  Layers,
   ReceiptText,
   Target,
-  TrendingUp,
   Users,
   Printer,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { InteractiveMap } from '@/components/InteractiveMap';
-import { buildProspectContractTemplate, buildRenewalContractTemplate, getContractLifecycle } from '@/lib/domain';
-import { formatNumber, formatPercent, formatPeso } from '@/lib/format';
+import { getContractLifecycle } from '@/lib/domain';
+import { formatNumber, formatPercent } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { AlertsPanel } from './dashboard/AlertsPanel';
+import { RenewalsPanel } from './dashboard/RenewalsPanel';
+import { VacanciesPanel } from './dashboard/VacanciesPanel';
+import { TopTenantsPanel } from './dashboard/TopTenantsPanel';
+import { AssetSummaryPanel } from './dashboard/AssetSummaryPanel';
+import { PortfolioComparisonPanel } from './dashboard/PortfolioComparisonPanel';
+import { ActivityFeedPanel } from './dashboard/ActivityFeedPanel';
 
 export function AdminDashboard() {
   const navigate = useNavigate();
-  const { insights, state, mallSummaries, portfolioStats, actions } = useAppState();
-  const recentImports = state.importLogs.slice(0, 4);
+  const { insights, state, assetSummaries, portfolioStats } = useAppState();
+  const { formatCurrency } = useCurrency();
   const topTenants = [...insights.tenantSummaries]
     .sort((left, right) => right.salesPerM2 - left.salesPerM2)
     .slice(0, 5);
@@ -99,12 +104,12 @@ export function AdminDashboard() {
         <div>
           <h1 className="text-xl font-bold md:text-2xl">Dashboard operativo</h1>
           <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-            {state.mall?.name ?? 'Mall sin configurar'} · ventas, contratos, firmas y planificación en un solo tablero.
+            {state.asset?.name ?? 'Activo sin configurar'} · ventas, contratos, firmas y planificación en un solo tablero.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => navigate('/admin/malls')}
+            onClick={() => navigate('/admin/activos')}
             className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
           >
             <Building2 className="h-4 w-4" />
@@ -139,24 +144,24 @@ export function AdminDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           title="Ocupación"
-          value={formatPercent(insights.occupancyPct)}
-          subtitle={`${insights.occupiedUnits}/${insights.totalUnits} locales con contrato`}
+          value={`${insights.occupiedUnits}/${insights.totalUnits}`}
+          subtitle={`${insights.vacantUnits} vacantes`}
           icon={<Building2 className="h-4 w-4 text-blue-600" />}
         />
         <KpiCard
           title="Ventas del mes"
-          value={formatPeso(insights.monthlySales)}
+          value={formatCurrency(insights.monthlySales)}
           subtitle={
             momChange !== 0
               ? `${momChange > 0 ? '+' : ''}${momChange.toFixed(1)}% vs mes anterior`
-              : `${formatPeso(insights.averageSalesPerM2)}/m2`
+              : `${formatCurrency(insights.averageSalesPerM2)}/m²`
           }
           icon={<ReceiptText className="h-4 w-4 text-emerald-600" />}
           trend={momChange}
         />
         <KpiCard
           title="Renta proyectada"
-          value={formatPeso(insights.monthlyRent)}
+          value={formatCurrency(insights.monthlyRent)}
           subtitle="Fija + variable + gastos comunes"
           icon={<Activity className="h-4 w-4 text-amber-600" />}
         />
@@ -169,7 +174,7 @@ export function AdminDashboard() {
         <KpiCard
           title="Presupuesto"
           value={insights.budgetCompletionPct > 0 ? formatPercent(insights.budgetCompletionPct) : 'Sin carga'}
-          subtitle={insights.activeForecast > 0 ? `Forecast: ${formatPeso(insights.activeForecast)}` : 'Forecast no generado'}
+          subtitle={insights.activeForecast > 0 ? `Forecast: ${formatCurrency(insights.activeForecast)}` : 'Forecast no generado'}
           icon={<Target className="h-4 w-4 text-rose-600" />}
         />
       </div>
@@ -181,7 +186,7 @@ export function AdminDashboard() {
             <p className="text-xs text-[var(--sidebar-fg)]">Serie de los últimos 6 meses a partir de cargas reales.</p>
           </div>
           <div className="mt-4 h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
               <AreaChart data={insights.chartSeries}>
                 <defs>
                   <linearGradient id="sales-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -208,7 +213,7 @@ export function AdminDashboard() {
                     borderRadius: 16,
                     fontSize: 12,
                   }}
-                  formatter={(value) => [formatPeso(Number(value ?? 0)), '']}
+                  formatter={(value) => [formatCurrency(Number(value ?? 0)), '']}
                 />
                 <Area type="monotone" dataKey="sales" stroke="#2563EB" strokeWidth={2.5} fill="url(#sales-gradient)" name="Ventas" />
                 <Area type="monotone" dataKey="budget" stroke="#10B981" strokeWidth={2} fill="url(#budget-gradient)" name="Presupuesto" />
@@ -223,7 +228,7 @@ export function AdminDashboard() {
             <h3 className="text-sm font-semibold">Ocupación por superficie</h3>
             <div className="mt-2 flex items-center gap-6">
               <div className="h-[140px] w-[140px] shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
                   <PieChart>
                     <Pie
                       data={donutData}
@@ -262,7 +267,7 @@ export function AdminDashboard() {
             <div className="glass-card p-5">
               <h3 className="text-sm font-semibold">Ventas por fuente de datos</h3>
               <div className="mt-3 h-[140px]">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
                   <BarChart data={sourceChartData} layout="vertical" barCategoryGap={6}>
                     <XAxis
                       type="number"
@@ -286,7 +291,7 @@ export function AdminDashboard() {
                         borderRadius: 14,
                         fontSize: 12,
                       }}
-                      formatter={(value) => [formatPeso(Number(value ?? 0)), 'Ventas']}
+                      formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Ventas']}
                     />
                     <Bar dataKey="amount" radius={[0, 8, 8, 0]}>
                       {sourceChartData.map((entry, index) => (
@@ -301,328 +306,23 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <h3 className="text-sm font-semibold">Alertas activas</h3>
-            {insights.alerts.length > 0 ? (
-              <span className="ml-auto rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                {insights.alerts.length}
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-4 space-y-3">
-            {insights.alerts.slice(0, 5).map((alert) => (
-              <div key={alert.id} className="rounded-2xl border border-[var(--border-color)] p-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      alert.type === 'critical' ? 'bg-red-600' : alert.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
-                    }`}
-                  />
-                  <p className="text-sm font-semibold">{alert.title}</p>
-                </div>
-                <p className="mt-1 pl-4 text-xs text-[var(--sidebar-fg)]">{alert.description}</p>
-              </div>
-            ))}
-            {insights.alerts.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-4 text-center">
-                <Layers className="h-8 w-8 text-[var(--border-color)]" />
-                <p className="text-sm text-[var(--sidebar-fg)]">Sin alertas por ahora. ¡Todo marcha bien!</p>
-              </div>
-            ) : null}
-            {insights.alerts.length > 5 ? (
-              <button
-                onClick={() => navigate('/admin/alertas')}
-                className="w-full rounded-xl border border-[var(--border-color)] py-2 text-center text-xs font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-              >
-                Ver las {insights.alerts.length} alertas
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="glass-card p-5">
-          <h3 className="text-sm font-semibold">Últimas importaciones</h3>
-          <div className="mt-4 space-y-3">
-            {recentImports.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-4 text-center">
-                <ReceiptText className="h-8 w-8 text-[var(--border-color)]" />
-                <p className="text-sm text-[var(--sidebar-fg)]">Aún no hay movimientos de carga.</p>
-                <button
-                  onClick={() => navigate('/admin/cargas')}
-                  className="mt-1 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
-                >
-                  Cargar datos
-                </button>
-              </div>
-            ) : (
-              recentImports.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--hover-bg)] p-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`rounded-lg p-1.5 ${item.status === 'success' ? 'bg-emerald-100 dark:bg-emerald-950/30' : 'bg-red-100 dark:bg-red-950/30'}`}>
-                      <ReceiptText className={`h-3.5 w-3.5 ${item.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold capitalize">{item.source.replace('_', ' ')}</p>
-                      <p className="text-xs text-[var(--sidebar-fg)]">{item.note}</p>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold">{item.importedCount}</p>
-                    <p className="text-[10px] text-[var(--sidebar-fg)]">{new Date(item.createdAt).toLocaleDateString('es-CL')}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <AlertsPanel alerts={insights.alerts} />
+        <ActivityFeedPanel key={state.asset?.backendUrl ?? 'no-api'} apiBase={state.asset?.backendUrl} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2">
-            <CircleArrowRight className="h-4 w-4 text-blue-600" />
-            <h3 className="text-sm font-semibold">Cola de renovaciones</h3>
-          </div>
-          <div className="mt-4 space-y-3">
-            {renewalQueue.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-4 text-center">
-                <FileCheck2 className="h-8 w-8 text-[var(--border-color)]" />
-                <p className="text-sm text-[var(--sidebar-fg)]">No hay renovaciones urgentes por ahora.</p>
-              </div>
-            ) : (
-              renewalQueue.map((tenant) => (
-                <div key={tenant.id} className="rounded-2xl border border-[var(--border-color)] p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">{tenant.storeName}</p>
-                      <p className="text-xs text-[var(--sidebar-fg)]">
-                        {tenant.localCodes.join(', ')} · vence {tenant.endDate}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => navigate(`/admin/locatarios/${tenant.id}`)}
-                        className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-                      >
-                        Abrir
-                      </button>
-                      <button
-                        onClick={() => {
-                          const contract = state.contracts.find((item) => item.id === tenant.id);
-                          if (!contract) {
-                            return;
-                          }
-                          navigate('/admin/locatarios', {
-                            state: {
-                              contractTemplate: buildRenewalContractTemplate(contract),
-                              flashMessage: `Borrador de renovación generado para ${tenant.storeName}.`,
-                            },
-                          });
-                        }}
-                        className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-                      >
-                        Crear renovación
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2">
-            <CircleArrowRight className="h-4 w-4 text-emerald-600" />
-            <h3 className="text-sm font-semibold">Vacancias con match comercial</h3>
-          </div>
-          <div className="mt-4 space-y-3">
-            {vacancyMatches.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-4 text-center">
-                <Building2 className="h-8 w-8 text-[var(--border-color)]" />
-                <p className="text-sm text-[var(--sidebar-fg)]">No hay vacancias activas visibles.</p>
-              </div>
-            ) : (
-              vacancyMatches.map(({ unit, prospect }) => (
-                <div key={unit.id} className="rounded-2xl border border-[var(--border-color)] p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">{unit.code}</p>
-                      <p className="text-xs text-[var(--sidebar-fg)]">{unit.label} · {unit.areaM2} m2</p>
-                      <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
-                        {prospect ? `Mejor match: ${prospect.brandName} (${prospect.targetAreaM2} m2)` : 'Sin prospecto sugerido'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => navigate('/admin/ecosistema', { state: { focusUnitId: unit.id } })}
-                        className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-                      >
-                        Ver prospectos
-                      </button>
-                      {prospect ? (
-                        <button
-                          onClick={() =>
-                            navigate('/admin/locatarios', {
-                              state: {
-                                contractTemplate: buildProspectContractTemplate(prospect, [unit.id]),
-                                flashMessage: `Borrador generado para ocupar ${unit.code} con ${prospect.brandName}.`,
-                              },
-                            })
-                          }
-                          className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-                        >
-                          Crear borrador
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <RenewalsPanel renewalQueue={renewalQueue} contracts={state.contracts} />
+        <VacanciesPanel vacancyMatches={vacancyMatches} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-            <h3 className="text-sm font-semibold">Top tiendas por ventas / m²</h3>
-          </div>
-          <div className="mt-4 space-y-3">
-            {topTenants.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-4 text-center">
-                <TrendingUp className="h-8 w-8 text-[var(--border-color)]" />
-                <p className="text-sm text-[var(--sidebar-fg)]">Sin datos de ranking disponible.</p>
-              </div>
-            ) : (
-              topTenants.map((tenant, index) => (
-                <div
-                  key={tenant.id}
-                  className="cursor-pointer rounded-2xl border border-[var(--border-color)] p-3 transition-colors hover:bg-[var(--hover-bg)]"
-                  onClick={() => navigate(`/admin/locatarios/${tenant.id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white ${
-                        index === 0
-                          ? 'bg-gradient-to-br from-amber-400 to-amber-600'
-                          : index === 1
-                            ? 'bg-gradient-to-br from-slate-300 to-slate-500'
-                            : index === 2
-                              ? 'bg-gradient-to-br from-orange-400 to-orange-600'
-                              : 'bg-[var(--hover-bg)] !text-[var(--fg)]'
-                      }`}
-                    >
-                      {index + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="truncate text-sm font-semibold">{tenant.storeName}</p>
-                        <p className="ml-3 shrink-0 text-sm font-bold">{formatPeso(tenant.salesPerM2)}<span className="text-xs font-normal text-[var(--sidebar-fg)]">/m²</span></p>
-                      </div>
-                      <p className="text-xs text-[var(--sidebar-fg)]">
-                        {tenant.localCodes.join(', ')} · {tenant.areaM2} m²
-                      </p>
-                      <div className="progress-bar mt-2">
-                        <div
-                          className="progress-bar-fill"
-                          style={{
-                            width: `${Math.min(100, (tenant.salesPerM2 / maxSalesPerM2) * 100)}%`,
-                            background: index === 0 ? '#2563EB' : index === 1 ? '#10B981' : '#7C3AED',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="glass-card p-5">
-          <h3 className="text-sm font-semibold">Resumen del mall</h3>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <MetricBox label="Locales totales" value={formatNumber(insights.totalUnits)} icon={<Building2 className="h-4 w-4 text-blue-500" />} />
-            <MetricBox label="Superficie total" value={`${formatNumber(insights.totalAreaM2)} m²`} icon={<Layers className="h-4 w-4 text-emerald-500" />} />
-            <MetricBox
-              label="Ventas / m²"
-              value={formatPeso(insights.averageSalesPerM2)}
-              icon={<TrendingUp className="h-4 w-4 text-amber-500" />}
-            />
-            <MetricBox
-              label="Contratos activos"
-              value={formatNumber(insights.tenantSummaries.length)}
-              icon={<FileCheck2 className="h-4 w-4 text-indigo-500" />}
-            />
-          </div>
-          {state.prospects.length > 0 || state.suppliers.length > 0 ? (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <MetricBox label="Prospectos" value={formatNumber(state.prospects.filter((p) => p.stage !== 'descartado' && p.stage !== 'cerrado').length)} icon={<Users className="h-4 w-4 text-purple-500" />} />
-              <MetricBox label="Proveedores" value={formatNumber(state.suppliers.filter((s) => s.status === 'activo').length)} icon={<Users className="h-4 w-4 text-rose-500" />} />
-            </div>
-          ) : null}
-        </div>
+        <TopTenantsPanel topTenants={topTenants} maxSalesPerM2={maxSalesPerM2} />
+        <AssetSummaryPanel insights={insights} prospects={state.prospects} suppliers={state.suppliers} />
       </div>
 
-      {mallSummaries.length > 1 ? (
-        <div className="glass-card p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold">Comparativo del portafolio</h3>
-              <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
-                Vista rápida de desempeño entre malls para cambiar el foco operativo sin salir del dashboard.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <MetricBox label="Malls" value={formatNumber(portfolioStats.mallCount)} icon={<Building2 className="h-4 w-4 text-blue-500" />} />
-              <MetricBox label="Ventas consolidadas" value={formatPeso(portfolioStats.monthlySales)} icon={<ReceiptText className="h-4 w-4 text-emerald-500" />} />
-              <MetricBox label="Alertas abiertas" value={formatNumber(portfolioStats.alertCount)} icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} />
-            </div>
-          </div>
-          <div className="mt-4 overflow-auto rounded-2xl border border-[var(--border-color)]">
-            <table className="w-full min-w-[760px]">
-              <thead className="bg-[var(--hover-bg)]">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Mall</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Ocupación</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Ventas mes</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Alertas</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mallSummaries.map((mall) => (
-                  <tr key={mall.id} className="border-t border-[var(--border-color)]">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold">{mall.name}</p>
-                      <p className="text-xs text-[var(--sidebar-fg)]">{mall.city} · {mall.region}</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm">{formatPercent(mall.occupancyPct)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold">{formatPeso(mall.monthlySales)}</td>
-                    <td className="px-4 py-3 text-sm">{mall.alertCount}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => {
-                          actions.switchMall(mall.id);
-                          navigate('/admin/dashboard');
-                        }}
-                        className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-                      >
-                        Abrir
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {assetSummaries.length > 1 ? (
+        <PortfolioComparisonPanel assetSummaries={assetSummaries} portfolioStats={portfolioStats} />
       ) : null}
     </div>
   );
@@ -662,14 +362,4 @@ function KpiCard({
   );
 }
 
-function MetricBox({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{label}</p>
-        {icon ? <div className="rounded-lg bg-[var(--card-bg)] p-1.5">{icon}</div> : null}
-      </div>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
-    </div>
-  );
-}
+

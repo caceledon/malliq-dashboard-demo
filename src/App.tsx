@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ToastProvider } from '@/components/Toast';
 import { ThemeProvider, useTheme } from '@/lib/theme';
+import { CurrencyProvider } from '@/lib/currency';
 import { AppStateProvider, useAppState } from '@/store/appState';
 import { NotFound } from '@/pages/NotFound';
 import { PortalSelector } from '@/pages/PortalSelector';
@@ -35,15 +36,15 @@ function withSuspense(element: ReactNode) {
   );
 }
 
-function ActiveMallThemeSync() {
+function ActiveAssetThemeSync() {
   const { state } = useAppState();
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    if (state.mall?.themePreference && state.mall.themePreference !== theme) {
-      setTheme(state.mall.themePreference);
+    if (state.asset?.themePreference && state.asset.themePreference !== theme) {
+      setTheme(state.asset.themePreference);
     }
-  }, [state.mall?.id, state.mall?.themePreference, theme, setTheme]);
+  }, [state.asset?.id, state.asset?.themePreference, theme, setTheme]);
 
   return null;
 }
@@ -51,35 +52,37 @@ function ActiveMallThemeSync() {
 function App() {
   return (
     <ThemeProvider>
-      <ToastProvider>
-        <AppStateProvider>
-          <HashRouter>
-            <ActiveMallThemeSync />
-            <Routes>
-              <Route element={<AppLayout />}>
-                <Route path="/admin/dashboard" element={withSuspense(<AdminDashboard />)} />
-                <Route path="/admin/malls" element={withSuspense(<Portafolio />)} />
-                <Route path="/admin/locatarios" element={withSuspense(<Locatarios />)} />
-                <Route path="/admin/locatarios/:id" element={withSuspense(<LocatarioDetail />)} />
-                <Route path="/admin/rentas" element={withSuspense(<RentasContratos />)} />
-                <Route path="/admin/cargas" element={withSuspense(<CargasDatos />)} />
-                <Route path="/admin/planeacion" element={withSuspense(<Planeacion />)} />
-                <Route path="/admin/ecosistema" element={withSuspense(<Ecosistema />)} />
-                <Route path="/admin/alertas" element={withSuspense(<Alertas />)} />
-                <Route path="/admin/configuracion" element={withSuspense(<Configuracion />)} />
+      <CurrencyProvider>
+        <ToastProvider>
+          <AppStateProvider>
+            <HashRouter>
+              <ActiveAssetThemeSync />
+              <Routes>
+                <Route element={<AppLayout />}>
+                  <Route path="/admin/dashboard" element={withSuspense(<AdminDashboard />)} />
+                  <Route path="/admin/activos" element={withSuspense(<Portafolio />)} />
+                  <Route path="/admin/locatarios" element={withSuspense(<Locatarios />)} />
+                  <Route path="/admin/locatarios/:id" element={withSuspense(<LocatarioDetail />)} />
+                  <Route path="/admin/rentas" element={withSuspense(<RentasContratos />)} />
+                  <Route path="/admin/cargas" element={withSuspense(<CargasDatos />)} />
+                  <Route path="/admin/planeacion" element={withSuspense(<Planeacion />)} />
+                  <Route path="/admin/ecosistema" element={withSuspense(<Ecosistema />)} />
+                  <Route path="/admin/alertas" element={withSuspense(<Alertas />)} />
+                  <Route path="/admin/configuracion" element={withSuspense(<Configuracion />)} />
 
-                <Route path="/locatario/dashboard" element={withSuspense(<LocatarioDashboard />)} />
-                <Route path="/locatario/contrato" element={withSuspense(<LocatarioContrato />)} />
-                <Route path="/locatario/ventas" element={withSuspense(<LocatarioVentas />)} />
-              </Route>
+                  <Route path="/locatario/dashboard" element={withSuspense(<LocatarioDashboard />)} />
+                  <Route path="/locatario/contrato" element={withSuspense(<LocatarioContrato />)} />
+                  <Route path="/locatario/ventas" element={withSuspense(<LocatarioVentas />)} />
+                </Route>
 
-              {/* Standalone Views without Sidebar */}
-              <Route path="/" element={<PortalSelector />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </HashRouter>
-        </AppStateProvider>
-      </ToastProvider>
+                {/* Standalone Views without Sidebar */}
+                <Route path="/" element={<PortalSelector />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </HashRouter>
+          </AppStateProvider>
+        </ToastProvider>
+      </CurrencyProvider>
     </ThemeProvider>
   );
 }

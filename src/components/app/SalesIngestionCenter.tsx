@@ -13,8 +13,10 @@ import {
 } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { createId, type PosConnectionProfile, type SaleRecord } from '@/lib/domain';
-import { formatDate, formatPeso } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { materializeSales, parsePosPayload, parseReceiptText, type ParsedSaleDraft } from '@/lib/importers';
+import { CsvBulkImporter } from './CsvBulkImporter';
 
 type DraftSource = 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection';
 
@@ -30,7 +32,7 @@ const emptyBucket: DraftBucket = {
 
 export function SalesIngestionCenter() {
   const { state, unitsByCode, actions } = useAppState();
-  const serverSyncEnabled = Boolean(state.mall?.syncEnabled && state.mall?.backendUrl);
+  const serverSyncEnabled = Boolean(state.asset?.syncEnabled && state.asset?.backendUrl);
   const [manualContractId, setManualContractId] = useState('');
   const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
   const [manualAmount, setManualAmount] = useState('');
@@ -65,6 +67,19 @@ export function SalesIngestionCenter() {
   const contracts = state.contracts;
 
   const readFileText = async (file: File) => file.text();
+
+  const reparseOcrText = () => {
+    if (!ocrText.trim()) {
+      setStatusMessage('No hay texto OCR para reprocesar.');
+      return;
+    }
+
+    setOcrBucket((current) => ({
+      ...current,
+      drafts: parseReceiptText(ocrText, 'ocr'),
+    }));
+    setStatusMessage('Texto OCR reprocesado. Revisa el preview antes de importar.');
+  };
 
   const commitDrafts = (bucket: DraftBucket, source: DraftSource) => {
     const sales = materializeSales(bucket.drafts, contracts, unitsByCode).map((sale) => {
@@ -323,6 +338,12 @@ export function SalesIngestionCenter() {
             Subir boleta o imagen
             <input type="file" accept="image/*" className="hidden" onChange={(event) => event.target.files?.[0] && runOcr(event.target.files[0])} />
           </label>
+            <button
+              onClick={reparseOcrText}
+              className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--hover-bg)]"
+            >
+              Procesar texto editado
+            </button>
             {ocrBusy ? <LoaderCircle className="mt-3 h-4 w-4 animate-spin text-blue-600" /> : null}
           </div>
           <label className="mt-4 block">
@@ -379,8 +400,13 @@ export function SalesIngestionCenter() {
             </button>
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2.5 text-sm font-medium">
               <FileUp className="h-4 w-4" />
-              Cargar TXT
-              <input type="file" accept=".txt,.log,.csv" className="hidden" onChange={(event) => event.target.files?.[0] && loadPrinterFile(event.target.files[0])} />
+              Cargar archivo fiscal
+              <input
+                type="file"
+                accept={serverSyncEnabled ? '.txt,.log,.csv,.json,.pdf,image/*' : '.txt,.log,.csv,.json'}
+                className="hidden"
+                onChange={(event) => event.target.files?.[0] && loadPrinterFile(event.target.files[0])}
+              />
             </label>
             <select
               value={printerBucket.fallbackContractId}
@@ -619,6 +645,10 @@ export function SalesIngestionCenter() {
         </section>
       </div>
 
+      <div className="grid gap-6">
+        <CsvBulkImporter />
+      </div>
+
       {statusMessage ? (
         <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-3 text-sm text-[var(--sidebar-fg)]">
           {statusMessage}
@@ -629,6 +659,7 @@ export function SalesIngestionCenter() {
 }
 
 function PreviewTable({ bucket, onImport }: { bucket: DraftBucket; onImport: () => void }) {
+  const { formatCurrency } = useCurrency();
   if (bucket.drafts.length === 0) {
     return (
       <div className="mt-4 rounded-2xl border border-dashed border-[var(--border-color)] p-4 text-sm text-[var(--sidebar-fg)]">
@@ -661,7 +692,7 @@ function PreviewTable({ bucket, onImport }: { bucket: DraftBucket; onImport: () 
                 <td className="px-3 py-2 text-sm">{draft.occurredAt ? formatDate(draft.occurredAt) : 'Sin fecha'}</td>
                 <td className="px-3 py-2 text-sm">{draft.localCode ?? draft.storeLabel ?? 'Sin local'}</td>
                 <td className="px-3 py-2 text-sm">{draft.ticketNumber ?? 'N/D'}</td>
-                <td className="px-3 py-2 text-right text-sm font-semibold">{formatPeso(draft.grossAmount)}</td>
+                <td className="px-3 py-2 text-right text-sm font-semibold">{formatCurrency(draft.grossAmount)}</td>
               </tr>
             ))}
           </tbody>

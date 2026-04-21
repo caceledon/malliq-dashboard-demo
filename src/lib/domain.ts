@@ -16,6 +16,8 @@ export type DocumentKind =
   | 'render'
   | 'presupuesto'
   | 'forecast'
+  | 'plano'
+  | 'permiso'
   | 'otro';
 
 export type PlanType = 'budget' | 'forecast';
@@ -24,7 +26,7 @@ export type ProspectStage = 'nuevo' | 'contactado' | 'negociacion' | 'oferta' | 
 
 export type SupplierStatus = 'activo' | 'inactivo';
 
-export interface MallSettings {
+export interface AssetSettings {
   id: string;
   name: string;
   city: string;
@@ -40,7 +42,7 @@ export interface MallSettings {
   createdAt: string;
 }
 
-export interface MallUnit {
+export interface AssetUnit {
   id: string;
   code: string;
   label: string;
@@ -51,6 +53,13 @@ export interface MallUnit {
   notes?: string;
   manualDisplayName?: string;
   manualCategory?: string;
+}
+
+export interface RentStep {
+  id: string;
+  startDate: string;
+  endDate: string;
+  rentaFijaUfM2: number;
 }
 
 export interface Contract {
@@ -65,6 +74,7 @@ export interface Contract {
   variableRentPct: number;
   baseRentUF: number;
   commonExpenses: number;
+  fondoPromocion: number;
   salesParticipationPct: number;
   escalation: string;
   conditions: string;
@@ -76,6 +86,17 @@ export interface Contract {
   manualStoreName?: string;
   manualCategory?: string;
   manualOverrideNotes?: string;
+  // Nuevos campos comerciales
+  garantiaMonto: number;
+  garantiaVencimiento: string;
+  feeIngreso: number;
+  rentSteps: RentStep[];
+  // Salud del locatario (rating 0-5)
+  healthPagoAlDia: boolean;
+  healthEntregaVentas: boolean;
+  healthNivelVenta: boolean;
+  healthNivelRenta: boolean;
+  healthPercepcionAdmin: boolean;
   createdAt: string;
 }
 
@@ -107,7 +128,7 @@ export interface PlanningEntry {
 
 export interface DocumentRecord {
   id: string;
-  entityType: 'mall' | 'unit' | 'contract';
+  entityType: 'asset' | 'unit' | 'contract';
   entityId: string;
   name: string;
   kind: DocumentKind;
@@ -168,8 +189,8 @@ export interface ImportLog {
 }
 
 export interface AppState {
-  mall: MallSettings | null;
-  units: MallUnit[];
+  asset: AssetSettings | null;
+  units: AssetUnit[];
   contracts: Contract[];
   sales: SaleRecord[];
   planning: PlanningEntry[];
@@ -190,15 +211,19 @@ export interface TenantSummary {
   salesCurrent: number;
   salesPrevious: number;
   salesPerM2: number;
+  ventaPorM2: number;
   rentFixed: number;
   rentVariable: number;
   rentTotal: number;
+  costoOcupacionPct: number;
   startDate: string;
   endDate: string;
   baseRentUF: number;
   lifecycle: ContractLifecycle;
   signatureStatus: SignatureStatus;
   localCount: number;
+  garantiaVencimiento?: string;
+  healthScore: number;
 }
 
 export interface AlertItem {
@@ -218,6 +243,28 @@ export interface ContractOverlapConflict {
   storeNames: string[];
 }
 
+export interface ContractValidationIssue {
+  code:
+    | 'date_range'
+    | 'negative_value'
+    | 'rate_out_of_range'
+    | 'rent_step_date_range'
+    | 'rent_step_overlap'
+    | 'rent_step_out_of_contract';
+  message: string;
+  severity: 'error' | 'warning';
+  stepId?: string;
+}
+
+export interface ContractCommercialSnapshot {
+  effectiveBaseRentUF: number;
+  fixedRent: number;
+  variableRent: number;
+  rentTotal: number;
+  totalOccupancyCost: number;
+  costoOcupacionPct: number;
+}
+
 export interface ChartPoint {
   month: string;
   sales: number;
@@ -233,6 +280,7 @@ export interface DashboardInsights {
   chartSeries: ChartPoint[];
   occupancyPct: number;
   occupiedUnits: number;
+  vacantUnits: number;
   totalUnits: number;
   totalAreaM2: number;
   monthlySales: number;
@@ -255,6 +303,7 @@ export interface BackupArchive {
   state: AppState;
   documents: BackupDocumentPayload[];
   serverRevision?: number;
+  force?: boolean;
 }
 
 export const STORAGE_KEY = 'malliq-functional-state';
@@ -269,6 +318,16 @@ export function getContractDisplayValues(contract: Contract) {
     storeName: contract.autoFillUnits ? contract.storeName : contract.manualStoreName?.trim() || contract.storeName,
     category: contract.autoFillUnits ? contract.category : contract.manualCategory?.trim() || contract.category,
   };
+}
+
+export function getContractHealthScore(contract: Contract): number {
+  let score = 0;
+  if (contract.healthPagoAlDia) score += 1;
+  if (contract.healthEntregaVentas) score += 1;
+  if (contract.healthNivelVenta) score += 1;
+  if (contract.healthNivelRenta) score += 1;
+  if (contract.healthPercepcionAdmin) score += 1;
+  return score;
 }
 
 export function monthKey(dateLike: Date | string): string {
@@ -313,129 +372,94 @@ export function contractDateRangesOverlap(
   left: Pick<Contract, 'startDate' | 'endDate'>,
   right: Pick<Contract, 'startDate' | 'endDate'>,
 ): boolean {
-  return new Date(left.startDate) <= new Date(right.endDate) && new Date(right.startDate) <= new Date(left.endDate);
+  const leftStart = new Date(left.startDate);
+  const leftEnd = new Date(left.endDate);
+  const rightStart = new Date(right.startDate);
+  const rightEnd = new Date(right.endDate);
+
+  if (
+    Number.isNaN(leftStart.getTime()) ||
+    Number.isNaN(leftEnd.getTime()) ||
+    Number.isNaN(rightStart.getTime()) ||
+    Number.isNaN(rightEnd.getTime())
+  ) {
+    return false;
+  }
+
+  return leftStart <= rightEnd && rightStart <= leftEnd;
 }
 
-export function buildRenewalContractTemplate(contract: Contract): Partial<Contract> {
-  const renewalStart = addDays(new Date(contract.endDate), 1);
-  const renewalEnd = addDays(
-    new Date(renewalStart.getFullYear() + 1, renewalStart.getMonth(), renewalStart.getDate()),
-    -1,
-  );
-  const renewalNote = `Renovación generada desde contrato anterior con término ${contract.endDate}.`;
+export function getEffectiveBaseRentUF(
+  contract: Pick<Contract, 'baseRentUF' | 'rentSteps'>,
+  referenceDate = startOfToday(),
+): number {
+  if (!contract.rentSteps || contract.rentSteps.length === 0) {
+    return contract.baseRentUF;
+  }
+  const target = new Date(referenceDate);
+  const activeStep = contract.rentSteps.find((step) => new Date(step.startDate) <= target && target <= new Date(step.endDate));
+  return activeStep ? activeStep.rentaFijaUfM2 : contract.baseRentUF;
+}
+
+export function buildContractCommercialSnapshot(
+  contract: Pick<Contract, 'baseRentUF' | 'rentSteps' | 'fixedRent' | 'variableRentPct' | 'commonExpenses' | 'fondoPromocion'>,
+  areaM2: number,
+  salesAmount: number,
+  referenceDate = startOfToday(),
+  ufToClpRate = 39000,
+): ContractCommercialSnapshot {
+  const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, referenceDate);
+  const fixedRent =
+    contract.baseRentUF > 0
+      ? calculateFixedRentFromUF(areaM2, effectiveBaseRentUF, ufToClpRate)
+      : contract.fixedRent;
+  const variableRent = calculateVariableRentAmount(salesAmount, contract.variableRentPct);
+  const rentTotal = fixedRent + variableRent;
 
   return {
-    companyName: contract.companyName,
-    storeName: contract.storeName,
-    category: contract.category,
-    localIds: [...contract.localIds],
-    startDate: formatIsoDate(renewalStart),
-    endDate: formatIsoDate(renewalEnd),
-    fixedRent: contract.fixedRent,
-    variableRentPct: contract.variableRentPct,
-    baseRentUF: contract.baseRentUF,
-    commonExpenses: contract.commonExpenses,
-    salesParticipationPct: contract.salesParticipationPct,
-    escalation: contract.escalation,
-    conditions: [contract.conditions, renewalNote].filter(Boolean).join('\n\n'),
-    signatureStatus: 'pendiente',
-    annexCount: 0,
-    autoFillUnits: contract.autoFillUnits,
-    manualCompanyName: contract.manualCompanyName ?? '',
-    manualStoreName: contract.manualStoreName ?? '',
-    manualCategory: contract.manualCategory ?? '',
-    manualOverrideNotes: contract.manualOverrideNotes ?? '',
-    signedAt: undefined,
+    effectiveBaseRentUF,
+    fixedRent,
+    variableRent,
+    rentTotal,
+    totalOccupancyCost: rentTotal + contract.commonExpenses + (contract.fondoPromocion || 0),
+    costoOcupacionPct: calculateCostoOcupacion(rentTotal, contract.commonExpenses, contract.fondoPromocion || 0, salesAmount),
   };
 }
 
-export function buildProspectContractTemplate(prospect: Prospect, localIds: string[] = []): Partial<Contract> {
-  const contractStart = startOfToday();
-  const contractEnd = addDays(
-    new Date(contractStart.getFullYear() + 1, contractStart.getMonth(), contractStart.getDate()),
-    -1,
-  );
-
-  return {
-    companyName: prospect.brandName,
-    storeName: prospect.brandName,
-    category: prospect.category,
-    localIds,
-    startDate: formatIsoDate(contractStart),
-    endDate: formatIsoDate(contractEnd),
-    fixedRent: 0,
-    variableRentPct: 0,
-    baseRentUF: 0,
-    commonExpenses: 0,
-    salesParticipationPct: 0,
-    escalation: 'Por definir',
-    conditions: [
-      `Borrador originado desde prospecto ${prospect.brandName}.`,
-      prospect.notes?.trim() ? `Notas comerciales: ${prospect.notes.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    signatureStatus: 'pendiente',
-    annexCount: 0,
-    autoFillUnits: true,
-    manualCompanyName: '',
-    manualStoreName: '',
-    manualCategory: '',
-    manualOverrideNotes: '',
-    signedAt: undefined,
-  };
+export function calculateFixedRentFromUF(areaM2: number, baseRentUF: number, ufToClpRate = 39000): number {
+  return Math.round(areaM2 * baseRentUF * ufToClpRate);
 }
 
-export function emptyAppState(): AppState {
-  return {
-    mall: null,
-    units: [],
-    contracts: [],
-    sales: [],
-    planning: [],
-    documents: [],
-    suppliers: [],
-    prospects: [],
-    posConnections: [],
-    importLogs: [],
-  };
+export function calculateVariableRentAmount(salesAmount: number, variableRentPct: number): number {
+  return Math.round((salesAmount * variableRentPct) / 100);
 }
 
-export function getContractLifecycle(contract: Contract, referenceDate = startOfToday()): ContractLifecycle {
-  const startDate = new Date(contract.startDate);
-  const endDate = new Date(contract.endDate);
-
-  if (endDate < referenceDate) {
-    return 'vencido';
-  }
-
-  if (contract.signatureStatus !== 'firmado') {
-    return 'en_firma';
-  }
-
-  if (startDate > referenceDate) {
-    return 'borrador';
-  }
-
-  const daysToEnd = diffInDays(referenceDate, endDate);
-  if (daysToEnd <= 120) {
-    return 'por_vencer';
-  }
-
-  return 'vigente';
+export function calculateEffectiveRentAmount(
+  contract: Pick<Contract, 'fixedRent' | 'variableRentPct'>,
+  salesAmount: number,
+): number {
+  return Math.max(contract.fixedRent, calculateVariableRentAmount(salesAmount, contract.variableRentPct));
 }
 
-export function getUnitArea(unitIds: string[], units: MallUnit[]): number {
-  return unitIds.reduce((sum, unitId) => {
-    const unit = units.find((item) => item.id === unitId);
-    return sum + (unit?.areaM2 ?? 0);
-  }, 0);
+export function calculateTotalRentAmount(
+  contract: Pick<Contract, 'fixedRent' | 'variableRentPct' | 'commonExpenses' | 'fondoPromocion'>,
+  salesAmount: number,
+): number {
+  return contract.fixedRent + calculateVariableRentAmount(salesAmount, contract.variableRentPct) + contract.commonExpenses + (contract.fondoPromocion || 0);
 }
 
-export function sumSalesByContract(contractId: string, sales: SaleRecord[], month: string): number {
-  return sales
-    .filter((entry) => entry.contractId === contractId && monthKey(entry.occurredAt) === month)
-    .reduce((sum, entry) => sum + entry.grossAmount, 0);
+export function calculateCostoOcupacion(
+  rentTotal: number,
+  commonExpenses: number,
+  fondoPromocion: number,
+  salesAmount: number,
+): number {
+  if (salesAmount <= 0) return 0;
+  return ((rentTotal + commonExpenses + (fondoPromocion || 0)) / salesAmount) * 100;
+}
+
+export function calculateVentaPorM2(salesAmount: number, areaM2: number): number {
+  return areaM2 > 0 ? Math.round(salesAmount / areaM2) : 0;
 }
 
 export function normalizeIsoDay(dateLike: string): string {
@@ -460,7 +484,255 @@ export function buildSaleFingerprint(sale: SaleRecord): string {
   ].join('::');
 }
 
-export function buildTenantSummaries(state: AppState, referenceDate = new Date()): TenantSummary[] {
+export function getUnitArea(unitIds: string[], units: AssetUnit[]): number {
+  return unitIds.reduce((sum, unitId) => {
+    const unit = units.find((item) => item.id === unitId);
+    return sum + (unit?.areaM2 ?? 0);
+  }, 0);
+}
+
+export function sumSalesByContract(contractId: string, sales: SaleRecord[], month: string): number {
+  return sales
+    .filter((entry) => entry.contractId === contractId && monthKey(entry.occurredAt) === month)
+    .reduce((sum, entry) => sum + entry.grossAmount, 0);
+}
+
+export function getContractLifecycle(contract: Contract, referenceDate = startOfToday()): ContractLifecycle {
+  const startDate = new Date(contract.startDate);
+  const endDate = new Date(contract.endDate);
+  const hasValidStart = !Number.isNaN(startDate.getTime());
+  const hasValidEnd = !Number.isNaN(endDate.getTime());
+
+  if (!hasValidStart || !hasValidEnd) {
+    return contract.signatureStatus === 'firmado' ? 'borrador' : 'en_firma';
+  }
+
+  if (endDate < referenceDate) {
+    return 'vencido';
+  }
+
+  if (contract.signatureStatus !== 'firmado') {
+    return 'en_firma';
+  }
+
+  if (startDate > referenceDate) {
+    return 'borrador';
+  }
+
+  const daysToEnd = diffInDays(referenceDate, endDate);
+  if (daysToEnd <= 180) {
+    return 'por_vencer';
+  }
+
+  return 'vigente';
+}
+
+export function buildRenewalContractTemplate(contract: Contract): Partial<Contract> {
+  const renewalStart = addDays(new Date(contract.endDate), 1);
+  const renewalEnd = addDays(
+    new Date(renewalStart.getFullYear() + 1, renewalStart.getMonth(), renewalStart.getDate()),
+    -1,
+  );
+  const renewalNote = `Renovación generada desde contrato anterior con término ${contract.endDate}.`;
+
+  return {
+    companyName: contract.companyName,
+    storeName: contract.storeName,
+    category: contract.category,
+    localIds: [...contract.localIds],
+    startDate: formatIsoDate(renewalStart),
+    endDate: formatIsoDate(renewalEnd),
+    fixedRent: contract.fixedRent,
+    variableRentPct: contract.variableRentPct,
+    baseRentUF: contract.baseRentUF,
+    commonExpenses: contract.commonExpenses,
+    fondoPromocion: contract.fondoPromocion || 0,
+    salesParticipationPct: contract.salesParticipationPct,
+    escalation: contract.escalation,
+    conditions: [contract.conditions, renewalNote].filter(Boolean).join('\n\n'),
+    signatureStatus: 'pendiente',
+    annexCount: 0,
+    autoFillUnits: contract.autoFillUnits,
+    manualCompanyName: contract.manualCompanyName ?? '',
+    manualStoreName: contract.manualStoreName ?? '',
+    manualCategory: contract.manualCategory ?? '',
+    manualOverrideNotes: contract.manualOverrideNotes ?? '',
+    signedAt: undefined,
+    garantiaMonto: contract.garantiaMonto,
+    garantiaVencimiento: contract.garantiaVencimiento,
+    feeIngreso: contract.feeIngreso,
+    rentSteps: contract.rentSteps ? [...contract.rentSteps] : [],
+    healthPagoAlDia: contract.healthPagoAlDia,
+    healthEntregaVentas: contract.healthEntregaVentas,
+    healthNivelVenta: contract.healthNivelVenta,
+    healthNivelRenta: contract.healthNivelRenta,
+    healthPercepcionAdmin: contract.healthPercepcionAdmin,
+  };
+}
+
+export function validateContract(contract: Pick<
+  Contract,
+  | 'startDate'
+  | 'endDate'
+  | 'fixedRent'
+  | 'variableRentPct'
+  | 'baseRentUF'
+  | 'commonExpenses'
+  | 'fondoPromocion'
+  | 'garantiaMonto'
+  | 'feeIngreso'
+  | 'rentSteps'
+>): ContractValidationIssue[] {
+  const issues: ContractValidationIssue[] = [];
+  const startDate = new Date(contract.startDate);
+  const endDate = new Date(contract.endDate);
+
+  if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && startDate > endDate) {
+    issues.push({
+      code: 'date_range',
+      severity: 'error',
+      message: 'La fecha de inicio no puede ser posterior al término del contrato.',
+    });
+  }
+
+  const numericFields = [
+    ['fixedRent', contract.fixedRent],
+    ['variableRentPct', contract.variableRentPct],
+    ['baseRentUF', contract.baseRentUF],
+    ['commonExpenses', contract.commonExpenses],
+    ['fondoPromocion', contract.fondoPromocion],
+    ['garantiaMonto', contract.garantiaMonto],
+    ['feeIngreso', contract.feeIngreso],
+  ] as const;
+
+  numericFields.forEach(([field, value]) => {
+    if (value < 0) {
+      issues.push({
+        code: 'negative_value',
+        severity: 'error',
+        message: `El campo ${field} no puede ser negativo.`,
+      });
+    }
+  });
+
+  if (contract.variableRentPct > 100) {
+    issues.push({
+      code: 'rate_out_of_range',
+      severity: 'error',
+      message: 'La renta variable no puede exceder 100%.',
+    });
+  }
+
+  const orderedSteps = [...contract.rentSteps]
+    .filter((step) => step.startDate || step.endDate || step.rentaFijaUfM2 > 0)
+    .sort((left, right) => left.startDate.localeCompare(right.startDate));
+
+  orderedSteps.forEach((step) => {
+    const stepStart = new Date(step.startDate);
+    const stepEnd = new Date(step.endDate);
+
+    if (Number.isNaN(stepStart.getTime()) || Number.isNaN(stepEnd.getTime()) || stepStart > stepEnd) {
+      issues.push({
+        code: 'rent_step_date_range',
+        severity: 'error',
+        message: `El escalonado ${step.id} tiene un rango de fechas inválido.`,
+        stepId: step.id,
+      });
+      return;
+    }
+
+    if ((!Number.isNaN(startDate.getTime()) && stepStart < startDate) || (!Number.isNaN(endDate.getTime()) && stepEnd > endDate)) {
+      issues.push({
+        code: 'rent_step_out_of_contract',
+        severity: 'warning',
+        message: `El escalonado ${step.id} queda fuera del rango principal del contrato.`,
+        stepId: step.id,
+      });
+    }
+  });
+
+  orderedSteps.forEach((step, index) => {
+    const previous = orderedSteps[index - 1];
+    if (!previous) {
+      return;
+    }
+
+    if (new Date(previous.endDate) >= new Date(step.startDate)) {
+      issues.push({
+        code: 'rent_step_overlap',
+        severity: 'error',
+        message: `Los escalonados ${previous.id} y ${step.id} se superponen.`,
+        stepId: step.id,
+      });
+    }
+  });
+
+  return issues;
+}
+
+export function buildProspectContractTemplate(prospect: Prospect, localIds: string[] = []): Partial<Contract> {
+  const contractStart = startOfToday();
+  const contractEnd = addDays(
+    new Date(contractStart.getFullYear() + 1, contractStart.getMonth(), contractStart.getDate()),
+    -1,
+  );
+
+  return {
+    companyName: prospect.brandName,
+    storeName: prospect.brandName,
+    category: prospect.category,
+    localIds,
+    startDate: formatIsoDate(contractStart),
+    endDate: formatIsoDate(contractEnd),
+    fixedRent: 0,
+    variableRentPct: 0,
+    baseRentUF: 0,
+    commonExpenses: 0,
+    fondoPromocion: 0,
+    salesParticipationPct: 0,
+    escalation: 'Por definir',
+    conditions: [
+      `Borrador originado desde prospecto ${prospect.brandName}.`,
+      prospect.notes?.trim() ? `Notas comerciales: ${prospect.notes.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    signatureStatus: 'pendiente',
+    annexCount: 0,
+    autoFillUnits: true,
+    manualCompanyName: '',
+    manualStoreName: '',
+    manualCategory: '',
+    manualOverrideNotes: '',
+    signedAt: undefined,
+    garantiaMonto: 0,
+    garantiaVencimiento: '',
+    feeIngreso: 0,
+    rentSteps: [],
+    healthPagoAlDia: true,
+    healthEntregaVentas: true,
+    healthNivelVenta: false,
+    healthNivelRenta: false,
+    healthPercepcionAdmin: true,
+  };
+}
+
+export function emptyAppState(): AppState {
+  return {
+    asset: null,
+    units: [],
+    contracts: [],
+    sales: [],
+    planning: [],
+    documents: [],
+    suppliers: [],
+    prospects: [],
+    posConnections: [],
+    importLogs: [],
+  };
+}
+
+export function buildTenantSummaries(state: AppState, referenceDate = new Date(), ufToClpRate = 39000): TenantSummary[] {
   const currentMonth = monthKey(referenceDate);
   const previousMonth = monthKey(addMonths(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1), -1));
 
@@ -470,8 +742,16 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
       const areaM2 = getUnitArea(contract.localIds, state.units);
       const salesCurrent = sumSalesByContract(contract.id, state.sales, currentMonth);
       const salesPrevious = sumSalesByContract(contract.id, state.sales, previousMonth);
-      const rentVariable = Math.round((salesCurrent * contract.variableRentPct) / 100);
-      const rentTotal = contract.fixedRent + contract.commonExpenses + rentVariable;
+
+      const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, referenceDate);
+      const rentFixed = contract.baseRentUF > 0
+        ? calculateFixedRentFromUF(areaM2, effectiveBaseRentUF, ufToClpRate)
+        : contract.fixedRent;
+      const rentVariable = calculateVariableRentAmount(salesCurrent, contract.variableRentPct);
+      const rentTotal = rentFixed + rentVariable;
+      const costoOcupacionPct = calculateCostoOcupacion(rentTotal, contract.commonExpenses, contract.fondoPromocion || 0, salesCurrent);
+      const ventaPorM2 = calculateVentaPorM2(salesCurrent, areaM2);
+      const healthScore = getContractHealthScore(contract);
 
       return {
         id: contract.id,
@@ -484,16 +764,20 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
         areaM2,
         salesCurrent,
         salesPrevious,
-        salesPerM2: areaM2 > 0 ? Math.round(salesCurrent / areaM2) : 0,
-        rentFixed: contract.fixedRent,
+        salesPerM2: ventaPorM2,
+        ventaPorM2,
+        rentFixed,
         rentVariable,
         rentTotal,
+        costoOcupacionPct,
         startDate: contract.startDate,
         endDate: contract.endDate,
-        baseRentUF: contract.baseRentUF,
-        lifecycle: getContractLifecycle(contract),
+        baseRentUF: effectiveBaseRentUF,
+        lifecycle: getContractLifecycle(contract, referenceDate),
         signatureStatus: contract.signatureStatus,
         localCount: contract.localIds.length,
+        garantiaVencimiento: contract.garantiaVencimiento,
+        healthScore,
       };
     })
     .sort((left, right) => left.storeName.localeCompare(right.storeName, 'es'));
@@ -508,9 +792,9 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
 
   if (state.units.length === 0) {
     alerts.push({
-      id: 'setup-mall',
+      id: 'setup-asset',
       type: 'critical',
-      title: 'Falta configurar el mall',
+      title: 'Falta configurar el activo',
       description: 'Debes cargar los locales y sus m2 para activar el mapa, contratos y KPIs.',
       createdAt: today.toISOString(),
     });
@@ -545,8 +829,8 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
       alerts.push({
         id: `unit-vacant-${unit.id}`,
         type: 'warning',
-        title: `Local sin contrato: ${unit.code}`,
-        description: `${unit.label} (${unit.areaM2} m2) no tiene contrato asociado.`,
+        title: `Local vacante: ${unit.code}`,
+        description: `${unit.label} (${unit.areaM2} m2) no tiene arrendatario asociado.`,
         createdAt: today.toISOString(),
         unitId: unit.id,
       });
@@ -600,6 +884,49 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
         description: 'No hay ventas del mes actual registradas para este contrato.',
         createdAt: today.toISOString(),
         contractId: contract.id,
+      });
+    }
+
+    // Alerta garantía próxima
+    if (contract.garantiaVencimiento) {
+      const garantiaDate = new Date(contract.garantiaVencimiento);
+      const daysToGarantia = diffInDays(today, garantiaDate);
+      if (daysToGarantia >= 0 && daysToGarantia <= 30) {
+        alerts.push({
+          id: `garantia-${contract.id}`,
+          type: 'warning',
+          title: `Garantía por vencer: ${display.storeName}`,
+          description: `La garantía vence en ${daysToGarantia} días (${contract.garantiaVencimiento}).`,
+          createdAt: today.toISOString(),
+          contractId: contract.id,
+        });
+      } else if (daysToGarantia < 0) {
+        alerts.push({
+          id: `garantia-expired-${contract.id}`,
+          type: 'critical',
+          title: `Garantía vencida: ${display.storeName}`,
+          description: `La garantía venció el ${contract.garantiaVencimiento}.`,
+          createdAt: today.toISOString(),
+          contractId: contract.id,
+        });
+      }
+    }
+
+    // Alerta step-up próximo
+    if (contract.rentSteps && contract.rentSteps.length > 0) {
+      contract.rentSteps.forEach((step) => {
+        const stepStart = new Date(step.startDate);
+        const daysToStep = diffInDays(today, stepStart);
+        if (daysToStep >= 0 && daysToStep <= 30) {
+          alerts.push({
+            id: `stepup-${contract.id}-${step.id}`,
+            type: 'info',
+            title: `Ajuste de renta próximo: ${display.storeName}`,
+            description: `El escalonado inicia el ${step.startDate} con ${step.rentaFijaUfM2} UF/m².`,
+            createdAt: today.toISOString(),
+            contractId: contract.id,
+          });
+        }
       });
     }
   });
@@ -668,12 +995,13 @@ export function buildDashboardInsights(state: AppState, referenceDate = new Date
     .reduce((sum, entry) => sum + entry.salesAmount, 0);
 
   return {
-    isSetupComplete: state.mall !== null && state.units.length > 0,
+    isSetupComplete: state.asset !== null && state.units.length > 0,
     tenantSummaries,
     alerts,
     chartSeries: buildChartSeries(state, referenceDate),
     occupancyPct: state.units.length > 0 ? Math.round((occupiedUnitIds.size / state.units.length) * 1000) / 10 : 0,
     occupiedUnits: occupiedUnitIds.size,
+    vacantUnits: state.units.length - occupiedUnitIds.size,
     totalUnits: state.units.length,
     totalAreaM2,
     monthlySales,
@@ -686,10 +1014,11 @@ export function buildDashboardInsights(state: AppState, referenceDate = new Date
   };
 }
 
-function estimatePortfolioVariableRate(state: AppState, referenceDate = new Date()): number {
+function buildProjectedSalesWeights(state: AppState, referenceDate = new Date()): Map<string, number> {
   const activeContracts = state.contracts.filter((contract) => getContractLifecycle(contract, referenceDate) !== 'vencido');
+  const weights = new Map<string, number>();
   if (activeContracts.length === 0) {
-    return 0;
+    return weights;
   }
 
   const recentMonths = new Set(
@@ -706,24 +1035,35 @@ function estimatePortfolioVariableRate(state: AppState, referenceDate = new Date
     salesByContract.set(sale.contractId, (salesByContract.get(sale.contractId) ?? 0) + sale.grossAmount);
   });
 
-  const totalRecentSales = Array.from(salesByContract.values()).reduce((sum, value) => sum + value, 0);
+  const totalRecentSales = activeContracts.reduce((sum, contract) => sum + (salesByContract.get(contract.id) ?? 0), 0);
   if (totalRecentSales > 0) {
-    return activeContracts.reduce((sum, contract) => {
-      const weight = (salesByContract.get(contract.id) ?? 0) / totalRecentSales;
-      return sum + weight * contract.variableRentPct;
-    }, 0);
+    activeContracts.forEach((contract) => {
+      weights.set(contract.id, (salesByContract.get(contract.id) ?? 0) / totalRecentSales);
+    });
+    return weights;
   }
 
-  return (
-    activeContracts.reduce((sum, contract) => sum + contract.variableRentPct, 0) / activeContracts.length
-  );
+  const equalWeight = 1 / activeContracts.length;
+  activeContracts.forEach((contract) => {
+    weights.set(contract.id, equalWeight);
+  });
+  return weights;
 }
 
 function estimatePlanningRent(state: AppState, projectedSales: number, referenceDate = new Date()): number {
   const activeContracts = state.contracts.filter((contract) => getContractLifecycle(contract, referenceDate) !== 'vencido');
-  const fixedBase = activeContracts.reduce((sum, contract) => sum + contract.fixedRent + contract.commonExpenses, 0);
-  const variableRate = estimatePortfolioVariableRate(state, referenceDate) / 100;
-  return Math.round(fixedBase + projectedSales * variableRate);
+  if (activeContracts.length === 0) {
+    return 0;
+  }
+
+  const salesWeights = buildProjectedSalesWeights(state, referenceDate);
+  return Math.round(
+    activeContracts.reduce((sum, contract) => {
+      const projectedSalesForContract = projectedSales * (salesWeights.get(contract.id) ?? 0);
+      const areaM2 = getUnitArea(contract.localIds, state.units);
+      return sum + buildContractCommercialSnapshot(contract, areaM2, projectedSalesForContract, referenceDate).totalOccupancyCost;
+    }, 0),
+  );
 }
 
 export function buildAutomaticBudget(

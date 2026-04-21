@@ -3,7 +3,7 @@ import {
   createContext,
   useContext,
   useEffect,
-  useEffectEvent,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -21,8 +21,8 @@ import {
   type DocumentKind,
   type DocumentRecord,
   type ImportLog,
-  type MallSettings,
-  type MallUnit,
+  type AssetSettings,
+  type AssetUnit,
   type PlanningEntry,
   type PosConnectionProfile,
   type Prospect,
@@ -30,7 +30,7 @@ import {
   type Supplier,
 } from '@/lib/domain';
 import {
-  buildPortfolioMallSummary,
+  buildPortfolioAssetSummary,
   buildPortfolioStats,
   emptyPortfolioState,
   getActiveWorkspace,
@@ -38,11 +38,11 @@ import {
   normalizePortfolioState,
   parseStoredPortfolio,
   STORAGE_KEY,
-  type MallWorkspace,
+  type AssetWorkspace,
   type PortfolioBackupArchive,
-  type PortfolioMallSummary,
-  type PortfolioState,
+  type PortfolioAssetSummary,
   type PortfolioStats,
+  type PortfolioState,
 } from '@/lib/portfolio';
 import {
   deleteRemoteDocument,
@@ -53,16 +53,20 @@ import {
   pullArchive,
   pushArchive,
   resolveApiBase,
+  type ServerHealth,
   uploadRemoteDocument,
 } from '@/lib/api';
 import { deleteDocumentBlob, getDocumentBlob, resetDocumentStorage, saveDocumentBlob } from '@/lib/files';
 
-interface MallSetupInput {
-  mall: Omit<MallSettings, 'id' | 'createdAt'>;
-  units: Array<Omit<MallUnit, 'id'>>;
+const AUTO_SYNC_DEBOUNCE_MS = 1500;
+const REMOTE_SYNC_POLL_MS = 15000;
+
+interface AssetSetupInput {
+  asset: Omit<AssetSettings, 'id' | 'createdAt'>;
+  units: Array<Omit<AssetUnit, 'id'>>;
 }
 
-interface CreateMallInput extends MallSetupInput {
+interface CreateAssetInput extends AssetSetupInput {
   makeActive?: boolean;
 }
 
@@ -82,19 +86,19 @@ interface AddSalesResult {
 interface AppContextValue {
   state: AppState;
   portfolio: PortfolioState;
-  activeMallId: string | null;
-  mallSummaries: PortfolioMallSummary[];
+  activeAssetId: string | null;
+  assetSummaries: PortfolioAssetSummary[];
   portfolioStats: PortfolioStats;
   insights: ReturnType<typeof buildDashboardInsights>;
   unitsByCode: Map<string, string>;
   currentTenantId?: string;
   actions: {
-    initializeMall: (payload: MallSetupInput) => void;
-    createMall: (payload: CreateMallInput) => string;
-    switchMall: (mallId: string) => void;
-    deleteMall: (mallId: string) => Promise<void>;
-    updateMallSettings: (payload: Partial<Omit<MallSettings, 'id' | 'createdAt'>>) => void;
-    replaceUnits: (units: MallUnit[]) => void;
+    initializeAsset: (payload: AssetSetupInput) => void;
+    createAsset: (payload: CreateAssetInput) => string;
+    switchAsset: (assetId: string) => void;
+    deleteAsset: (assetId: string) => Promise<void>;
+    updateAssetSettings: (payload: Partial<Omit<AssetSettings, 'id' | 'createdAt'>>) => void;
+    replaceUnits: (units: AssetUnit[]) => void;
     upsertContract: (contract: Omit<Contract, 'createdAt'> & { createdAt?: string }) => void;
     deleteContract: (contractId: string) => void;
     addSales: (sales: SaleRecord[], log?: Omit<ImportLog, 'id' | 'createdAt'>) => AddSalesResult;
@@ -118,7 +122,7 @@ interface AppContextValue {
     importBackup: (archive: BackupArchive) => Promise<void>;
     exportPortfolioBackup: () => Promise<PortfolioBackupArchive>;
     importPortfolioBackup: (archive: PortfolioBackupArchive) => Promise<void>;
-    pingServer: (apiBase?: string) => Promise<{ ok: boolean; archiveExists: boolean; updatedAt: string | null; revision: number }>;
+    pingServer: (apiBase?: string) => Promise<ServerHealth>;
     pushToServer: (apiBase?: string) => Promise<void>;
     forcePushToServer: (apiBase?: string) => Promise<void>;
     pullFromServer: (apiBase?: string) => Promise<BackupArchive>;
@@ -162,27 +166,35 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 function serializeStateForSync(state: AppState): string {
   return JSON.stringify({
     ...state,
-    mall: state.mall
+    asset: state.asset
       ? {
-          ...state.mall,
+          ...state.asset,
           lastSyncedAt: undefined,
           serverRevision: undefined,
           syncStatus: undefined,
           syncMessage: undefined,
         }
-      : state.mall,
+      : state.asset,
   });
+}
+
+function classifySyncError(error: unknown): Pick<AssetSettings, 'syncStatus' | 'syncMessage'> {
+  const message = error instanceof Error ? error.message : 'Error de sincronización.';
+  return {
+    syncStatus: /conflicto|revision conflict|409/i.test(message) ? 'conflict' : 'offline',
+    syncMessage: message,
+  };
 }
 
 function updateWorkspace(
   portfolio: PortfolioState,
-  mallId: string,
-  updater: (workspace: MallWorkspace) => MallWorkspace,
+  assetId: string,
+  updater: (workspace: AssetWorkspace) => AssetWorkspace,
 ): PortfolioState {
   return normalizePortfolioState({
     ...portfolio,
     workspaces: portfolio.workspaces.map((workspace) =>
-      workspace.mall.id === mallId ? updater(workspace) : workspace,
+      workspace.asset.id === assetId ? updater(workspace) : workspace,
     ),
   });
 }
@@ -195,49 +207,49 @@ function localizeDocumentRecords(documents: DocumentRecord[]): DocumentRecord[] 
   }));
 }
 
-function mergeImportedMall(importedMall: AppState['mall'], currentMall?: MallSettings | null): MallSettings | null {
-  if (!importedMall && !currentMall) {
+function mergeImportedAsset(importedAsset: AppState['asset'], currentAsset?: AssetSettings | null): AssetSettings | null {
+  if (!importedAsset && !currentAsset) {
     return null;
   }
 
   return {
-    ...(currentMall ?? importedMall ?? {}),
-    ...(importedMall ?? {}),
-    id: currentMall?.id ?? importedMall?.id ?? createId('mall'),
-    createdAt: currentMall?.createdAt ?? importedMall?.createdAt ?? new Date().toISOString(),
-    syncStatus: importedMall?.syncStatus ?? currentMall?.syncStatus ?? 'idle',
-    syncMessage: importedMall?.syncMessage ?? currentMall?.syncMessage ?? '',
-  } as MallSettings;
+    ...(currentAsset ?? importedAsset ?? {}),
+    ...(importedAsset ?? {}),
+    id: currentAsset?.id ?? importedAsset?.id ?? createId('asset'),
+    createdAt: currentAsset?.createdAt ?? importedAsset?.createdAt ?? new Date().toISOString(),
+    syncStatus: importedAsset?.syncStatus ?? currentAsset?.syncStatus ?? 'idle',
+    syncMessage: importedAsset?.syncMessage ?? currentAsset?.syncMessage ?? '',
+  } as AssetSettings;
 }
 
-function normalizeImportedAppState(archiveState: AppState, currentMall?: MallSettings | null): AppState {
+function normalizeImportedAppState(archiveState: AppState, currentAsset?: AssetSettings | null): AppState {
   return {
     ...emptyAppState(),
     ...archiveState,
-    mall: mergeImportedMall(archiveState.mall, currentMall),
+    asset: mergeImportedAsset(archiveState.asset, currentAsset),
     documents: localizeDocumentRecords(archiveState.documents ?? []),
   };
 }
 
-function normalizeImportedWorkspace(workspace: MallWorkspace): MallWorkspace {
+function normalizeImportedWorkspace(workspace: AssetWorkspace): AssetWorkspace {
   return {
     ...workspace,
-    mall: {
-      ...workspace.mall,
-      syncStatus: workspace.mall.syncStatus ?? 'idle',
-      syncMessage: workspace.mall.syncMessage ?? '',
+    asset: {
+      ...workspace.asset,
+      syncStatus: workspace.asset.syncStatus ?? 'idle',
+      syncMessage: workspace.asset.syncMessage ?? '',
     },
     documents: localizeDocumentRecords(workspace.documents),
   };
 }
 
-function buildEmptyWorkspace(payload: MallSetupInput): MallWorkspace {
+function buildEmptyWorkspace(payload: AssetSetupInput): AssetWorkspace {
   return {
     ...emptyAppState(),
-    mall: {
-      id: createId('mall'),
+    asset: {
+      id: createId('asset'),
       createdAt: new Date().toISOString(),
-      ...payload.mall,
+      ...payload.asset,
     },
     units: payload.units.map((unit) => ({
       ...unit,
@@ -265,8 +277,8 @@ async function exportWorkspaceBackup(workspace: AppState): Promise<BackupArchive
         };
       }
 
-      if (record.storage === 'remote' && workspace.mall?.backendUrl) {
-        const remoteBlob = await downloadRemoteDocument(resolveApiBase(workspace.mall.backendUrl), record.id);
+      if (record.storage === 'remote' && workspace.asset?.backendUrl) {
+        const remoteBlob = await downloadRemoteDocument(resolveApiBase(workspace.asset.backendUrl), record.id);
         return {
           record,
           dataUrl: await blobToDataUrl(remoteBlob),
@@ -282,36 +294,48 @@ async function exportWorkspaceBackup(workspace: AppState): Promise<BackupArchive
     exportedAt: new Date().toISOString(),
     state: workspace,
     documents,
-    serverRevision: workspace.mall?.serverRevision,
+    serverRevision: workspace.asset?.serverRevision,
   };
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [portfolio, setPortfolio] = useState<PortfolioState>(loadPortfolioState);
-  const activeWorkspace = getActiveWorkspace(portfolio);
-  const state = activeWorkspace ?? emptyAppState();
-  const activeMallId = activeWorkspace?.mall.id ?? portfolio.activeMallId ?? null;
-  const insights = buildDashboardInsights(state);
-  const unitsByCode = new Map(state.units.map((unit) => [unit.code.toUpperCase(), unit.id]));
-  const currentTenantId =
-    insights.tenantSummaries.find((tenant) => tenant.lifecycle !== 'vencido')?.id ??
-    insights.tenantSummaries[0]?.id;
-  const mallSummaries = [...portfolio.workspaces]
-    .map(buildPortfolioMallSummary)
-    .sort((left, right) => left.name.localeCompare(right.name, 'es'));
-  const portfolioStats = buildPortfolioStats(mallSummaries);
-  const configuredApiBase = resolveApiBase(state.mall?.backendUrl);
-  const shouldSyncRemotely = Boolean(state.mall?.syncEnabled && state.mall?.backendUrl);
-  const syncHash = activeMallId ? serializeStateForSync(state) : '';
+  const activeWorkspace = useMemo(() => getActiveWorkspace(portfolio), [portfolio]);
+  const state = useMemo(() => activeWorkspace ?? emptyAppState(), [activeWorkspace]);
+  const activeAssetId = activeWorkspace?.asset.id ?? portfolio.activeAssetId ?? null;
+  const syncHash = useMemo(() => (activeAssetId ? serializeStateForSync(state) : ''), [activeAssetId, state]);
+  const insights = useMemo(() => buildDashboardInsights(state), [state]);
+  const unitsByCode = useMemo(
+    () => new Map(state.units.map((unit) => [unit.code.toUpperCase(), unit.id])),
+    [state.units],
+  );
+  const currentTenantId = useMemo(
+    () =>
+      insights.tenantSummaries.find((tenant) => tenant.lifecycle !== 'vencido')?.id ??
+      insights.tenantSummaries[0]?.id,
+    [insights.tenantSummaries],
+  );
+  const assetSummaries = useMemo(
+    () =>
+      [...portfolio.workspaces]
+        .map(buildPortfolioAssetSummary)
+        .sort((left, right) => left.name.localeCompare(right.name, 'es')),
+    [portfolio.workspaces],
+  );
+  const portfolioStats = useMemo(() => buildPortfolioStats(assetSummaries), [assetSummaries]);
+  const configuredApiBase = useMemo(() => resolveApiBase(state.asset?.backendUrl), [state.asset?.backendUrl]);
+  const shouldSyncRemotely = Boolean(state.asset?.syncEnabled && state.asset?.backendUrl);
 
   const portfolioRef = useRef(portfolio);
   const stateRef = useRef(state);
-  const activeMallIdRef = useRef<string | null>(activeMallId);
+  const activeAssetIdRef = useRef<string | null>(activeAssetId);
   const syncingRef = useRef(false);
   const suppressDirtyTrackingRef = useRef(false);
   const lastStableSyncHashRef = useRef<Record<string, string>>({});
   const dirtyRef = useRef<Record<string, boolean>>({});
   const pushTimeoutRef = useRef<number | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+  const actionsRef = useRef<AppContextValue['actions'] | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(portfolio));
@@ -326,19 +350,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    activeMallIdRef.current = activeMallId;
-  }, [activeMallId]);
+    activeAssetIdRef.current = activeAssetId;
+  }, [activeAssetId]);
 
-  const setSyncMetadata = (payload: Partial<MallSettings>, mallId = activeMallIdRef.current) => {
-    if (!mallId) {
+  const setSyncMetadata = (payload: Partial<AssetSettings>, assetId = activeAssetIdRef.current) => {
+    if (!assetId) {
       return;
     }
 
     setPortfolio((current) =>
-      updateWorkspace(current, mallId, (workspace) => ({
+      updateWorkspace(current, assetId, (workspace) => ({
         ...workspace,
-        mall: {
-          ...workspace.mall,
+        asset: {
+          ...workspace.asset,
           ...payload,
         },
       })),
@@ -346,22 +370,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   };
 
   const actions: AppContextValue['actions'] = {
-    initializeMall(payload) {
+    initializeAsset(payload) {
       setPortfolio((current) => {
-        if (!current.activeMallId) {
+        if (!current.activeAssetId) {
           const workspace = buildEmptyWorkspace(payload);
           return normalizePortfolioState({
             ...current,
-            activeMallId: workspace.mall.id,
+            activeAssetId: workspace.asset.id,
             workspaces: [...current.workspaces, workspace],
           });
         }
 
-        return updateWorkspace(current, current.activeMallId, (workspace) => ({
+        return updateWorkspace(current, current.activeAssetId, (workspace) => ({
           ...workspace,
-          mall: {
-            ...workspace.mall,
-            ...payload.mall,
+          asset: {
+            ...workspace.asset,
+            ...payload.asset,
           },
           units: payload.units.map((unit, index) => ({
             ...unit,
@@ -370,27 +394,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }));
       });
     },
-    createMall(payload) {
+    createAsset(payload) {
       const workspace = buildEmptyWorkspace(payload);
       setPortfolio((current) =>
         normalizePortfolioState({
           ...current,
-          activeMallId: payload.makeActive ?? !current.activeMallId ? workspace.mall.id : current.activeMallId,
+          activeAssetId: payload.makeActive ?? !current.activeAssetId ? workspace.asset.id : current.activeAssetId,
           workspaces: [...current.workspaces, workspace],
         }),
       );
-      return workspace.mall.id;
+      return workspace.asset.id;
     },
-    switchMall(mallId) {
+    switchAsset(assetId) {
       setPortfolio((current) =>
         normalizePortfolioState({
           ...current,
-          activeMallId: mallId,
+          activeAssetId: assetId,
         }),
       );
     },
-    async deleteMall(mallId) {
-      const workspace = getWorkspaceById(portfolioRef.current, mallId);
+    async deleteAsset(assetId) {
+      const workspace = getWorkspaceById(portfolioRef.current, assetId);
       if (!workspace) {
         return;
       }
@@ -399,33 +423,33 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPortfolio((current) =>
         normalizePortfolioState({
           ...current,
-          workspaces: current.workspaces.filter((item) => item.mall.id !== mallId),
-          activeMallId:
-            current.activeMallId === mallId
-              ? current.workspaces.find((item) => item.mall.id !== mallId)?.mall.id ?? null
-              : current.activeMallId,
+          workspaces: current.workspaces.filter((item) => item.asset.id !== assetId),
+          activeAssetId:
+            current.activeAssetId === assetId
+              ? current.workspaces.find((item) => item.asset.id !== assetId)?.asset.id ?? null
+              : current.activeAssetId,
         }),
       );
-      delete lastStableSyncHashRef.current[mallId];
-      delete dirtyRef.current[mallId];
+      delete lastStableSyncHashRef.current[assetId];
+      delete dirtyRef.current[assetId];
     },
-    updateMallSettings(payload) {
-      if (!activeMallIdRef.current) {
+    updateAssetSettings(payload) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
-          mall: {
-            ...workspace.mall,
+          asset: {
+            ...workspace.asset,
             ...payload,
           },
         })),
       );
     },
     replaceUnits(units) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
@@ -445,7 +469,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       void cleanupLocalDocuments(removedDocuments);
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const nextContracts = workspace.contracts
             .map((contract) => ({
               ...contract,
@@ -480,14 +504,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     upsertContract(contract) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const nextContract: Contract = {
             ...contract,
+            fondoPromocion: contract.fondoPromocion ?? 0,
+            garantiaMonto: contract.garantiaMonto ?? 0,
+            garantiaVencimiento: contract.garantiaVencimiento ?? '',
+            feeIngreso: contract.feeIngreso ?? 0,
+            rentSteps: contract.rentSteps ?? [],
+            healthPagoAlDia: contract.healthPagoAlDia ?? true,
+            healthEntregaVentas: contract.healthEntregaVentas ?? true,
+            healthNivelVenta: contract.healthNivelVenta ?? false,
+            healthNivelRenta: contract.healthNivelRenta ?? false,
+            healthPercepcionAdmin: contract.healthPercepcionAdmin ?? true,
             signedAt:
               contract.signatureStatus === 'firmado'
                 ? contract.signedAt ?? new Date().toISOString()
@@ -506,7 +540,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     deleteContract(contractId) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
@@ -516,7 +550,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       void cleanupLocalDocuments(removedDocuments);
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           contracts: workspace.contracts.filter((contract) => contract.id !== contractId),
           sales: workspace.sales.filter((sale) => sale.contractId !== contractId),
@@ -528,13 +562,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     addSales(sales, log) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return { added: 0, duplicates: 0 };
       }
 
       let result: AddSalesResult = { added: 0, duplicates: 0 };
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const existingFingerprints = new Set(workspace.sales.map((sale) => buildSaleFingerprint(sale)));
           const uniqueSales = sales.filter((sale) => {
             const fingerprint = buildSaleFingerprint(sale);
@@ -577,24 +611,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return result;
     },
     deleteSale(saleId) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           sales: workspace.sales.filter((sale) => sale.id !== saleId),
         })),
       );
     },
     upsertPlanningEntry(entry) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const exists = workspace.planning.some((item) => item.id === entry.id);
           return {
             ...workspace,
@@ -606,24 +640,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     deletePlanningEntry(entryId) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           planning: workspace.planning.filter((entry) => entry.id !== entryId),
         })),
       );
     },
     replacePlanningEntries(entries, type) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           planning: [
             ...workspace.planning.filter((entry) => (type ? entry.type !== type : false)),
@@ -633,12 +667,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     generateBudget(months = 6, upliftPct = 6) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           planning: [
             ...workspace.planning.filter((entry) => entry.type !== 'budget'),
@@ -648,12 +682,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     generateForecast(months = 6) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           planning: [
             ...workspace.planning.filter((entry) => entry.type !== 'forecast'),
@@ -663,12 +697,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     upsertSupplier(supplier) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const exists = workspace.suppliers.some((item) => item.id === supplier.id);
           return {
             ...workspace,
@@ -680,24 +714,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     deleteSupplier(supplierId) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           suppliers: workspace.suppliers.filter((supplier) => supplier.id !== supplierId),
         })),
       );
     },
     upsertProspect(prospect) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const exists = workspace.prospects.some((item) => item.id === prospect.id);
           return {
             ...workspace,
@@ -709,24 +743,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     deleteProspect(prospectId) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           prospects: workspace.prospects.filter((prospect) => prospect.id !== prospectId),
         })),
       );
     },
     upsertPosConnection(profile) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => {
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const existing = workspace.posConnections.find((item) => item.id === profile.id);
           const nextProfile: PosConnectionProfile = {
             ...profile,
@@ -746,24 +780,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       );
     },
     deletePosConnection(profileId) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           posConnections: workspace.posConnections.filter((profile) => profile.id !== profileId),
         })),
       );
     },
     recordPosSync(profileId, status, message) {
-      if (!activeMallIdRef.current) {
+      if (!activeAssetIdRef.current) {
         return;
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, activeMallIdRef.current!, (workspace) => ({
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
           ...workspace,
           posConnections: workspace.posConnections.map((profile) =>
             profile.id === profileId
@@ -780,13 +814,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     },
     async uploadDocument(payload) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
-      if (!currentWorkspace?.mall) {
+      if (!currentWorkspace?.asset) {
         return;
       }
 
       const documentId = createId('document');
-      const shouldUploadRemotely = Boolean(currentWorkspace.mall.syncEnabled && currentWorkspace.mall.backendUrl);
-      const apiBase = resolveApiBase(currentWorkspace.mall.backendUrl);
+      const shouldUploadRemotely = Boolean(currentWorkspace.asset.syncEnabled && currentWorkspace.asset.backendUrl);
+      const apiBase = resolveApiBase(currentWorkspace.asset.backendUrl);
       const localRecord: DocumentRecord = {
         id: documentId,
         entityType: payload.entityType,
@@ -821,18 +855,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, currentWorkspace.mall.id, (workspace) => ({
+        updateWorkspace(current, currentWorkspace.asset.id, (workspace) => ({
           ...workspace,
-          mall:
+          asset:
             shouldUploadRemotely
               ? {
-                  ...workspace.mall,
+                  ...workspace.asset,
                   lastSyncedAt: syncedAt ?? new Date().toISOString(),
-                  serverRevision: revision ?? workspace.mall.serverRevision,
+                  serverRevision: revision ?? workspace.asset.serverRevision,
                   syncStatus: 'online',
                   syncMessage: 'Documento sincronizado con backend.',
                 }
-              : workspace.mall,
+              : workspace.asset,
           documents: [record, ...workspace.documents],
           contracts:
             payload.entityType === 'contract' && payload.kind === 'anexo'
@@ -855,7 +889,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       let syncedAt: string | undefined;
       let revision: number | undefined;
       if (target.storage === 'remote') {
-        const remote = await deleteRemoteDocument(resolveApiBase(currentWorkspace.mall.backendUrl), documentId);
+        const remote = await deleteRemoteDocument(resolveApiBase(currentWorkspace.asset.backendUrl), documentId);
         syncedAt = remote.updatedAt;
         revision = remote.revision;
         suppressDirtyTrackingRef.current = true;
@@ -864,18 +898,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
 
       setPortfolio((current) =>
-        updateWorkspace(current, currentWorkspace.mall.id, (workspace) => ({
+        updateWorkspace(current, currentWorkspace.asset.id, (workspace) => ({
           ...workspace,
-          mall:
+          asset:
             target.storage === 'remote'
               ? {
-                  ...workspace.mall,
+                  ...workspace.asset,
                   lastSyncedAt: syncedAt ?? new Date().toISOString(),
-                  serverRevision: revision ?? workspace.mall.serverRevision,
+                  serverRevision: revision ?? workspace.asset.serverRevision,
                   syncStatus: 'online',
                   syncMessage: 'Documento eliminado y sincronizado con backend.',
                 }
-              : workspace.mall,
+              : workspace.asset,
           documents: workspace.documents.filter((document) => document.id !== documentId),
           contracts:
             target.entityType === 'contract' && target.kind === 'anexo'
@@ -897,7 +931,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
       const blob =
         record.storage === 'remote'
-          ? await downloadRemoteDocument(resolveApiBase(currentWorkspace.mall.backendUrl), documentId)
+          ? await downloadRemoteDocument(resolveApiBase(currentWorkspace.asset.backendUrl), documentId)
           : await getDocumentBlob(documentId);
       if (!blob) {
         return;
@@ -916,7 +950,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     },
     async importBackup(archive) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
-      const nextState = normalizeImportedAppState(archive.state, currentWorkspace?.mall);
+      const importedState = normalizeImportedAppState(archive.state, currentWorkspace?.asset);
+      const nextState = importedState.asset
+        ? {
+            ...importedState,
+            asset: {
+              ...importedState.asset,
+              serverRevision: archive.serverRevision ?? importedState.asset.serverRevision,
+            },
+          }
+        : importedState;
 
       suppressDirtyTrackingRef.current = true;
       await resetDocumentStorage();
@@ -926,31 +969,31 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (!nextState.mall) {
+      if (!nextState.asset) {
         return;
       }
 
       setPortfolio((current) => {
-        if (!current.activeMallId) {
+        if (!current.activeAssetId) {
           return normalizePortfolioState({
             ...current,
-            activeMallId: nextState.mall!.id,
+            activeAssetId: nextState.asset!.id,
             workspaces: [
               {
-                ...(nextState as MallWorkspace),
-                mall: nextState.mall!,
+                ...(nextState as AssetWorkspace),
+                asset: nextState.asset!,
               },
             ],
           });
         }
 
-        return updateWorkspace(current, current.activeMallId, () => ({
-          ...(nextState as MallWorkspace),
-          mall: nextState.mall!,
+        return updateWorkspace(current, current.activeAssetId, () => ({
+          ...(nextState as AssetWorkspace),
+          asset: nextState.asset!,
         }));
       });
-      lastStableSyncHashRef.current[nextState.mall.id] = serializeStateForSync(nextState);
-      dirtyRef.current[nextState.mall.id] = false;
+      lastStableSyncHashRef.current[nextState.asset.id] = serializeStateForSync(nextState);
+      dirtyRef.current[nextState.asset.id] = false;
     },
     async exportPortfolioBackup() {
       const currentPortfolio = portfolioRef.current;
@@ -959,7 +1002,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           currentPortfolio.workspaces.map(async (workspace) => {
             const archive = await exportWorkspaceBackup(workspace);
             return archive.documents.map((item) => ({
-              mallId: workspace.mall.id,
+              assetId: workspace.asset.id,
               ...item,
             }));
           }),
@@ -989,153 +1032,72 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
       setPortfolio(nextPortfolio);
       lastStableSyncHashRef.current = Object.fromEntries(
-        nextPortfolio.workspaces.map((workspace) => [workspace.mall.id, serializeStateForSync(workspace)]),
+        nextPortfolio.workspaces.map((workspace) => [workspace.asset.id, serializeStateForSync(workspace)]),
       );
-      dirtyRef.current = Object.fromEntries(nextPortfolio.workspaces.map((workspace) => [workspace.mall.id, false]));
+      dirtyRef.current = Object.fromEntries(nextPortfolio.workspaces.map((workspace) => [workspace.asset.id, false]));
     },
     async pingServer(apiBase) {
       return fetchServerHealth(apiBase ?? configuredApiBase);
     },
     async pushToServer(apiBase) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
-      if (!currentWorkspace?.mall) {
+      if (!currentWorkspace?.asset?.backendUrl) {
         return;
       }
-
-      const targetBase = apiBase ?? resolveApiBase(currentWorkspace.mall.backendUrl);
-      syncingRef.current = true;
-      try {
-        const archive = await exportWorkspaceBackup(currentWorkspace);
-        const syncedAt = new Date().toISOString();
-        const currentHash = serializeStateForSync(currentWorkspace);
-        archive.serverRevision = currentWorkspace.mall.serverRevision ?? archive.serverRevision;
-        archive.state = {
-          ...archive.state,
-          mall: archive.state.mall
-            ? {
-                ...archive.state.mall,
-                backendUrl: targetBase,
-                syncEnabled: true,
-                lastSyncedAt: syncedAt,
-              }
-            : archive.state.mall,
-        };
-        setSyncMetadata({ syncStatus: 'syncing', syncMessage: 'Subiendo cambios al backend…' }, currentWorkspace.mall.id);
-        const result = await pushArchive(targetBase, archive);
-        lastStableSyncHashRef.current[currentWorkspace.mall.id] = currentHash;
-        dirtyRef.current[currentWorkspace.mall.id] = false;
-        setPortfolio((current) =>
-          updateWorkspace(current, currentWorkspace.mall.id, (workspace) => ({
-            ...workspace,
-            mall: {
-              ...workspace.mall,
-              backendUrl: targetBase,
-              syncEnabled: true,
-              lastSyncedAt: syncedAt,
-              serverRevision: result.revision,
-              syncStatus: 'online',
-              syncMessage: 'Sincronizado con backend.',
-            },
-          })),
-        );
-      } finally {
-        syncingRef.current = false;
-      }
+      const base = apiBase ?? resolveApiBase(currentWorkspace.asset.backendUrl);
+      const snapshotHash = serializeStateForSync(currentWorkspace);
+      setSyncMetadata({
+        syncStatus: 'syncing',
+        syncMessage: 'Publicando cambios locales en el backend...',
+      });
+      const archive = await exportWorkspaceBackup(currentWorkspace);
+      const response = await pushArchive(base, archive);
+      setSyncMetadata({
+        lastSyncedAt: response.updatedAt,
+        serverRevision: response.revision,
+        syncStatus: 'online',
+        syncMessage: 'Sincronizado correctamente.',
+      });
+      lastStableSyncHashRef.current[currentWorkspace.asset.id] = snapshotHash;
+      dirtyRef.current[currentWorkspace.asset.id] = false;
     },
     async forcePushToServer(apiBase) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
-      if (!currentWorkspace?.mall) {
+      if (!currentWorkspace?.asset?.backendUrl) {
         return;
       }
-
-      const targetBase = apiBase ?? resolveApiBase(currentWorkspace.mall.backendUrl);
-      syncingRef.current = true;
-      try {
-        const archive = await exportWorkspaceBackup(currentWorkspace);
-        const syncedAt = new Date().toISOString();
-        const currentHash = serializeStateForSync(currentWorkspace);
-        archive.serverRevision = currentWorkspace.mall.serverRevision ?? archive.serverRevision;
-        archive.state = {
-          ...archive.state,
-          mall: archive.state.mall
-            ? {
-                ...archive.state.mall,
-                backendUrl: targetBase,
-                syncEnabled: true,
-                lastSyncedAt: syncedAt,
-              }
-            : archive.state.mall,
-        };
-        setSyncMetadata(
-          {
-            syncStatus: 'syncing',
-            syncMessage: 'Forzando sincronización local hacia backend…',
-          },
-          currentWorkspace.mall.id,
-        );
-        const result = await pushArchive(targetBase, archive, true);
-        lastStableSyncHashRef.current[currentWorkspace.mall.id] = currentHash;
-        dirtyRef.current[currentWorkspace.mall.id] = false;
-        setPortfolio((current) =>
-          updateWorkspace(current, currentWorkspace.mall.id, (workspace) => ({
-            ...workspace,
-            mall: {
-              ...workspace.mall,
-              backendUrl: targetBase,
-              syncEnabled: true,
-              lastSyncedAt: syncedAt,
-              serverRevision: result.revision,
-              syncStatus: 'online',
-              syncMessage: 'Versión local publicada sobre la remota.',
-            },
-          })),
-        );
-      } finally {
-        syncingRef.current = false;
-      }
+      const base = apiBase ?? resolveApiBase(currentWorkspace.asset.backendUrl);
+      const snapshotHash = serializeStateForSync(currentWorkspace);
+      setSyncMetadata({
+        syncStatus: 'syncing',
+        syncMessage: 'Forzando publicación local al backend...',
+      });
+      const archive = await exportWorkspaceBackup(currentWorkspace);
+      const response = await pushArchive(base, { ...archive, force: true });
+      setSyncMetadata({
+        lastSyncedAt: response.updatedAt,
+        serverRevision: response.revision,
+        syncStatus: 'online',
+        syncMessage: 'Sincronización forzada exitosa.',
+      });
+      lastStableSyncHashRef.current[currentWorkspace.asset.id] = snapshotHash;
+      dirtyRef.current[currentWorkspace.asset.id] = false;
     },
     async pullFromServer(apiBase) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
-      if (!currentWorkspace?.mall) {
-        return {
-          version: 1,
-          exportedAt: new Date().toISOString(),
-          state: emptyAppState(),
-          documents: [],
-        };
+      const base = apiBase ?? (currentWorkspace?.asset?.backendUrl ? resolveApiBase(currentWorkspace.asset.backendUrl) : '');
+      if (!base) {
+        throw new Error('No hay URL de backend configurada.');
       }
-
-      const targetBase = apiBase ?? resolveApiBase(currentWorkspace.mall.backendUrl);
-      syncingRef.current = true;
-      try {
-        setSyncMetadata(
-          {
-            syncStatus: 'syncing',
-            syncMessage: 'Descargando cambios del backend…',
-          },
-          currentWorkspace.mall.id,
-        );
-        const archive = await pullArchive(targetBase);
-        await actions.importBackup(archive);
-        suppressDirtyTrackingRef.current = true;
-        setPortfolio((current) =>
-          updateWorkspace(current, currentWorkspace.mall.id, (workspace) => ({
-            ...workspace,
-            mall: {
-              ...workspace.mall,
-              backendUrl: targetBase,
-              syncEnabled: true,
-              lastSyncedAt: new Date().toISOString(),
-              serverRevision: archive.serverRevision ?? workspace.mall.serverRevision,
-              syncStatus: 'online',
-              syncMessage: 'Estado remoto cargado.',
-            },
-          })),
-        );
-        return archive;
-      } finally {
-        syncingRef.current = false;
-      }
+      const archive = await pullArchive(base);
+      await this.importBackup(archive);
+      setSyncMetadata({
+        lastSyncedAt: archive.exportedAt,
+        serverRevision: archive.serverRevision,
+        syncStatus: 'online',
+        syncMessage: 'Estado remoto descargado correctamente.',
+      });
+      return archive;
     },
     async fetchViaServerPosProxy(payload, apiBase) {
       return proxyPosRequest(apiBase ?? configuredApiBase, payload);
@@ -1144,158 +1106,153 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return ingestFiscalText(apiBase ?? configuredApiBase, payload);
     },
   };
+  actionsRef.current = actions;
 
-  const runAutoPush = useEffectEvent(async () => {
-    const currentMallId = activeMallIdRef.current;
-    if (!currentMallId || syncingRef.current || !dirtyRef.current[currentMallId]) {
-      return;
-    }
-
-    try {
-      await actions.pushToServer();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo sincronizar con el backend.';
-      if (message.toLowerCase().includes('conflicto')) {
-        setSyncMetadata(
-          {
-            syncStatus: 'conflict',
-            syncMessage: 'El servidor cambió mientras había cambios locales pendientes.',
-          },
-          currentMallId,
-        );
-        return;
-      }
-
-      setSyncMetadata(
-        {
-          syncStatus: 'offline',
-          syncMessage: message,
-        },
-        currentMallId,
-      );
-    }
-  });
-
-  const reconcileRemoteState = useEffectEvent(async () => {
-    const currentMallId = activeMallIdRef.current;
-    const currentWorkspace = getActiveWorkspace(portfolioRef.current);
-    if (!currentMallId || syncingRef.current || !currentWorkspace?.mall?.syncEnabled || !currentWorkspace.mall.backendUrl) {
-      return;
-    }
-
-    try {
-      const health = await actions.pingServer();
-      if (!health.ok) {
-        throw new Error('Backend no disponible.');
-      }
-
-      const localRevision = currentWorkspace.mall.serverRevision ?? 0;
-      const hasRemoteChanges = health.revision > localRevision;
-      const hasLocalChanges = dirtyRef.current[currentMallId];
-
-      if (hasRemoteChanges) {
-        if (hasLocalChanges) {
-          setSyncMetadata(
-            {
-              syncStatus: 'conflict',
-              syncMessage: 'Cambios remotos detectados mientras hay cambios locales sin sincronizar.',
-            },
-            currentMallId,
-          );
-          return;
-        }
-
-        await actions.pullFromServer();
-        return;
-      }
-
-      if (currentWorkspace.mall.syncStatus !== 'online' && currentWorkspace.mall.syncStatus !== 'syncing') {
-        setSyncMetadata(
-          {
-            syncStatus: 'online',
-            syncMessage:
-              health.updatedAt
-                ? `Backend conectado. Última actualización remota ${new Date(health.updatedAt).toLocaleString('es-CL')}.`
-                : 'Backend conectado.',
-          },
-          currentMallId,
-        );
-      }
-    } catch (error) {
-      setSyncMetadata(
-        {
-          syncStatus: currentWorkspace.mall.syncStatus === 'conflict' ? 'conflict' : 'offline',
-          syncMessage: error instanceof Error ? error.message : 'Backend no disponible.',
-        },
-        currentMallId,
-      );
-    }
-  });
-
+  // Auto-sync effect
   useEffect(() => {
-    if (!activeMallId) {
-      return;
-    }
-
-    if (suppressDirtyTrackingRef.current) {
-      suppressDirtyTrackingRef.current = false;
-      lastStableSyncHashRef.current[activeMallId] = syncHash;
-      dirtyRef.current[activeMallId] = false;
-      return;
-    }
-
-    if (!(activeMallId in lastStableSyncHashRef.current)) {
-      lastStableSyncHashRef.current[activeMallId] = syncHash;
-      dirtyRef.current[activeMallId] = false;
-      return;
-    }
-
-    dirtyRef.current[activeMallId] = syncHash !== lastStableSyncHashRef.current[activeMallId];
-
-    if (pushTimeoutRef.current) {
-      window.clearTimeout(pushTimeoutRef.current);
-      pushTimeoutRef.current = null;
-    }
-
-    if (!shouldSyncRemotely || syncingRef.current || state.mall?.syncStatus === 'conflict' || !dirtyRef.current[activeMallId]) {
-      return;
-    }
-
-    pushTimeoutRef.current = window.setTimeout(() => {
-      pushTimeoutRef.current = null;
-      void runAutoPush();
-    }, 1500);
-  }, [activeMallId, shouldSyncRemotely, state.mall?.syncStatus, syncHash]);
-
-  useEffect(() => {
-    if (!shouldSyncRemotely || !activeMallId) {
-      return;
-    }
-
-    void reconcileRemoteState();
-    const interval = window.setInterval(() => {
-      void reconcileRemoteState();
-    }, 15000);
-
-    return () => window.clearInterval(interval);
-  }, [activeMallId, configuredApiBase, shouldSyncRemotely]);
-
-  useEffect(
-    () => () => {
+    if (!shouldSyncRemotely || !activeAssetIdRef.current) {
       if (pushTimeoutRef.current) {
         window.clearTimeout(pushTimeoutRef.current);
       }
-    },
-    [],
-  );
+      return;
+    }
+
+    const assetId = activeAssetIdRef.current;
+    const previousHash = lastStableSyncHashRef.current[assetId];
+    const isDirty = previousHash !== undefined && previousHash !== syncHash;
+
+    if (suppressDirtyTrackingRef.current) {
+      suppressDirtyTrackingRef.current = false;
+      lastStableSyncHashRef.current[assetId] = syncHash;
+      dirtyRef.current[assetId] = false;
+      return;
+    }
+
+    if (previousHash === undefined) {
+      lastStableSyncHashRef.current[assetId] = syncHash;
+      dirtyRef.current[assetId] = false;
+      return;
+    }
+
+    if (isDirty && !dirtyRef.current[assetId]) {
+      dirtyRef.current[assetId] = true;
+    }
+
+    if (pushTimeoutRef.current) {
+      window.clearTimeout(pushTimeoutRef.current);
+    }
+
+    pushTimeoutRef.current = window.setTimeout(() => {
+      if (dirtyRef.current[assetId] && !syncingRef.current) {
+        syncingRef.current = true;
+        setSyncMetadata({
+          syncStatus: 'syncing',
+          syncMessage: 'Publicando cambios locales en el backend...',
+        }, assetId);
+        actionsRef.current
+          ?.pushToServer()
+          .catch((error) => {
+            setSyncMetadata(classifySyncError(error), assetId);
+          })
+          .finally(() => {
+            syncingRef.current = false;
+          });
+      }
+    }, AUTO_SYNC_DEBOUNCE_MS);
+
+    return () => {
+      if (pushTimeoutRef.current) {
+        window.clearTimeout(pushTimeoutRef.current);
+      }
+    };
+  }, [syncHash, shouldSyncRemotely, configuredApiBase]);
+
+  useEffect(() => {
+    if (!shouldSyncRemotely || !activeAssetId || !state.asset?.backendUrl) {
+      if (pollIntervalRef.current) {
+        window.clearInterval(pollIntervalRef.current);
+      }
+      return;
+    }
+
+    const assetId = activeAssetId;
+    const apiBase = configuredApiBase;
+
+    const pollRemoteHealth = () => {
+      if (syncingRef.current) {
+        return;
+      }
+
+      fetchServerHealth(apiBase)
+        .then((health) => {
+          if (activeAssetIdRef.current !== assetId) {
+            return;
+          }
+
+          const currentAsset = stateRef.current.asset;
+          const knownRevision = currentAsset?.serverRevision ?? 0;
+
+          if (health.revision > knownRevision) {
+            if (dirtyRef.current[assetId]) {
+              setSyncMetadata({
+                lastSyncedAt: health.updatedAt ?? currentAsset?.lastSyncedAt,
+                serverRevision: health.revision,
+                syncStatus: 'conflict',
+                syncMessage: `Se detectaron cambios remotos en revisión ${health.revision}. Descarga el estado del servidor o fuerza publicación.`,
+              }, assetId);
+              return;
+            }
+
+            syncingRef.current = true;
+            setSyncMetadata({
+              syncStatus: 'syncing',
+              syncMessage: `Descargando cambios remotos de la revisión ${health.revision}...`,
+            }, assetId);
+            actionsRef.current
+              ?.pullFromServer(apiBase)
+              .catch((error) => {
+                setSyncMetadata(classifySyncError(error), assetId);
+              })
+              .finally(() => {
+                syncingRef.current = false;
+              });
+            return;
+          }
+
+          setSyncMetadata({
+            lastSyncedAt: health.updatedAt ?? currentAsset?.lastSyncedAt,
+            serverRevision: health.revision,
+            syncStatus: dirtyRef.current[assetId] ? currentAsset?.syncStatus : 'online',
+            syncMessage: dirtyRef.current[assetId]
+              ? currentAsset?.syncMessage ?? 'Hay cambios locales pendientes por sincronizar.'
+              : 'Conexión remota operativa.',
+          }, assetId);
+        })
+        .catch((error) => {
+          if (activeAssetIdRef.current !== assetId) {
+            return;
+          }
+          setSyncMetadata(classifySyncError(error), assetId);
+        });
+    };
+
+    pollRemoteHealth();
+    pollIntervalRef.current = window.setInterval(pollRemoteHealth, REMOTE_SYNC_POLL_MS);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        window.clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [activeAssetId, configuredApiBase, shouldSyncRemotely, state.asset?.backendUrl]);
 
   return (
     <AppContext.Provider
       value={{
         state,
         portfolio,
-        activeMallId,
-        mallSummaries,
+        activeAssetId,
+        assetSummaries,
         portfolioStats,
         insights,
         unitsByCode,
@@ -1308,11 +1265,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAppState() {
+export function useAppState(): AppContextValue {
   const context = useContext(AppContext);
   if (!context) {
-    throw new Error('useAppState must be used inside AppStateProvider');
+    throw new Error('useAppState must be used within an AppStateProvider');
   }
-
   return context;
 }

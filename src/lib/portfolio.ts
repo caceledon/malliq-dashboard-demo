@@ -2,22 +2,22 @@ import {
   buildDashboardInsights,
   emptyAppState,
   type AppState,
+  type AssetSettings,
   type BackupDocumentPayload,
-  type MallSettings,
 } from '@/lib/domain';
 
-export interface MallWorkspace extends AppState {
-  mall: MallSettings;
+export interface AssetWorkspace extends AppState {
+  asset: AssetSettings;
 }
 
 export interface PortfolioState {
   version: 2;
-  activeMallId: string | null;
-  workspaces: MallWorkspace[];
+  activeAssetId: string | null;
+  workspaces: AssetWorkspace[];
 }
 
 export interface PortfolioBackupDocumentPayload extends BackupDocumentPayload {
-  mallId: string;
+  assetId: string;
 }
 
 export interface PortfolioBackupArchive {
@@ -27,12 +27,12 @@ export interface PortfolioBackupArchive {
   documents: PortfolioBackupDocumentPayload[];
 }
 
-export interface PortfolioMallSummary {
+export interface PortfolioAssetSummary {
   id: string;
   name: string;
   city: string;
   region: string;
-  syncStatus?: MallSettings['syncStatus'];
+  syncStatus?: AssetSettings['syncStatus'];
   lastSyncedAt?: string;
   totalUnits: number;
   occupiedUnits: number;
@@ -44,7 +44,7 @@ export interface PortfolioMallSummary {
 }
 
 export interface PortfolioStats {
-  mallCount: number;
+  assetCount: number;
   totalUnits: number;
   occupiedUnits: number;
   occupancyPct: number;
@@ -57,7 +57,7 @@ export const STORAGE_KEY = 'malliq-functional-state';
 export function emptyPortfolioState(): PortfolioState {
   return {
     version: 2,
-    activeMallId: null,
+    activeAssetId: null,
     workspaces: [],
   };
 }
@@ -66,7 +66,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isMallSettings(value: unknown): value is MallSettings {
+function isAssetSettings(value: unknown): value is AssetSettings {
   return isRecord(value) && typeof value.id === 'string' && typeof value.name === 'string';
 }
 
@@ -76,7 +76,7 @@ function isAppState(value: unknown): value is AppState {
   }
 
   return (
-    'mall' in value &&
+    'asset' in value &&
     'units' in value &&
     'contracts' in value &&
     'sales' in value &&
@@ -89,8 +89,8 @@ function isAppState(value: unknown): value is AppState {
   );
 }
 
-function isMallWorkspace(value: unknown): value is MallWorkspace {
-  return isAppState(value) && isMallSettings(value.mall);
+function isAssetWorkspace(value: unknown): value is AssetWorkspace {
+  return isAppState(value) && isAssetSettings(value.asset);
 }
 
 function isPortfolioState(value: unknown): value is PortfolioState {
@@ -98,31 +98,31 @@ function isPortfolioState(value: unknown): value is PortfolioState {
 }
 
 export function normalizePortfolioState(portfolio: PortfolioState): PortfolioState {
-  const workspaces = portfolio.workspaces.filter(isMallWorkspace);
-  const activeMallId = workspaces.some((workspace) => workspace.mall.id === portfolio.activeMallId)
-    ? portfolio.activeMallId
-    : workspaces[0]?.mall.id ?? null;
+  const workspaces = portfolio.workspaces.filter(isAssetWorkspace);
+  const activeAssetId = workspaces.some((workspace) => workspace.asset.id === portfolio.activeAssetId)
+    ? portfolio.activeAssetId
+    : workspaces[0]?.asset.id ?? null;
 
   return {
     version: 2,
-    activeMallId,
+    activeAssetId,
     workspaces,
   };
 }
 
 export function migrateLegacyAppState(state: AppState): PortfolioState {
-  if (!state.mall) {
+  if (!state.asset) {
     return emptyPortfolioState();
   }
 
   return normalizePortfolioState({
     version: 2,
-    activeMallId: state.mall.id,
+    activeAssetId: state.asset.id,
     workspaces: [
       {
         ...emptyAppState(),
         ...state,
-        mall: state.mall,
+        asset: state.asset,
       },
     ],
   });
@@ -137,31 +137,36 @@ export function parseStoredPortfolio(raw: unknown): PortfolioState {
     return migrateLegacyAppState(raw);
   }
 
+  // Legacy migration from single-asset state (stored as AppState with 'mall' key)
+  if (isRecord(raw) && ('mall' in raw || 'asset' in raw)) {
+    return migrateLegacyAppState((raw as unknown) as AppState);
+  }
+
   return emptyPortfolioState();
 }
 
-export function getActiveWorkspace(portfolio: PortfolioState): MallWorkspace | null {
-  if (!portfolio.activeMallId) {
+export function getActiveWorkspace(portfolio: PortfolioState): AssetWorkspace | null {
+  if (!portfolio.activeAssetId) {
     return null;
   }
 
-  return portfolio.workspaces.find((workspace) => workspace.mall.id === portfolio.activeMallId) ?? null;
+  return portfolio.workspaces.find((workspace) => workspace.asset.id === portfolio.activeAssetId) ?? null;
 }
 
-export function getWorkspaceById(portfolio: PortfolioState, mallId: string): MallWorkspace | null {
-  return portfolio.workspaces.find((workspace) => workspace.mall.id === mallId) ?? null;
+export function getWorkspaceById(portfolio: PortfolioState, assetId: string): AssetWorkspace | null {
+  return portfolio.workspaces.find((workspace) => workspace.asset.id === assetId) ?? null;
 }
 
-export function buildPortfolioMallSummary(workspace: MallWorkspace): PortfolioMallSummary {
+export function buildPortfolioAssetSummary(workspace: AssetWorkspace): PortfolioAssetSummary {
   const insights = buildDashboardInsights(workspace);
 
   return {
-    id: workspace.mall.id,
-    name: workspace.mall.name,
-    city: workspace.mall.city,
-    region: workspace.mall.region,
-    syncStatus: workspace.mall.syncStatus,
-    lastSyncedAt: workspace.mall.lastSyncedAt,
+    id: workspace.asset.id,
+    name: workspace.asset.name,
+    city: workspace.asset.city,
+    region: workspace.asset.region,
+    syncStatus: workspace.asset.syncStatus,
+    lastSyncedAt: workspace.asset.lastSyncedAt,
     totalUnits: insights.totalUnits,
     occupiedUnits: insights.occupiedUnits,
     occupancyPct: insights.occupancyPct,
@@ -174,15 +179,15 @@ export function buildPortfolioMallSummary(workspace: MallWorkspace): PortfolioMa
   };
 }
 
-export function buildPortfolioStats(summaries: PortfolioMallSummary[]): PortfolioStats {
-  const mallCount = summaries.length;
+export function buildPortfolioStats(summaries: PortfolioAssetSummary[]): PortfolioStats {
+  const assetCount = summaries.length;
   const totalUnits = summaries.reduce((sum, item) => sum + item.totalUnits, 0);
   const occupiedUnits = summaries.reduce((sum, item) => sum + item.occupiedUnits, 0);
   const monthlySales = summaries.reduce((sum, item) => sum + item.monthlySales, 0);
   const alertCount = summaries.reduce((sum, item) => sum + item.alertCount, 0);
 
   return {
-    mallCount,
+    assetCount,
     totalUnits,
     occupiedUnits,
     occupancyPct: totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 1000) / 10 : 0,

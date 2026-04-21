@@ -26,7 +26,7 @@ function resizeUnits(current: DraftUnit[], count: number): DraftUnit[] {
 export function SetupWizard() {
   const { state, actions } = useAppState();
 
-  return <SetupWizardForm key={state.mall?.id ?? 'new-mall'} state={state} actions={actions} />;
+  return <SetupWizardForm key={state.asset?.id ?? 'new-asset'} state={state} actions={actions} />;
 }
 
 function SetupWizardForm({
@@ -36,10 +36,10 @@ function SetupWizardForm({
   state: ReturnType<typeof useAppState>['state'];
   actions: ReturnType<typeof useAppState>['actions'];
 }) {
-  const [mallName, setMallName] = useState(state.mall?.name ?? 'Mall operativo');
-  const [city, setCity] = useState(state.mall?.city ?? 'Santiago');
-  const [region, setRegion] = useState(state.mall?.region ?? 'Metropolitana');
-  const [notes, setNotes] = useState(state.mall?.notes ?? '');
+  const [assetName, setAssetName] = useState(state.asset?.name ?? 'Activo operativo');
+  const [city, setCity] = useState(state.asset?.city ?? 'Santiago');
+  const [region, setRegion] = useState(state.asset?.region ?? 'Metropolitana');
+  const [notes, setNotes] = useState(state.asset?.notes ?? '');
   const [unitCount, setUnitCount] = useState(Math.max(state.units.length, 6));
   const [units, setUnits] = useState<DraftUnit[]>(
     state.units.length > 0
@@ -55,16 +55,16 @@ function SetupWizardForm({
   const totalArea = units.reduce((sum, unit) => sum + Number(unit.areaM2 || 0), 0);
 
   const handleSave = () => {
-    actions.initializeMall({
-      mall: {
-        name: mallName,
+    actions.initializeAsset({
+      asset: {
+        name: assetName,
         city,
         region,
         notes,
-        themePreference: state.mall?.themePreference ?? 'light',
-        backendUrl: state.mall?.backendUrl ?? 'http://localhost:4000/api',
-        syncEnabled: state.mall?.syncEnabled ?? false,
-        lastSyncedAt: state.mall?.lastSyncedAt,
+        themePreference: state.asset?.themePreference ?? 'light',
+        backendUrl: state.asset?.backendUrl ?? '/api',
+        syncEnabled: state.asset?.syncEnabled ?? false,
+        lastSyncedAt: state.asset?.lastSyncedAt,
       },
       units: units.map((unit) => ({
         ...unit,
@@ -80,7 +80,7 @@ function SetupWizardForm({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-600">Configuración inicial</p>
-              <h1 className="mt-2 text-2xl font-bold">Carga la base física del mall antes de operar</h1>
+              <h1 className="mt-2 text-2xl font-bold">Carga la base física del activo antes de operar</h1>
               <p className="mt-2 max-w-3xl text-sm text-[var(--sidebar-fg)]">
                 Define la cantidad de locales y los m2 de cada uno. El plano, la ocupación, los contratos multi-local y los
                 KPIs se calculan desde esta estructura base.
@@ -107,10 +107,10 @@ function SetupWizardForm({
             </div>
             <div className="mt-4 space-y-3">
               <label className="block">
-                <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">Nombre del mall</span>
+                <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">Nombre del activo</span>
                 <input
-                  value={mallName}
-                  onChange={(event) => setMallName(event.target.value)}
+                  value={assetName}
+                  onChange={(event) => setAssetName(event.target.value)}
                   className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm outline-none"
                 />
               </label>

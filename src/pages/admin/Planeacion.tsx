@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { FileUp, Pencil, Trash2, WandSparkles } from 'lucide-react';
 import { DocumentManager } from '@/components/app/DocumentManager';
 import { createId, monthKey, type PlanningEntry, type PlanType } from '@/lib/domain';
-import { formatPercent, formatPeso } from '@/lib/format';
+import { formatPercent } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 function parsePlanningRows(raw: string, type: PlanType): PlanningEntry[] {
   return raw
@@ -27,6 +29,7 @@ function parsePlanningRows(raw: string, type: PlanType): PlanningEntry[] {
 
 export function Planeacion() {
   const { state, actions, insights } = useAppState();
+  const { formatCurrency } = useCurrency();
   const [type, setType] = useState<PlanType>('budget');
   const [entryId, setEntryId] = useState('');
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -36,6 +39,11 @@ export function Planeacion() {
   const [budgetMonths, setBudgetMonths] = useState(6);
   const [budgetUplift, setBudgetUplift] = useState(6);
   const [forecastMonths, setForecastMonths] = useState(6);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    entryId: string;
+  }>({ open: false, entryId: '' });
 
   const planningByType = {
     budget: state.planning.filter((entry) => entry.type === 'budget').sort((left, right) => left.month.localeCompare(right.month)),
@@ -105,17 +113,17 @@ export function Planeacion() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <PlanningMetric
           label="Ventas reales mes"
-          value={formatPeso(insights.monthlySales)}
+          value={formatCurrency(insights.monthlySales)}
           subtitle={currentBudget ? `Vs presupuesto ${budgetGapPct ? formatPercent(budgetGapPct) : '0.0%'}` : 'Sin presupuesto del mes'}
         />
         <PlanningMetric
           label="Presupuesto vigente"
-          value={currentBudget ? formatPeso(currentBudget.salesAmount) : 'No cargado'}
-          subtitle={currentBudget ? `Renta objetivo ${formatPeso(currentBudget.rentAmount)}` : 'Puedes generarlo automáticamente'}
+          value={currentBudget ? formatCurrency(currentBudget.salesAmount) : 'No cargado'}
+          subtitle={currentBudget ? `Renta objetivo ${formatCurrency(currentBudget.rentAmount)}` : 'Puedes generarlo automáticamente'}
         />
         <PlanningMetric
           label="Forecast vigente"
-          value={currentForecast ? formatPeso(currentForecast.salesAmount) : 'No cargado'}
+          value={currentForecast ? formatCurrency(currentForecast.salesAmount) : 'No cargado'}
           subtitle={currentForecast ? `Vs real ${forecastGapPct ? formatPercent(forecastGapPct) : '0.0%'}` : 'Puedes generarlo automáticamente'}
         />
         <PlanningMetric
@@ -236,13 +244,35 @@ export function Planeacion() {
           </div>
         </div>
 
-        <DocumentManager entityType="mall" entityId={state.mall?.id ?? 'mall'} title="Respaldos de presupuesto y forecast" />
+        <DocumentManager entityType="asset" entityId={state.asset?.id ?? 'asset'} title="Respaldos de presupuesto y forecast" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <PlanningTable title="Presupuesto" entries={planningByType.budget} onEdit={editEntry} onDelete={actions.deletePlanningEntry} />
-        <PlanningTable title="Forecast" entries={planningByType.forecast} onEdit={editEntry} onDelete={actions.deletePlanningEntry} />
+        <PlanningTable
+          title="Presupuesto"
+          entries={planningByType.budget}
+          onEdit={editEntry}
+          onDelete={(id) => setConfirmDialog({ open: true, entryId: id })}
+        />
+        <PlanningTable
+          title="Forecast"
+          entries={planningByType.forecast}
+          onEdit={editEntry}
+          onDelete={(id) => setConfirmDialog({ open: true, entryId: id })}
+        />
       </div>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Eliminar entrada"
+        message="¿Estás seguro de eliminar esta entrada de planeación? Esta acción no se puede deshacer."
+        variant="danger"
+        onConfirm={() => {
+          actions.deletePlanningEntry(confirmDialog.entryId);
+          setConfirmDialog({ open: false, entryId: '' });
+        }}
+        onCancel={() => setConfirmDialog({ open: false, entryId: '' })}
+      />
     </div>
   );
 }
@@ -268,6 +298,7 @@ function PlanningTable({
   onEdit: (entry: PlanningEntry) => void;
   onDelete: (entryId: string) => void;
 }) {
+  const { formatCurrency } = useCurrency();
   return (
     <div className="glass-card p-5">
       <h3 className="text-sm font-semibold">{title}</h3>
@@ -286,8 +317,8 @@ function PlanningTable({
                   {entry.note ? <p className="mt-1 text-xs text-[var(--sidebar-fg)]">{entry.note}</p> : null}
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold">{formatPeso(entry.salesAmount)}</p>
-                  <p className="text-xs text-[var(--sidebar-fg)]">Renta {formatPeso(entry.rentAmount)}</p>
+                  <p className="text-sm font-semibold">{formatCurrency(entry.salesAmount)}</p>
+                  <p className="text-xs text-[var(--sidebar-fg)]">Renta {formatCurrency(entry.rentAmount)}</p>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">

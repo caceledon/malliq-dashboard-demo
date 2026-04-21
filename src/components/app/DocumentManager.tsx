@@ -13,6 +13,8 @@ const documentKindLabels: Record<DocumentKind, string> = {
   render: 'Render',
   presupuesto: 'Presupuesto',
   forecast: 'Forecast',
+  plano: 'Plano',
+  permiso: 'Permiso',
   otro: 'Otro',
 };
 

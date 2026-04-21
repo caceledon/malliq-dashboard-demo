@@ -15,7 +15,7 @@ export function PortalSelector() {
           <Building2 className="h-8 w-8" />
         </div>
         <h1 className="text-4xl font-extrabold tracking-tight text-[var(--fg)] md:text-5xl">
-          {state.mall?.name || 'MallIQ Platform'}
+          {state.asset?.name || 'IQ Activo'}
         </h1>
         <p className="mt-3 max-w-md text-[var(--sidebar-fg)]">
           Selecciona el portal correspondiente a tu perfil de usuario para ingresar al dashboard de inteligencia.
@@ -37,7 +37,7 @@ export function PortalSelector() {
             Portal Administrador
           </h2>
           <p className="mb-8 text-sm text-[var(--sidebar-fg)]">
-            Acceso completo para gestión de malls, rentas, contratos, cargas tributarias, reportes OCR y mapas de ocupación comerciales.
+            Acceso completo para gestión de activos, rentas, contratos, cargas tributarias, reportes OCR y mapas de ocupación comerciales.
           </p>
           <div className="mt-auto flex w-full items-center justify-between text-blue-600 dark:text-blue-400">
             <span className="font-semibold text-sm">Entrar como Operador</span>
@@ -57,7 +57,7 @@ export function PortalSelector() {
             Portal Locatario
           </h2>
           <p className="mb-8 text-sm text-[var(--sidebar-fg)]">
-            Acceso para los inquilinos y tiendas arrendatarias del mall. Revisa el estado de tus contratos, ventas reportadas y métricas mensuales.
+            Acceso para los inquilinos y tiendas arrendatarias del activo. Revisa el estado de tus contratos, ventas reportadas y métricas mensuales.
           </p>
           <div className="mt-auto flex w-full items-center justify-between text-emerald-600 dark:text-emerald-400">
             <span className="font-semibold text-sm">Entrar como Arrendatario</span>

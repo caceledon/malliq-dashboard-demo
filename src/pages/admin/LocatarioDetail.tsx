@@ -11,8 +11,11 @@ import {
 import { ChevronRight, FileBadge2, MapPinned, ReceiptText, Signature } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DocumentManager } from '@/components/app/DocumentManager';
+import { RentStepGantt } from '@/components/app/RentStepGantt';
+import { TenantHealthRating } from '@/components/app/TenantHealthRating';
 import { buildRenewalContractTemplate, getContractDisplayValues, getContractLifecycle, monthKey } from '@/lib/domain';
-import { formatDate, formatPeso } from '@/lib/format';
+import { formatDate, formatUF, formatPercent } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +23,7 @@ export function LocatarioDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { state, insights } = useAppState();
+  const { formatCurrency } = useCurrency();
   const contract = state.contracts.find((item) => item.id === id);
   const summary = insights.tenantSummaries.find((item) => item.id === id);
 
@@ -124,10 +128,22 @@ export function LocatarioDetail() {
               </button>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-            <MiniCard label="Ventas mes" value={formatPeso(summary.salesCurrent)} />
-            <MiniCard label="Renta total" value={formatPeso(summary.rentTotal)} />
-            <MiniCard label="Base UF" value={`${contract.baseRentUF.toFixed(1)} UF`} />
-            <MiniCard label="Anexos" value={String(contractDocuments.filter((doc) => doc.kind === 'anexo').length)} />
+              <MiniCard label="Ventas mes" value={formatCurrency(summary.salesCurrent)} />
+              <MiniCard label="Renta total" value={formatCurrency(summary.rentTotal)} />
+              <MiniCard label="Renta fija UF/m²" value={summary.baseRentUF > 0 ? `${formatUF(summary.baseRentUF)}/m²` : 'No definida'} />
+              <MiniCard label="Anexos" value={String(contractDocuments.filter((doc) => doc.kind === 'anexo').length)} />
+              <MiniCard
+                label="Costo ocupación"
+                value={formatPercent(summary.costoOcupacionPct)}
+                className={summary.costoOcupacionPct > 20 ? 'text-red-600' : ''}
+              />
+              <MiniCard label="Venta/m²" value={formatCurrency(summary.ventaPorM2)} />
+              <div className="rounded-2xl bg-[var(--hover-bg)] p-4 sm:col-span-2">
+                <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Health score</p>
+                <div className="mt-2">
+                  <TenantHealthRating score={summary.healthScore} />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -138,7 +154,7 @@ export function LocatarioDetail() {
           <h3 className="text-sm font-semibold">Evolución histórica de ventas</h3>
           <p className="mt-1 text-xs text-[var(--sidebar-fg)]">Serie armada desde ventas manuales, OCR, fiscal printer y conexión POS.</p>
           <div className="mt-4 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
               <AreaChart data={monthlySales}>
                 <defs>
                   <linearGradient id="tenant-sales-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -156,7 +172,7 @@ export function LocatarioDetail() {
                 />
                 <Tooltip
                   contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 14, fontSize: 12 }}
-                  formatter={(value) => [formatPeso(Number(value ?? 0)), 'Ventas']}
+                  formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Ventas']}
                 />
                 <Area type="monotone" dataKey="sales" stroke="#10B981" strokeWidth={2.5} fill="url(#tenant-sales-gradient)" />
               </AreaChart>
@@ -169,9 +185,35 @@ export function LocatarioDetail() {
           <div className="mt-4 space-y-4">
             <DetailRow icon={<Signature className="h-4 w-4 text-blue-600" />} label="Estado firma" value={contract.signatureStatus.replace('_', ' ')} />
             <DetailRow icon={<FileBadge2 className="h-4 w-4 text-emerald-600" />} label="Vigencia" value={`${formatDate(contract.startDate)} a ${formatDate(contract.endDate)}`} />
-            <DetailRow icon={<ReceiptText className="h-4 w-4 text-amber-600" />} label="Renta fija" value={formatPeso(contract.fixedRent)} />
+            <DetailRow
+              icon={<ReceiptText className="h-4 w-4 text-amber-600" />}
+              label="Renta fija UF/m²"
+              value={contract.baseRentUF > 0 ? `${formatUF(contract.baseRentUF)}/m²` : 'No definida'}
+            />
+            <DetailRow icon={<ReceiptText className="h-4 w-4 text-emerald-600" />} label="Renta fija estimada" value={formatCurrency(summary.rentFixed)} />
             <DetailRow icon={<ReceiptText className="h-4 w-4 text-indigo-600" />} label="Variable" value={`${contract.variableRentPct}% de venta`} />
             <DetailRow icon={<MapPinned className="h-4 w-4 text-rose-600" />} label="Locales" value={linkedUnits.map((unit) => unit.code).join(', ')} />
+            {contract.garantiaMonto > 0 ? (
+              <DetailRow
+                icon={<ReceiptText className="h-4 w-4 text-purple-600" />}
+                label="Garantía"
+                value={`${formatCurrency(contract.garantiaMonto)} hasta ${formatDate(contract.garantiaVencimiento)}`}
+              />
+            ) : null}
+            {contract.feeIngreso > 0 ? (
+              <DetailRow icon={<ReceiptText className="h-4 w-4 text-orange-600" />} label="Fee ingreso" value={formatCurrency(contract.feeIngreso)} />
+            ) : null}
+            {contract.fondoPromocion > 0 ? (
+              <DetailRow icon={<ReceiptText className="h-4 w-4 text-pink-600" />} label="Fondo promoción" value={formatCurrency(contract.fondoPromocion)} />
+            ) : null}
+            {contract.rentSteps.length > 0 ? (
+              <div className="rounded-2xl border border-[var(--border-color)] p-4">
+                <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Escalonado de renta</p>
+                <div className="mt-3">
+                  <RentStepGantt steps={contract.rentSteps} contractStart={contract.startDate} contractEnd={contract.endDate} />
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="mt-4 rounded-2xl bg-[var(--hover-bg)] p-4">
             <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Condiciones</p>
@@ -238,6 +280,10 @@ export function LocatarioDetail() {
         </div>
       </div>
 
+      {state.asset ? (
+        <DocumentManager entityType="asset" entityId={state.asset.id} title="Documentos del activo" />
+      ) : null}
+
       <DocumentManager entityType="contract" entityId={contract.id} title="Documentación contractual y anexos" />
 
       <div className="space-y-4">
@@ -254,11 +300,11 @@ export function LocatarioDetail() {
   );
 }
 
-function MiniCard({ label, value }: { label: string; value: string }) {
+function MiniCard({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
     <div className="rounded-2xl bg-[var(--hover-bg)] p-4">
       <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{label}</p>
-      <p className="mt-2 text-lg font-semibold">{value}</p>
+      <p className={`mt-2 text-lg font-semibold ${className ?? ''}`}>{value}</p>
     </div>
   );
 }

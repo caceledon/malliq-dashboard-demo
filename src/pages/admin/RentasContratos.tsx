@@ -11,13 +11,15 @@ import { FileText, ShieldCheck, Wallet } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { buildRenewalContractTemplate, getContractDisplayValues, getContractLifecycle } from '@/lib/domain';
-import { formatDate, formatPeso } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { cn } from '@/lib/utils';
 
 export function RentasContratos() {
   const navigate = useNavigate();
   const { state, insights } = useAppState();
+  const { formatCurrency } = useCurrency();
   const signed = state.contracts.filter((contract) => contract.signatureStatus === 'firmado').length;
   const underReview = state.contracts.filter((contract) => contract.signatureStatus === 'en_revision').length;
   const pending = state.contracts.filter((contract) => contract.signatureStatus === 'pendiente').length;
@@ -46,9 +48,11 @@ export function RentasContratos() {
 
       <div className="glass-card p-5">
         <h3 className="text-sm font-semibold">Composición de renta por contrato</h3>
-        <p className="mt-1 text-xs text-[var(--sidebar-fg)]">La porción variable se recalcula automáticamente según las ventas del mes cargadas.</p>
+        <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+          La renta facturada toma el mayor entre mínimo garantizado y porcentaje sobre ventas, más los gastos comunes.
+        </p>
         <div className="mt-4 h-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.5} />
               <XAxis dataKey="name" tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -60,10 +64,11 @@ export function RentasContratos() {
               />
               <Tooltip
                 contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 14, fontSize: 12 }}
-                formatter={(value) => [formatPeso(Number(value ?? 0)), '']}
+                formatter={(value, name) => [formatCurrency(Number(value ?? 0)), String(name)]}
               />
-              <Bar dataKey="fija" stackId="rent" fill="#2563EB" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="variable" stackId="rent" fill="#10B981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="fija" name="Mínimo garantizado" fill="#94A3B8" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="variable" name="% sobre ventas" fill="#10B981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="total" name="Renta facturada" fill="#2563EB" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -127,7 +132,7 @@ export function RentasContratos() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">{contract.annexCount}</td>
-                  <td className="px-4 py-3 text-sm font-semibold">{formatPeso(tenant.rentTotal)}</td>
+                  <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(tenant.rentTotal)}</td>
                   <td className="px-4 py-3 text-sm text-[var(--sidebar-fg)]">{contract.escalation}</td>
                   <td className="px-4 py-3">
                     {lifecycle === 'por_vencer' || lifecycle === 'vencido' ? (

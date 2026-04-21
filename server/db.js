@@ -1,18 +1,25 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import './env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'malliq.sqlite');
+const DATA_DIR = process.env.MALLIQ_DATA_DIR
+  ? path.resolve(process.env.MALLIQ_DATA_DIR)
+  : path.join(__dirname, 'data');
+const DB_PATH = process.env.MALLIQ_DB_PATH
+  ? path.resolve(process.env.MALLIQ_DB_PATH)
+  : path.join(DATA_DIR, 'malliq.sqlite');
 
 let dbInstance = null;
 
 export async function getDb() {
   if (dbInstance) return dbInstance;
-  
+
+  await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
   dbInstance = await open({
     filename: DB_PATH,
     driver: sqlite3.Database
@@ -25,7 +32,7 @@ export async function getDb() {
       updated_at TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS mall_settings (
+    CREATE TABLE IF NOT EXISTS asset_settings (
       id TEXT PRIMARY KEY,
       data JSON NOT NULL
     );
@@ -74,6 +81,16 @@ export async function getDb() {
       id TEXT PRIMARY KEY,
       data JSON NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS activities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      actor TEXT,
+      details JSON,
+      created_at TEXT NOT NULL
+    );
   `);
 
   const meta = await dbInstance.get('SELECT * FROM meta WHERE id = 1');
@@ -88,10 +105,10 @@ export async function fetchFullState() {
   const db = await getDb();
   
   const [
-    mallRows, units, contracts, sales, planning, documents, 
+    assetRows, units, contracts, sales, planning, documents, 
     suppliers, prospects, posConnections, importLogs
   ] = await Promise.all([
-    db.all('SELECT data FROM mall_settings LIMIT 1'),
+    db.all('SELECT data FROM asset_settings LIMIT 1'),
     db.all('SELECT data FROM units'),
     db.all('SELECT data FROM contracts'),
     db.all('SELECT data FROM sales'),
@@ -104,7 +121,7 @@ export async function fetchFullState() {
   ]);
 
   return {
-    mall: mallRows.length > 0 ? JSON.parse(mallRows[0].data) : null,
+    asset: assetRows.length > 0 ? JSON.parse(assetRows[0].data) : null,
     units: units.map(r => JSON.parse(r.data)),
     contracts: contracts.map(r => JSON.parse(r.data)),
     sales: sales.map(r => JSON.parse(r.data)),
@@ -119,36 +136,42 @@ export async function fetchFullState() {
 
 export async function replaceFullState(state) {
   const db = await getDb();
-  
+
   await db.exec('BEGIN TRANSACTION');
   try {
-    const clearTables = ['mall_settings', 'units', 'contracts', 'sales', 'planning', 'documents', 'suppliers', 'prospects', 'pos_connections', 'import_logs'];
-    for (const table of clearTables) {
-      await db.run(`DELETE FROM ${table}`);
+    if (state.asset) {
+      await db.run('INSERT OR REPLACE INTO asset_settings (id, data) VALUES (?, ?)', [state.asset.id || 'asset-1', JSON.stringify(state.asset)]);
+    } else {
+      await db.run('DELETE FROM asset_settings');
     }
 
-    if (state.mall) {
-      await db.run('INSERT INTO mall_settings (id, data) VALUES (?, ?)', [state.mall.id || 'mall-1', JSON.stringify(state.mall)]);
-    }
-
-    const insertMany = async (table, items) => {
-      if (!items || items.length === 0) return;
-      const stmt = await db.prepare(`INSERT INTO ${table} (id, data) VALUES (?, ?)`);
-      for (const item of items) {
-        await stmt.run([item.id, JSON.stringify(item)]);
+    const upsertMany = async (table, items) => {
+      const ids = [];
+      if (items && items.length > 0) {
+        const stmt = await db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`);
+        for (const item of items) {
+          await stmt.run([item.id, JSON.stringify(item)]);
+          ids.push(item.id);
+        }
+        await stmt.finalize();
       }
-      await stmt.finalize();
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        await db.run(`DELETE FROM ${table} WHERE id NOT IN (${placeholders})`, ids);
+      } else {
+        await db.run(`DELETE FROM ${table}`);
+      }
     };
 
-    await insertMany('units', state.units);
-    await insertMany('contracts', state.contracts);
-    await insertMany('sales', state.sales);
-    await insertMany('planning', state.planning);
-    await insertMany('documents', state.documents);
-    await insertMany('suppliers', state.suppliers);
-    await insertMany('prospects', state.prospects);
-    await insertMany('pos_connections', state.posConnections);
-    await insertMany('import_logs', state.importLogs);
+    await upsertMany('units', state.units);
+    await upsertMany('contracts', state.contracts);
+    await upsertMany('sales', state.sales);
+    await upsertMany('planning', state.planning);
+    await upsertMany('documents', state.documents);
+    await upsertMany('suppliers', state.suppliers);
+    await upsertMany('prospects', state.prospects);
+    await upsertMany('pos_connections', state.posConnections);
+    await upsertMany('import_logs', state.importLogs);
 
     await db.exec('COMMIT');
   } catch (error) {
@@ -167,4 +190,30 @@ export async function incrementRevision() {
   const now = new Date().toISOString();
   await db.run('UPDATE meta SET revision = revision + 1, updated_at = ? WHERE id = 1', [now]);
   return await getMeta();
+}
+
+export async function logActivity(action, entityType = null, entityId = null, actor = null, details = null) {
+  const db = await getDb();
+  await db.run(
+    'INSERT INTO activities (action, entity_type, entity_id, actor, details, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [action, entityType, entityId, actor, details ? JSON.stringify(details) : null, new Date().toISOString()],
+  );
+}
+
+export async function getRecentActivities(limit = 50) {
+  const db = await getDb();
+  return await db.all(
+    'SELECT * FROM activities ORDER BY created_at DESC LIMIT ?',
+    [limit],
+  );
+}
+
+export async function closeDb() {
+  if (!dbInstance) {
+    return;
+  }
+
+  const current = dbInstance;
+  dbInstance = null;
+  await current.close();
 }

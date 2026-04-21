@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 
 const adminLinks = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/admin/malls', label: 'Portafolio malls', icon: Map },
+  { to: '/admin/activos', label: 'Portafolio activos', icon: Map },
   { to: '/admin/locatarios', label: 'Locatarios', icon: Users },
   { to: '/admin/rentas', label: 'Rentas y contratos', icon: FileArchive },
   { to: '/admin/cargas', label: 'Carga de datos', icon: ReceiptText },
@@ -62,7 +62,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
             </div>
             <div>
               <h1 className="text-base font-bold tracking-tight">MallIQ Operativo</h1>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-fg)]">Datos reales del mall</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-fg)]">Datos reales del activo</p>
             </div>
           </div>
 
