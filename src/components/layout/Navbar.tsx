@@ -1,4 +1,4 @@
-import { Menu, Moon, Sun, Building2 } from 'lucide-react';
+import { Menu, Moon, Printer, Sparkles, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 import { useTheme } from '@/lib/theme';
@@ -10,117 +10,168 @@ interface NavbarProps {
   onMenuClick: () => void;
 }
 
+const ROUTE_TITLES: Record<string, string> = {
+  '/admin/dashboard': 'Dashboard operativo',
+  '/admin/activos': 'Portafolio activos',
+  '/admin/locatarios': 'Locatarios',
+  '/admin/rentas': 'Rentas y contratos',
+  '/admin/cargas': 'Carga de datos',
+  '/admin/planeacion': 'Presupuesto operativo',
+  '/admin/ecosistema': 'Prospectos y proveedores',
+  '/admin/alertas': 'Alertas',
+  '/admin/configuracion': 'Configuración',
+  '/locatario/dashboard': 'Mi dashboard',
+  '/locatario/contrato': 'Mi contrato',
+  '/locatario/ventas': 'Mis ventas',
+};
+
+function matchRouteTitle(pathname: string): string {
+  if (ROUTE_TITLES[pathname]) return ROUTE_TITLES[pathname];
+  const prefix = Object.keys(ROUTE_TITLES).find((k) => pathname.startsWith(k));
+  return prefix ? ROUTE_TITLES[prefix] : 'Panel';
+}
+
 export function Navbar({ onMenuClick }: NavbarProps) {
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, ufValue, setUfValue } = useCurrency();
-  const { state, assetSummaries, activeAssetId, actions } = useAppState();
+  const { state, actions } = useAppState();
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = location.pathname.startsWith('/admin');
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  const assetName = state.asset?.name ?? 'Sin activo';
+  const pageTitle = matchRouteTitle(location.pathname);
 
   return (
-    <nav
-      className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-[var(--border-color)] px-4 md:px-8"
-      style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(14px)' }}
-    >
-      <div className="flex items-center gap-3">
-        <button onClick={onMenuClick} title="Menú" className="rounded-lg p-2 transition-colors hover:bg-[var(--hover-bg)] md:hidden">
-          <Menu className="h-5 w-5" />
-        </button>
-        <div className="flex items-center gap-3 rounded-full border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2">
-          <div className="rounded-full bg-white p-1.5 shadow-sm dark:bg-slate-900">
-            <Building2 className="h-4 w-4 text-blue-600" />
-          </div>
-          {assetSummaries.length > 1 ? (
-            <label className="leading-tight">
-              <span className="block text-[10px] uppercase tracking-[0.18em] text-[var(--sidebar-fg)]">Activo</span>
-              <select
-                value={activeAssetId ?? ''}
-                onChange={(event) => actions.switchAsset(event.target.value)}
-                className="bg-transparent text-sm font-semibold outline-none"
-              >
-                {assetSummaries.map((asset) => (
-                  <option key={asset.id} value={asset.id}>
-                    {asset.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <div className="leading-tight">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--sidebar-fg)]">Activo</p>
-              <p className="text-sm font-semibold">{state.asset?.name ?? 'Configura tu activo'}</p>
-            </div>
-          )}
-        </div>
+    <nav className="mq-topbar">
+      <button
+        onClick={onMenuClick}
+        title="Menú"
+        type="button"
+        className="iconbtn md:hidden"
+      >
+        <Menu size={16} />
+      </button>
+
+      <div className="breadcrumb" style={{ minWidth: 0 }}>
+        <span className="truncate">{assetName}</span>
+        <span className="sep">/</span>
+        <span style={{ color: 'var(--ink-1)', fontWeight: 500 }} className="truncate">
+          {pageTitle}
+        </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        {isAdmin ? (
-          <button
-            onClick={() => navigate('/admin/activos')}
-            className="hidden rounded-xl border border-[var(--border-color)] px-3 py-2 text-xs font-semibold transition-colors hover:bg-[var(--hover-bg)] lg:block"
-          >
-            {assetSummaries.length > 1 ? `${assetSummaries.length} activos` : 'Portafolio'}
-          </button>
-        ) : null}
-        <div className="flex items-center rounded-full bg-[var(--hover-bg)] p-0.5">
-          <button
-            onClick={() => navigate('/admin/dashboard')}
-            className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-semibold transition-all',
-              isAdmin ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--sidebar-fg)]',
-            )}
-          >
-            Admin
-          </button>
-          <button
-            onClick={() => navigate('/locatario/dashboard')}
-            className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-semibold transition-all',
-              !isAdmin ? 'bg-emerald-600 text-white shadow-sm' : 'text-[var(--sidebar-fg)]',
-            )}
-          >
-            Locatario
-          </button>
-        </div>
+      <div style={{ flex: 1 }} />
 
-        <div className="flex items-center gap-2">
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value as 'UF' | 'CLP')}
-            className="rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)] px-2 py-1 text-xs font-semibold outline-none"
-          >
-            <option value="CLP">CLP</option>
-            <option value="UF">UF</option>
-          </select>
-          {currency === 'UF' ? (
-            <input
-              type="number"
-              value={ufValue}
-              onChange={(e) => setUfValue(Number(e.target.value))}
-              className="w-20 rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)] px-2 py-1 text-xs outline-none"
-              title="Valor UF"
-            />
-          ) : null}
-        </div>
-
-        <button
-          onClick={() => {
-            setTheme(nextTheme);
-            if (state.asset) {
-              actions.updateAssetSettings({ themePreference: nextTheme });
-            }
+      {/* Search */}
+      <div style={{ position: 'relative', width: 340 }} className="hidden md:block">
+        <input
+          className="mq-input search"
+          placeholder="Buscar locatario, local, contrato…"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <span
+          style={{
+            position: 'absolute',
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontFamily: 'var(--mono)',
+            fontSize: 10.5,
+            color: 'var(--ink-4)',
+            padding: '2px 6px',
+            border: '1px solid var(--line)',
+            borderRadius: 5,
           }}
-          className="rounded-lg p-2 transition-colors hover:bg-[var(--hover-bg)]"
-          title="Cambiar tema"
         >
-          {theme === 'dark' ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-        </button>
-
-        <NotificationDrawer />
+          ⌘K
+        </span>
       </div>
+
+      {/* Portal switcher */}
+      <div
+        className="seg hidden lg:inline-flex"
+        role="tablist"
+        aria-label="Portal"
+      >
+        <button
+          type="button"
+          className={cn(isAdmin && 'on')}
+          onClick={() => navigate('/admin/dashboard')}
+        >
+          Admin
+        </button>
+        <button
+          type="button"
+          className={cn(!isAdmin && 'on')}
+          onClick={() => navigate('/locatario/dashboard')}
+        >
+          Locatario
+        </button>
+      </div>
+
+      {/* Currency */}
+      <div className="hidden md:flex items-center gap-2">
+        <div className="seg">
+          <button
+            type="button"
+            className={cn(currency === 'CLP' && 'on')}
+            onClick={() => setCurrency('CLP')}
+          >
+            CLP
+          </button>
+          <button
+            type="button"
+            className={cn(currency === 'UF' && 'on')}
+            onClick={() => setCurrency('UF')}
+          >
+            UF
+          </button>
+        </div>
+        {currency === 'UF' ? (
+          <input
+            type="number"
+            value={ufValue}
+            onChange={(e) => setUfValue(Number(e.target.value))}
+            className="mq-input"
+            style={{ width: 88, padding: '6px 8px', fontSize: 12 }}
+            title="Valor UF"
+          />
+        ) : null}
+      </div>
+
+      {/* Theme */}
+      <button
+        type="button"
+        className="iconbtn"
+        title={`Cambiar a modo ${nextTheme === 'dark' ? 'oscuro' : 'claro'}`}
+        onClick={() => {
+          setTheme(nextTheme);
+          if (state.asset) {
+            actions.updateAssetSettings({ themePreference: nextTheme });
+          }
+        }}
+      >
+        {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+      </button>
+
+      <NotificationDrawer />
+
+      <button
+        type="button"
+        className="mq-btn sm hidden md:inline-flex"
+        onClick={() => window.print()}
+        title="Imprimir PDF ejecutivo"
+      >
+        <Printer size={14} /> PDF ejecutivo
+      </button>
+      <button
+        type="button"
+        className="mq-btn primary sm"
+        onClick={() => navigate('/admin/rentas')}
+      >
+        <Sparkles size={14} /> Asistente MallQ
+      </button>
     </nav>
   );
 }

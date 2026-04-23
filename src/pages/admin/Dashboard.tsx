@@ -1,365 +1,630 @@
-
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  Activity,
-  ArrowDownRight,
+  AlertTriangle,
   ArrowUpRight,
-  Building2,
-  FileCheck2,
-  ReceiptText,
-  Target,
-  Users,
-  Printer,
+  Calendar,
+  ExternalLink,
+  FileText,
+  Flame,
+  Plug2,
+  Receipt,
+  Sparkles,
+  TrendingDown,
+  Upload,
+  type LucideIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { InteractiveMap } from '@/components/InteractiveMap';
+import { AreaChart, Delta, Donut, HealthRing, Kpi, LifeChip, TenantLogo } from '@/components/mallq/ui';
 import { getContractLifecycle } from '@/lib/domain';
-import { formatNumber, formatPercent } from '@/lib/format';
+import type { AlertItem, TenantSummary } from '@/lib/domain';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
-import { AlertsPanel } from './dashboard/AlertsPanel';
-import { RenewalsPanel } from './dashboard/RenewalsPanel';
-import { VacanciesPanel } from './dashboard/VacanciesPanel';
-import { TopTenantsPanel } from './dashboard/TopTenantsPanel';
-import { AssetSummaryPanel } from './dashboard/AssetSummaryPanel';
-import { PortfolioComparisonPanel } from './dashboard/PortfolioComparisonPanel';
-import { ActivityFeedPanel } from './dashboard/ActivityFeedPanel';
+
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+function monthKeyToLabel(month: string): string {
+  const [, mm] = month.split('-');
+  const idx = Number(mm) - 1;
+  return MONTH_LABELS[idx] ?? month;
+}
+
+function shortMoney(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+  return `$${Math.round(n)}`;
+}
+
+function pctSign(n: number, d = 1): string {
+  return `${n >= 0 ? '+' : ''}${(n * 100).toFixed(d)}%`;
+}
+
+function today(): string {
+  try {
+    const fmt = new Intl.DateTimeFormat('es-CL', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return fmt.format(new Date());
+  } catch {
+    return new Date().toLocaleString();
+  }
+}
 
 export function AdminDashboard() {
   const navigate = useNavigate();
-  const { insights, state, assetSummaries, portfolioStats } = useAppState();
+  const { insights, state } = useAppState();
   const { formatCurrency } = useCurrency();
-  const topTenants = [...insights.tenantSummaries]
-    .sort((left, right) => right.salesPerM2 - left.salesPerM2)
-    .slice(0, 5);
-  const activeUnitIds = new Set(
+
+  const topTenants = useMemo(
+    () => [...insights.tenantSummaries].sort((a, b) => b.salesPerM2 - a.salesPerM2).slice(0, 5),
+    [insights.tenantSummaries],
+  );
+
+  const watchlist = useMemo(
+    () =>
+      [...insights.tenantSummaries]
+        .filter((t) => t.healthScore <= 75 || t.lifecycle === 'por_vencer' || t.lifecycle === 'vencido')
+        .slice(0, 5),
+    [insights.tenantSummaries],
+  );
+
+  const activeUnitIds = useMemo(() => {
+    const set = new Set<string>();
     state.contracts
-      .filter((contract) => getContractLifecycle(contract) !== 'vencido')
-      .flatMap((contract) => contract.localIds),
-  );
-  const renewalQueue = insights.tenantSummaries
-    .filter((tenant) => tenant.lifecycle === 'por_vencer' || tenant.lifecycle === 'vencido')
-    .slice(0, 4);
-  const vacancyMatches = state.units
-    .filter((unit) => !activeUnitIds.has(unit.id))
-    .map((unit) => ({
-      unit,
-      prospect: [...state.prospects]
-        .filter((prospect) => prospect.stage !== 'cerrado' && prospect.stage !== 'descartado')
-        .sort((left, right) => Math.abs(left.targetAreaM2 - unit.areaM2) - Math.abs(right.targetAreaM2 - unit.areaM2))[0],
-    }))
-    .slice(0, 4);
+      .filter((c) => getContractLifecycle(c) !== 'vencido')
+      .forEach((c) => c.localIds.forEach((id) => set.add(id)));
+    return set;
+  }, [state.contracts]);
 
-  /* Occupancy donut data */
-  const occupiedM2 = state.units
-    .filter((unit) => activeUnitIds.has(unit.id))
-    .reduce((sum, unit) => sum + unit.areaM2, 0);
+  const occupiedM2 = useMemo(
+    () => state.units.filter((u) => activeUnitIds.has(u.id)).reduce((sum, u) => sum + u.areaM2, 0),
+    [state.units, activeUnitIds],
+  );
   const totalM2 = insights.totalAreaM2 || 1;
-  const vacantM2 = totalM2 - occupiedM2;
-  const donutData = [
-    { name: 'Ocupado', value: occupiedM2 },
-    { name: 'Vacante', value: vacantM2 },
-  ];
-  const DONUT_COLORS = ['#2563EB', 'rgba(148,163,184,0.25)'];
+  const vacantM2 = Math.max(totalM2 - occupiedM2, 0);
+  const occupancyRatio = occupiedM2 / totalM2;
 
-  /* Sales by source */
+  const salesTrend = insights.chartSeries.map((p) => p.sales);
+  const salesLabels = insights.chartSeries.map((p) => monthKeyToLabel(p.month));
+  const lastSales = salesTrend[salesTrend.length - 1] ?? 0;
+  const prevSales = salesTrend[salesTrend.length - 2] ?? 0;
+  const momSales = prevSales > 0 ? (lastSales - prevSales) / prevSales : 0;
+
+  const rentTrend = insights.chartSeries.map((p) => p.rent);
+
   const salesBySource = {
-    manual: state.sales.filter((sale) => sale.source === 'manual').reduce((sum, sale) => sum + sale.grossAmount, 0),
-    ocr: state.sales.filter((sale) => sale.source === 'ocr').reduce((sum, sale) => sum + sale.grossAmount, 0),
-    fiscal_printer: state.sales.filter((sale) => sale.source === 'fiscal_printer').reduce((sum, sale) => sum + sale.grossAmount, 0),
-    pos_connection: state.sales.filter((sale) => sale.source === 'pos_connection').reduce((sum, sale) => sum + sale.grossAmount, 0),
+    manual: state.sales.filter((s) => s.source === 'manual').reduce((acc, s) => acc + s.grossAmount, 0),
+    ocr: state.sales.filter((s) => s.source === 'ocr').reduce((acc, s) => acc + s.grossAmount, 0),
+    fiscal: state.sales.filter((s) => s.source === 'fiscal_printer').reduce((acc, s) => acc + s.grossAmount, 0),
+    pos: state.sales.filter((s) => s.source === 'pos_connection').reduce((acc, s) => acc + s.grossAmount, 0),
   };
-  const sourceChartData = [
-    { source: 'Manual', amount: salesBySource.manual, fill: '#2563EB' },
-    { source: 'OCR', amount: salesBySource.ocr, fill: '#10B981' },
-    { source: 'Fiscal', amount: salesBySource.fiscal_printer, fill: '#F59E0B' },
-    { source: 'POS', amount: salesBySource.pos_connection, fill: '#8B5CF6' },
-  ].filter((item) => item.amount > 0);
 
-  /* MoM change */
-  const totalSalesCurrent = insights.monthlySales;
-  const totalSalesPrevious = insights.tenantSummaries.reduce((sum, tenant) => sum + tenant.salesPrevious, 0);
-  const momChange = totalSalesPrevious > 0 ? ((totalSalesCurrent - totalSalesPrevious) / totalSalesPrevious) * 100 : 0;
+  const avgHealth = useMemo(() => {
+    const vals = insights.tenantSummaries.map((t) => t.healthScore);
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+  }, [insights.tenantSummaries]);
+  const healthBelow65 = insights.tenantSummaries.filter((t) => t.healthScore < 65).length;
+  const healthAbove90 = insights.tenantSummaries.filter((t) => t.healthScore >= 90).length;
 
-  /* Top tenant max for progress bars */
-  const maxSalesPerM2 = topTenants.length > 0 ? topTenants[0].salesPerM2 : 1;
+  const renewalsSoon = insights.tenantSummaries.filter((t) => t.lifecycle === 'por_vencer').length;
+  const expired = insights.tenantSummaries.filter((t) => t.lifecycle === 'vencido').length;
+  const activeCount = insights.tenantSummaries.filter((t) => t.lifecycle === 'vigente').length;
+
+  const avgSalesPerM2 = insights.averageSalesPerM2;
+
+  const vacancies = insights.vacantUnits;
 
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-xl font-bold md:text-2xl">Dashboard operativo</h1>
-          <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-            {state.asset?.name ?? 'Activo sin configurar'} · ventas, contratos, firmas y planificación en un solo tablero.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => navigate('/admin/activos')}
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-          >
-            <Building2 className="h-4 w-4" />
-            Portafolio
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-          >
-            <Printer className="h-4 w-4" />
-            PDF Ejecutivo
-          </button>
-          <button
-            onClick={() => navigate('/admin/cargas')}
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-          >
-            <ReceiptText className="h-4 w-4" />
-            Cargar ventas
-          </button>
-          <button
-            onClick={() => navigate('/admin/locatarios')}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"
-          >
-            <Users className="h-4 w-4" />
-            Gestionar contratos
-          </button>
-        </div>
-      </div>
-
-      <InteractiveMap />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard
-          title="Ocupación"
-          value={`${insights.occupiedUnits}/${insights.totalUnits}`}
-          subtitle={`${insights.vacantUnits} vacantes`}
-          icon={<Building2 className="h-4 w-4 text-blue-600" />}
+    <div className="fadeUp" style={{ padding: '24px 28px 56px' }}>
+      {/* HERO STRIP */}
+      <div
+        className="mq-card"
+        style={{
+          padding: '22px 24px',
+          marginBottom: 18,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 24,
+          borderRadius: 16,
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            right: -40,
+            top: -40,
+            width: 300,
+            height: 300,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, var(--umber), var(--umber-ink))',
+            opacity: 0.08,
+            filter: 'blur(20px)',
+          }}
         />
-        <KpiCard
-          title="Ventas del mes"
-          value={formatCurrency(insights.monthlySales)}
-          subtitle={
-            momChange !== 0
-              ? `${momChange > 0 ? '+' : ''}${momChange.toFixed(1)}% vs mes anterior`
-              : `${formatCurrency(insights.averageSalesPerM2)}/m²`
-          }
-          icon={<ReceiptText className="h-4 w-4 text-emerald-600" />}
-          trend={momChange}
-        />
-        <KpiCard
-          title="Renta proyectada"
-          value={formatCurrency(insights.monthlyRent)}
-          subtitle="Fija + variable + gastos comunes"
-          icon={<Activity className="h-4 w-4 text-amber-600" />}
-        />
-        <KpiCard
-          title="Firmas"
-          value={String(insights.signedContracts)}
-          subtitle={`${insights.pendingSignatureContracts} pendientes o en revisión`}
-          icon={<FileCheck2 className="h-4 w-4 text-indigo-600" />}
-        />
-        <KpiCard
-          title="Presupuesto"
-          value={insights.budgetCompletionPct > 0 ? formatPercent(insights.budgetCompletionPct) : 'Sin carga'}
-          subtitle={insights.activeForecast > 0 ? `Forecast: ${formatCurrency(insights.activeForecast)}` : 'Forecast no generado'}
-          icon={<Target className="h-4 w-4 text-rose-600" />}
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <div className="glass-card p-5">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-semibold">Ventas vs presupuesto / forecast</h3>
-            <p className="text-xs text-[var(--sidebar-fg)]">Serie de los últimos 6 meses a partir de cargas reales.</p>
+        <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
+          <div className="t-eyebrow" style={{ marginBottom: 6 }}>
+            {today()}
           </div>
-          <div className="mt-4 h-[320px]">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
-              <AreaChart data={insights.chartSeries}>
-                <defs>
-                  <linearGradient id="sales-gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.32} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="budget-gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.22} />
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.55} />
-                <XAxis dataKey="month" tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) => `$${Math.round(value / 1000000)}M`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--card-bg)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 16,
-                    fontSize: 12,
-                  }}
-                  formatter={(value) => [formatCurrency(Number(value ?? 0)), '']}
-                />
-                <Area type="monotone" dataKey="sales" stroke="#2563EB" strokeWidth={2.5} fill="url(#sales-gradient)" name="Ventas" />
-                <Area type="monotone" dataKey="budget" stroke="#10B981" strokeWidth={2} fill="url(#budget-gradient)" name="Presupuesto" />
-                <Area type="monotone" dataKey="forecast" stroke="#7C3AED" strokeWidth={2} fill="none" strokeDasharray="6 4" name="Forecast" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold">Ocupación por superficie</h3>
-            <div className="mt-2 flex items-center gap-6">
-              <div className="h-[140px] w-[140px] shrink-0">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
-                  <PieChart>
-                    <Pie
-                      data={donutData}
-                      innerRadius={42}
-                      outerRadius={62}
-                      paddingAngle={4}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      {donutData.map((_entry, index) => (
-                        <Cell key={index} fill={DONUT_COLORS[index]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-blue-600" />
-                  <span className="text-[var(--sidebar-fg)]">Ocupado</span>
-                  <span className="ml-auto font-semibold">{formatNumber(occupiedM2)} m²</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full" style={{ background: 'rgba(148,163,184,0.5)' }} />
-                  <span className="text-[var(--sidebar-fg)]">Vacante</span>
-                  <span className="ml-auto font-semibold">{formatNumber(vacantM2)} m²</span>
-                </div>
-                <div className="mt-2 text-xs text-[var(--sidebar-fg)]">
-                  {formatPercent(insights.occupancyPct)} del total de {formatNumber(totalM2)} m²
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {sourceChartData.length > 0 ? (
-            <div className="glass-card p-5">
-              <h3 className="text-sm font-semibold">Ventas por fuente de datos</h3>
-              <div className="mt-3 h-[140px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
-                  <BarChart data={sourceChartData} layout="vertical" barCategoryGap={6}>
-                    <XAxis
-                      type="number"
-                      tick={{ fill: 'var(--sidebar-fg)', fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value) => `$${Math.round(value / 1000000)}M`}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="source"
-                      tick={{ fill: 'var(--sidebar-fg)', fontSize: 11 }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={55}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--card-bg)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 14,
-                        fontSize: 12,
-                      }}
-                      formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Ventas']}
-                    />
-                    <Bar dataKey="amount" radius={[0, 8, 8, 0]}>
-                      {sourceChartData.map((entry, index) => (
-                        <Cell key={index} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <AlertsPanel alerts={insights.alerts} />
-        <ActivityFeedPanel key={state.asset?.backendUrl ?? 'no-api'} apiBase={state.asset?.backendUrl} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <RenewalsPanel renewalQueue={renewalQueue} contracts={state.contracts} />
-        <VacanciesPanel vacancyMatches={vacancyMatches} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <TopTenantsPanel topTenants={topTenants} maxSalesPerM2={maxSalesPerM2} />
-        <AssetSummaryPanel insights={insights} prospects={state.prospects} suppliers={state.suppliers} />
-      </div>
-
-      {assetSummaries.length > 1 ? (
-        <PortfolioComparisonPanel assetSummaries={assetSummaries} portfolioStats={portfolioStats} />
-      ) : null}
-    </div>
-  );
-}
-
-function KpiCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  trend,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: ReactNode;
-  trend?: number;
-}) {
-  return (
-    <div className="glass-card p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">{title}</p>
-          <p className="mt-2 text-2xl font-bold">{value}</p>
-          <div className="mt-1 flex items-center gap-1">
-            {trend !== undefined && trend !== 0 ? (
-              <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${trend > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+          <h1 className="t-display" style={{ fontSize: 26, margin: 0, lineHeight: 1.1 }}>
+            Hola, Christian.{' '}
+            <span className="t-muted" style={{ fontWeight: 400 }}>
+              {momSales > 0
+                ? `las ventas crecen ${pctSign(momSales)} mes a mes si el ritmo actual se mantiene.`
+                : momSales < 0
+                  ? `las ventas ceden ${pctSign(momSales)} respecto al mes anterior.`
+                  : 'revisa los indicadores operativos del día.'}
+            </span>
+          </h1>
+          <div className="row-wrap" style={{ marginTop: 12, gap: 10 }}>
+            <span className="chip ok">
+              <span className="dot" />
+              Ocupación {insights.occupancyPct.toFixed(1)}%
+            </span>
+            <span className="chip umber">
+              <span className="dot" />
+              AI Autofill · Moonshot
+            </span>
+            {insights.pendingSignatureContracts > 0 ? (
+              <span className="chip info">
+                <span className="dot" />
+                {insights.pendingSignatureContracts} contratos en firma
               </span>
             ) : null}
-            <p className="text-xs text-[var(--sidebar-fg)]">{subtitle}</p>
+            {renewalsSoon + expired > 0 ? (
+              <span className="chip warn">
+                <span className="dot" />
+                {renewalsSoon + expired} vencimientos próximos
+              </span>
+            ) : null}
           </div>
         </div>
-        <div className="rounded-2xl bg-[var(--hover-bg)] p-3">{icon}</div>
+        <div className="row" style={{ gap: 8, zIndex: 1 }}>
+          <button type="button" className="mq-btn" onClick={() => navigate('/admin/cargas')}>
+            <Upload size={14} /> Cargar ventas
+          </button>
+          <button type="button" className="mq-btn" onClick={() => navigate('/admin/rentas')}>
+            <FileText size={14} /> Contratos
+          </button>
+          <button type="button" className="mq-btn umber" onClick={() => navigate('/admin/activos')}>
+            <Flame size={14} /> Ver heatmap
+          </button>
+        </div>
+      </div>
+
+      {/* KPI STRIP */}
+      <div className="kpi-grid" style={{ marginBottom: 18 }}>
+        <Kpi
+          label="Ocupación"
+          value={`${insights.occupancyPct.toFixed(1)}%`}
+          trend={`${activeCount} locatarios activos · ${vacancies} vacantes`}
+          sparkData={rentTrend.length > 0 ? rentTrend : [0, 0]}
+          sparkColor="var(--ok)"
+        />
+        <Kpi
+          label="Ventas del mes"
+          value={shortMoney(lastSales || insights.monthlySales)}
+          trend="vs mes anterior"
+          delta={momSales}
+          sparkData={salesTrend.length > 0 ? salesTrend : [0, 0]}
+          sparkColor="var(--umber)"
+        />
+        <Kpi
+          label="Renta proyectada"
+          value={shortMoney(insights.monthlyRent)}
+          trend="Fija + variable + GC"
+          sparkData={rentTrend.length > 0 ? rentTrend : [0, 0]}
+          sparkColor="var(--info)"
+        />
+        <Kpi
+          label="Ventas / m²"
+          value={shortMoney(avgSalesPerM2)}
+          trend="Promedio portafolio"
+          sparkData={salesTrend.length > 0 ? salesTrend : [0, 0]}
+          sparkColor="var(--warn)"
+        />
+        <Kpi
+          label="Salud promedio"
+          value={String(avgHealth)}
+          unit="/100"
+          trend={`${healthAbove90} ≥90 · ${healthBelow65} <65`}
+          sparkData={salesTrend.length > 0 ? salesTrend.map(() => avgHealth) : [0, 0]}
+          sparkColor="var(--ok)"
+        />
+      </div>
+
+      {/* HEATMAP HERO */}
+      <div className="mq-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
+        <div className="mq-card-hd">
+          <div>
+            <div className="t-eyebrow">Mapa operativo</div>
+            <h3
+              style={{
+                margin: '4px 0 2px',
+                fontFamily: 'var(--display)',
+                fontSize: 16,
+                fontWeight: 600,
+                color: 'var(--ink-1)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Heatmap de ventas por m² · {state.asset?.name ?? 'Activo'}
+            </h3>
+            <div className="t-muted" style={{ fontSize: 12.5 }}>
+              Click en un local para ver el detalle. Intensidad proporcional al rendimiento vs promedio.
+            </div>
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            <div className="seg">
+              <button className="on" type="button">
+                Ventas/m²
+              </button>
+              <button type="button">Foot traffic</button>
+              <button type="button">Salud</button>
+            </div>
+            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
+              <ExternalLink size={13} /> Expandir
+            </button>
+          </div>
+        </div>
+        <div style={{ padding: 18 }}>
+          <InteractiveMap />
+        </div>
+        <div className="heat-legend">
+          <span className="t-eyebrow">Ventas / m²</span>
+          <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+            &lt; {shortMoney(avgSalesPerM2 * 0.55)}
+          </span>
+          <div className="heat-ramp" />
+          <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+            &gt; {shortMoney(avgSalesPerM2 * 1.35)}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 11 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                background: 'var(--heat-vacant)',
+                border: '1px solid var(--line)',
+                borderRadius: 2,
+              }}
+            />
+            Vacante
+          </span>
+          <div className="row" style={{ gap: 14, marginLeft: 'auto' }}>
+            <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+              {insights.totalUnits} locales
+            </span>
+            <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3) ' }}>
+              · {vacancies} vacantes
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* TWO COLUMN ROW */}
+      <div className="mq-grid-2" style={{ marginBottom: 18 }}>
+        {/* Sales trend */}
+        <div className="mq-card">
+          <div className="mq-card-hd">
+            <div>
+              <div className="t-eyebrow">Venta mensual</div>
+              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 16, fontWeight: 600 }}>
+                {formatCurrency(lastSales || insights.monthlySales)}{' '}
+                {momSales !== 0 ? (
+                  <span
+                    className="t-mono"
+                    style={{
+                      fontSize: 12,
+                      color: momSales > 0 ? 'var(--ok)' : 'var(--danger)',
+                      fontWeight: 400,
+                      marginLeft: 6,
+                    }}
+                  >
+                    {momSales > 0 ? '▲' : '▼'} {pctSign(momSales)}
+                  </span>
+                ) : null}
+              </h3>
+            </div>
+            <div className="seg">
+              <button type="button" className="on">
+                12M
+              </button>
+              <button type="button">YTD</button>
+              <button type="button">QTD</button>
+            </div>
+          </div>
+          <div style={{ padding: '8px 10px 6px' }}>
+            {salesTrend.length > 0 ? (
+              <AreaChart data={salesTrend} labels={salesLabels} format={shortMoney} stroke="var(--umber)" />
+            ) : (
+              <div className="t-muted" style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
+                Aún no hay ventas registradas.
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              padding: '10px 18px 14px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4,1fr)',
+              gap: 14,
+              borderTop: '1px solid var(--line)',
+            }}
+          >
+            <MiniStat label="Manual" val={shortMoney(salesBySource.manual)} color="var(--ink-1)" />
+            <MiniStat label="OCR" val={shortMoney(salesBySource.ocr)} color="var(--umber)" />
+            <MiniStat label="Fiscal" val={shortMoney(salesBySource.fiscal)} color="var(--ok)" />
+            <MiniStat label="POS" val={shortMoney(salesBySource.pos)} color="var(--info)" />
+          </div>
+        </div>
+
+        {/* Occupancy + watchlist */}
+        <div className="mq-card">
+          <div className="mq-card-hd">
+            <div>
+              <div className="t-eyebrow">Ocupación</div>
+              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 16, fontWeight: 600 }}>
+                {insights.occupancyPct.toFixed(1)}% del GLA
+              </h3>
+            </div>
+            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
+              Detalle
+            </button>
+          </div>
+          <div className="mq-card-bd" style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
+            <Donut value={isFinite(occupancyRatio) ? occupancyRatio : 0} size={120} stroke={14} color="var(--umber)" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span className="t-muted" style={{ fontSize: 12 }}>
+                  Ocupado
+                </span>
+                <span className="t-num">{new Intl.NumberFormat('es-CL').format(Math.round(occupiedM2))} m²</span>
+              </div>
+              <div className="mq-bar ok">
+                <span style={{ width: `${Math.min(occupancyRatio * 100, 100).toFixed(1)}%` }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0 8px' }}>
+                <span className="t-muted" style={{ fontSize: 12 }}>
+                  Vacante
+                </span>
+                <span className="t-num">{new Intl.NumberFormat('es-CL').format(Math.round(vacantM2))} m²</span>
+              </div>
+              <div className="mq-bar warn">
+                <span style={{ width: `${Math.min((vacantM2 / totalM2) * 100, 100).toFixed(1)}%` }} />
+              </div>
+              <div style={{ marginTop: 14, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+                {state.prospects.length} prospecto{state.prospects.length === 1 ? '' : 's'} activos para {vacancies}{' '}
+                local{vacancies === 1 ? '' : 'es'} vacante{vacancies === 1 ? '' : 's'}.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* THREE COLUMN ROW */}
+      <div className="mq-grid-3">
+        {/* top performers */}
+        <div className="mq-card">
+          <div className="mq-card-hd">
+            <div>
+              <div className="t-eyebrow">Top ventas / m²</div>
+              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+                Rendimiento líder
+              </h3>
+            </div>
+            <button type="button" className="mq-btn ghost sm" onClick={() => navigate('/admin/locatarios')}>
+              Todos
+            </button>
+          </div>
+          <div style={{ padding: '4px 6px' }}>
+            {topTenants.length === 0 ? (
+              <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
+                Aún no hay ventas por locatario.
+              </div>
+            ) : (
+              topTenants.map((t, i) => (
+                <TopRow key={t.id} tenant={t} index={i} onClick={() => navigate(`/admin/locatarios/${t.id}`)} />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* watchlist */}
+        <div className="mq-card">
+          <div className="mq-card-hd">
+            <div>
+              <div className="t-eyebrow">Watchlist · salud</div>
+              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+                Requieren atención
+              </h3>
+            </div>
+            <span className="chip warn">
+              <span className="dot" />
+              {watchlist.length} casos
+            </span>
+          </div>
+          <div style={{ padding: '4px 6px' }}>
+            {watchlist.length === 0 ? (
+              <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
+                Ningún locatario por debajo del umbral.
+              </div>
+            ) : (
+              watchlist.map((t, i) => (
+                <WatchRow key={t.id} tenant={t} index={i} onClick={() => navigate(`/admin/locatarios/${t.id}`)} />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* alerts feed */}
+        <div className="mq-card">
+          <div className="mq-card-hd">
+            <div>
+              <div className="t-eyebrow">Actividad · hoy</div>
+              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+                Feed operativo
+              </h3>
+            </div>
+            <button type="button" className="mq-btn ghost sm" onClick={() => navigate('/admin/alertas')}>
+              Ver todo
+            </button>
+          </div>
+          <div style={{ padding: '4px 6px' }}>
+            {insights.alerts.length === 0 ? (
+              <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
+                No hay alertas activas.
+              </div>
+            ) : (
+              insights.alerts.slice(0, 5).map((a, i) => <AlertRow key={a.id ?? i} alert={a} index={i} />)
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
+function MiniStat({ label, val, color }: { label: string; val: string; color: string }) {
+  return (
+    <div>
+      <div className="row" style={{ gap: 6, fontSize: 11, color: 'var(--ink-3)' }}>
+        <span style={{ width: 6, height: 6, borderRadius: 999, background: color }} />
+        {label}
+      </div>
+      <div className="t-num" style={{ fontSize: 14, marginTop: 4 }}>
+        {val}
+      </div>
+    </div>
+  );
+}
+
+function TopRow({ tenant, index, onClick }: { tenant: TenantSummary; index: number; onClick: () => void }) {
+  return (
+    <div
+      className="row"
+      style={{
+        padding: '9px 12px',
+        gap: 10,
+        borderTop: index === 0 ? 0 : '1px solid var(--line)',
+        cursor: 'pointer',
+      }}
+      onClick={onClick}
+    >
+      <span className="t-mono t-dim" style={{ width: 16, fontSize: 11 }}>
+        #{index + 1}
+      </span>
+      <TenantLogo name={tenant.storeName} seed={tenant.id} size="sm" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
+          {tenant.storeName}
+        </div>
+        <div className="t-dim" style={{ fontSize: 11 }}>
+          {tenant.category} · {tenant.localCodes.join(', ') || '—'}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div className="t-num" style={{ fontSize: 12.5 }}>
+          {shortMoney(tenant.salesPerM2)}
+          <span className="t-dim" style={{ fontWeight: 400 }}>
+            /m²
+          </span>
+        </div>
+        {tenant.salesPrevious > 0 ? (
+          <Delta v={(tenant.salesCurrent - tenant.salesPrevious) / tenant.salesPrevious} />
+        ) : (
+          <span className="t-dim t-mono" style={{ fontSize: 11 }}>
+            —
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WatchRow({ tenant, index, onClick }: { tenant: TenantSummary; index: number; onClick: () => void }) {
+  return (
+    <div
+      className="row"
+      style={{
+        padding: '9px 12px',
+        gap: 10,
+        borderTop: index === 0 ? 0 : '1px solid var(--line)',
+        cursor: 'pointer',
+      }}
+      onClick={onClick}
+    >
+      <HealthRing value={tenant.healthScore} size={34} stroke={3} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
+          {tenant.storeName}
+        </div>
+        <div className="t-dim" style={{ fontSize: 11 }}>
+          {tenant.category} · {tenant.localCodes.join(', ') || '—'}
+        </div>
+      </div>
+      <LifeChip status={tenant.lifecycle} />
+    </div>
+  );
+}
+
+const ALERT_ICON: Record<AlertItem['type'], { I: LucideIcon; bg: string; fg: string }> = {
+  critical: { I: TrendingDown, bg: 'var(--danger-soft)', fg: 'var(--danger)' },
+  warning: { I: AlertTriangle, bg: 'var(--warn-soft)', fg: 'var(--warn)' },
+  info: { I: Sparkles, bg: 'var(--info-soft)', fg: 'var(--info)' },
+};
+
+const ALERT_BY_HINT: { match: RegExp; I: LucideIcon }[] = [
+  { match: /vencim|renov|contrato/i, I: Calendar },
+  { match: /pos|sync|conector/i, I: Plug2 },
+  { match: /venta/i, I: Receipt },
+  { match: /ia|autofill|moonshot/i, I: Sparkles },
+];
+
+function AlertRow({ alert, index }: { alert: AlertItem; index: number }) {
+  const style = ALERT_ICON[alert.type] ?? ALERT_ICON.info;
+  const hinted = ALERT_BY_HINT.find((h) => h.match.test(`${alert.title} ${alert.description}`));
+  const IconCmp = hinted?.I ?? style.I;
+  return (
+    <div
+      className="row"
+      style={{
+        padding: '11px 12px',
+        gap: 10,
+        alignItems: 'flex-start',
+        borderTop: index === 0 ? 0 : '1px solid var(--line)',
+      }}
+    >
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          display: 'grid',
+          placeItems: 'center',
+          background: style.bg,
+          color: style.fg,
+          flex: 'none',
+        }}
+      >
+        <IconCmp size={14} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }}>{alert.title}</div>
+        <div className="t-dim" style={{ fontSize: 11.5, marginTop: 2 }}>
+          {alert.description}
+        </div>
+      </div>
+      <ArrowUpRight size={14} style={{ color: 'var(--ink-4)', flex: 'none' }} />
+    </div>
+  );
+}
 

@@ -13,13 +13,13 @@ export function AppLayout() {
   const { insights } = useAppState();
 
   return (
-    <div className="flex min-h-screen bg-[var(--bg)]">
+    <div className="flex min-h-screen" style={{ background: 'var(--paper)' }}>
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <Navbar onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-x-hidden">
-          <div className="mx-auto w-full max-w-[1680px]">
+          <div className="mx-auto w-full max-w-[1440px]">
             <SkeletonLoader key={location.pathname}>
               <Outlet />
             </SkeletonLoader>

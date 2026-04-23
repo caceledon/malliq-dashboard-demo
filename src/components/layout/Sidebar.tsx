@@ -1,36 +1,33 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  Building2,
+  AlertTriangle,
+  Bolt,
+  ChevronDown,
   Database,
   FileArchive,
   LayoutDashboard,
   LogOut,
   Map,
+  Plug2,
+  Plus,
   ReceiptText,
   Settings,
-  ShoppingBasket,
+  Sparkles,
+  Store,
   Users,
-  TriangleAlert,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppState } from '@/store/appState';
+import type { PortfolioAssetSummary } from '@/lib/portfolio';
 
-const adminLinks = [
-  { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/admin/activos', label: 'Portafolio activos', icon: Map },
-  { to: '/admin/locatarios', label: 'Locatarios', icon: Users },
-  { to: '/admin/rentas', label: 'Rentas y contratos', icon: FileArchive },
-  { to: '/admin/cargas', label: 'Carga de datos', icon: ReceiptText },
-  { to: '/admin/planeacion', label: 'Presupuesto', icon: Database },
-  { to: '/admin/ecosistema', label: 'Prospectos y proveedores', icon: ShoppingBasket },
-  { to: '/admin/alertas', label: 'Alertas', icon: TriangleAlert },
-  { to: '/admin/configuracion', label: 'Configuración', icon: Settings },
-];
-
-const locatarioLinks = [
-  { to: '/locatario/dashboard', label: 'Mi dashboard', icon: LayoutDashboard },
-  { to: '/locatario/contrato', label: 'Mi contrato', icon: FileArchive },
-  { to: '/locatario/ventas', label: 'Mis ventas', icon: ReceiptText },
-];
+interface NavDef {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  tag?: string | number | null;
+}
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -40,7 +37,48 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
-  const links = isAdmin ? adminLinks : locatarioLinks;
+  const { state, insights, assetSummaries, activeAssetId, actions } = useAppState();
+
+  const operationNav: NavDef[] = useMemo(
+    () =>
+      isAdmin
+        ? [
+            { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+            { to: '/admin/activos', label: 'Portafolio activos', icon: Map, tag: assetSummaries.length || null },
+            { to: '/admin/locatarios', label: 'Locatarios', icon: Users, tag: insights.tenantSummaries.length || null },
+            { to: '/admin/rentas', label: 'Rentas y contratos', icon: FileArchive },
+            { to: '/admin/cargas', label: 'Carga de datos', icon: ReceiptText },
+          ]
+        : [
+            { to: '/locatario/dashboard', label: 'Mi dashboard', icon: LayoutDashboard },
+            { to: '/locatario/contrato', label: 'Mi contrato', icon: FileArchive },
+            { to: '/locatario/ventas', label: 'Mis ventas', icon: ReceiptText },
+          ],
+    [isAdmin, assetSummaries.length, insights.tenantSummaries.length],
+  );
+
+  const managementNav: NavDef[] = useMemo(
+    () =>
+      isAdmin
+        ? [
+            { to: '/admin/alertas', label: 'Alertas', icon: AlertTriangle, tag: insights.alerts.length || null },
+            { to: '/admin/planeacion', label: 'Presupuesto', icon: Database },
+            { to: '/admin/ecosistema', label: 'Prospectos', icon: Store },
+            { to: '/admin/configuracion', label: 'Configuración', icon: Settings },
+          ]
+        : [],
+    [isAdmin, insights.alerts.length],
+  );
+
+  const asset = state.asset;
+  const userName = 'Christian Celedón';
+  const userRole = 'Gerente de operación';
+  const userInitials = userName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((s) => s[0])
+    .join('')
+    .toUpperCase();
 
   return (
     <>
@@ -49,68 +87,285 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       ) : null}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-72 border-r border-[var(--border-color)] transition-transform duration-300',
-          'md:sticky md:top-0 md:h-screen md:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex h-screen w-[260px] flex-col border-r transition-transform duration-300',
+          'md:sticky md:top-0 md:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
-        style={{ background: 'var(--sidebar-bg)' }}
+        style={{ background: 'var(--sidebar)', borderColor: 'var(--line)' }}
       >
-        <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center gap-3 border-b border-[var(--border-color)] px-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold tracking-tight">MallIQ Operativo</h1>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-fg)]">Datos reales del activo</p>
-            </div>
-          </div>
-
-          <div className="border-b border-[var(--border-color)] px-4 py-4">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sidebar-fg)]">
-              {isAdmin ? 'Panel administrador' : 'Panel locatario'}
-            </span>
-          </div>
-
-          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-            {links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                onClick={() => setMobileOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-blue-600/15 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-                      : 'text-[var(--sidebar-fg)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]',
-                  )
-                }
-              >
-                <link.icon className="h-4.5 w-4.5" />
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="border-t border-[var(--border-color)] p-4">
-            <button
-              onClick={() => {
-                setMobileOpen(false);
-                window.location.href = '#/';
+        {/* Brand */}
+        <div className="mq-brand">
+          <div className="logo">
+            <span className="mark">M</span>
+            <span
+              style={{
+                position: 'absolute',
+                bottom: -2,
+                right: -2,
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: 'var(--umber)',
+                boxShadow: '0 0 0 2px var(--sidebar)',
               }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-            >
-              <LogOut className="h-4.5 w-4.5" />
-              Cerrar sesión
-            </button>
-            <div className="mt-3 px-2 text-[11px] text-[var(--sidebar-fg)]">
-              <p className="font-semibold text-[var(--fg)]">Versión productiva local</p>
-              <p>Persistencia SQLite · IA · Proxy Auth</p>
+            />
+          </div>
+          <div>
+            <div className="title">MallQ</div>
+            <div className="sub">Retail Operations</div>
+          </div>
+        </div>
+
+        {/* Asset switcher */}
+        {isAdmin ? (
+          <AssetSwitcher
+            assetSummaries={assetSummaries}
+            activeAssetId={activeAssetId}
+            assetName={asset?.name ?? null}
+            assetCity={asset?.city ?? null}
+            onSwitch={(id) => actions.switchAsset(id)}
+          />
+        ) : null}
+
+        {/* Nav */}
+        <nav className="mq-nav">
+          <div className="mq-nav-section">{isAdmin ? 'Operación' : 'Panel locatario'}</div>
+          {operationNav.map((n) => (
+            <NavItem key={n.to} def={n} onNavigate={() => setMobileOpen(false)} />
+          ))}
+
+          {managementNav.length > 0 ? (
+            <>
+              <div className="mq-nav-section" style={{ marginTop: 14 }}>
+                Gestión
+              </div>
+              {managementNav.map((n) => (
+                <NavItem key={n.to} def={n} onNavigate={() => setMobileOpen(false)} />
+              ))}
+            </>
+          ) : null}
+
+          <div style={{ flex: 1 }} />
+
+          <div className="mq-nav-section" style={{ marginTop: 14 }}>
+            IA + Sync
+          </div>
+          <div className="mq-nav-item" style={{ cursor: 'default' }}>
+            <Sparkles size={16} style={{ color: 'var(--umber)' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+              <span style={{ fontSize: 12.5 }}>Autofill Moonshot</span>
+              <span className="t-dim" style={{ fontSize: 10.5 }}>
+                {state.documents.length} docs · kimi-k2.5
+              </span>
             </div>
           </div>
+          <SyncStatusRow />
+        </nav>
+
+        {/* Footer */}
+        <div className="sidebar-foot">
+          <div className="mq-avatar">{userInitials}</div>
+          <div style={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-1)' }}>{userName}</div>
+            <div className="t-dim" style={{ fontSize: 11 }}>
+              {userRole}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="iconbtn"
+            title="Cerrar sesión"
+            onClick={() => {
+              setMobileOpen(false);
+              window.location.href = '#/';
+            }}
+          >
+            <LogOut size={15} />
+          </button>
         </div>
       </aside>
     </>
   );
+}
+
+function NavItem({ def, onNavigate }: { def: NavDef; onNavigate: () => void }) {
+  const Icon = def.icon;
+  return (
+    <NavLink
+      to={def.to}
+      onClick={onNavigate}
+      className={({ isActive }) => cn('mq-nav-item', isActive && 'active')}
+    >
+      <Icon size={16} />
+      <span>{def.label}</span>
+      {def.tag ? <span className="ni-tag">{def.tag}</span> : null}
+    </NavLink>
+  );
+}
+
+interface AssetSwitcherProps {
+  assetSummaries: PortfolioAssetSummary[];
+  activeAssetId: string | null;
+  assetName: string | null;
+  assetCity: string | null;
+  onSwitch: (id: string) => void;
+}
+
+function AssetSwitcher({ assetSummaries, activeAssetId, assetName, assetCity, onSwitch }: AssetSwitcherProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  const active = assetSummaries.find((a) => a.id === activeAssetId);
+  const displayName = active?.name ?? assetName ?? 'Configura tu activo';
+  const displayCity = active?.city ?? assetCity ?? '';
+  const totalUnits = active?.totalUnits;
+  const glaLabel = totalUnits ? `${totalUnits} locales` : null;
+
+  return (
+    <div style={{ position: 'relative' }} ref={rootRef}>
+      <div
+        className="asset-switch"
+        onClick={() => assetSummaries.length > 0 && setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+      >
+        <div
+          className="asset-thumb"
+          style={{
+            background: assetGradient(active?.id ?? assetName ?? 'default'),
+          }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="asset-name truncate">{displayName}</div>
+          <div className="asset-meta">
+            {displayCity}
+            {displayCity && glaLabel ? ' · ' : ''}
+            {glaLabel ?? ''}
+          </div>
+        </div>
+        {assetSummaries.length > 1 ? <ChevronDown size={14} style={{ color: 'var(--ink-4)' }} /> : null}
+      </div>
+
+      {open ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 12,
+            right: 12,
+            zIndex: 50,
+            background: 'var(--card)',
+            border: '1px solid var(--line)',
+            borderRadius: 10,
+            boxShadow: 'var(--shadow-pop)',
+            padding: 4,
+            animation: 'fadeIn .15s ease-out',
+          }}
+        >
+          {assetSummaries.map((a) => (
+            <div
+              key={a.id}
+              onClick={() => {
+                onSwitch(a.id);
+                setOpen(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 10px',
+                borderRadius: 8,
+                cursor: 'pointer',
+                background: a.id === activeAssetId ? 'var(--paper-2)' : 'transparent',
+              }}
+            >
+              <div
+                className="asset-thumb"
+                style={{ background: assetGradient(a.id), width: 28, height: 28, borderRadius: 7 }}
+              />
+              <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-1)' }} className="truncate">
+                  {a.name}
+                </div>
+                <div className="t-dim" style={{ fontSize: 10.5 }}>
+                  {a.city ?? ''}
+                </div>
+              </div>
+              <span className="t-mono t-dim" style={{ fontSize: 11 }}>
+                {(a.occupancyPct ?? 0).toFixed(0)}%
+              </span>
+            </div>
+          ))}
+          <div className="mq-divider" style={{ margin: '4px 6px' }} />
+          <a
+            href="#/admin/activos"
+            onClick={() => setOpen(false)}
+            style={{
+              padding: '8px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: 'var(--ink-3)',
+              fontSize: 12.5,
+              cursor: 'pointer',
+            }}
+          >
+            <Plus size={14} /> Gestionar activos
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SyncStatusRow() {
+  const { state } = useAppState();
+  const syncEnabled = state.asset?.syncEnabled && !!state.asset?.backendUrl;
+  if (!syncEnabled) {
+    return (
+      <div className="mq-nav-item" style={{ cursor: 'default' }}>
+        <Plug2 size={16} style={{ color: 'var(--ink-4)' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+          <span style={{ fontSize: 12.5 }}>Sync local</span>
+          <span className="t-dim" style={{ fontSize: 10.5 }}>
+            SQLite · sin remoto
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mq-nav-item" style={{ cursor: 'default' }}>
+      <span className="mq-dot ok" style={{ marginLeft: 2, marginRight: 4 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+        <span style={{ fontSize: 12.5 }}>Sync activo</span>
+        <span className="t-dim" style={{ fontSize: 10.5 }}>
+          <Bolt size={10} style={{ display: 'inline', marginRight: 2, verticalAlign: -1 }} />
+          Remoto · cada 15 s
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function assetGradient(seed: string): string {
+  const palettes = [
+    'linear-gradient(135deg, oklch(0.72 0.10 55), oklch(0.55 0.14 35))',
+    'linear-gradient(135deg, oklch(0.70 0.08 160), oklch(0.48 0.10 175))',
+    'linear-gradient(135deg, oklch(0.72 0.08 240), oklch(0.46 0.11 250))',
+    'linear-gradient(135deg, oklch(0.75 0.08 70), oklch(0.50 0.13 50))',
+    'linear-gradient(135deg, oklch(0.72 0.08 300), oklch(0.48 0.12 320))',
+  ];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return palettes[h % palettes.length];
 }
