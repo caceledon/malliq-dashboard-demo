@@ -1,3 +1,5 @@
+import { anomaliesToAlerts, detectSalesAnomalies } from './anomalies';
+
 export type ThemeMode = 'light' | 'dark';
 export type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline' | 'conflict';
 
@@ -941,6 +943,11 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
       unitId: conflict.unitId,
     });
   });
+
+  const salesAnomalies = detectSalesAnomalies(state, referenceDate);
+  for (const alert of anomaliesToAlerts(salesAnomalies, today)) {
+    alerts.push(alert);
+  }
 
   return alerts.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
