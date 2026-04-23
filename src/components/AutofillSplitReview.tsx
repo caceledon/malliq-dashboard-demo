@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 /**
  * Revisión split-screen del resultado de Autofill LLM.
@@ -42,20 +42,15 @@ const ETIQUETAS: Record<string, string> = {
 };
 
 export function AutofillSplitReview({ pdfUrl, campos, onAplicar, onCancelar }: Props) {
-  const [valores, setValores] = useState<AutofillCampo[]>(campos);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [foco, setFoco] = useState<number>(0);
-  const [pagina, setPagina] = useState<number>(campos[0]?.pagina ?? 1);
-  const formRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setValores(campos), [campos]);
-
+  const valores = useMemo(
+    () => campos.map((c) => (overrides[c.clave] !== undefined ? { ...c, valor: overrides[c.clave] } : c)),
+    [campos, overrides],
+  );
   const campoActivo = valores[foco];
-
-  useEffect(() => {
-    if (campoActivo?.pagina && campoActivo.pagina !== pagina) {
-      setPagina(campoActivo.pagina);
-    }
-  }, [campoActivo, pagina]);
+  const pagina = campoActivo?.pagina ?? campos[0]?.pagina ?? 1;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -126,7 +121,7 @@ export function AutofillSplitReview({ pdfUrl, campos, onAplicar, onCancelar }: P
           <ConfianzaPromedio valor={promedio} />
         </header>
 
-        <div ref={formRef} className="flex-1 overflow-y-auto px-8 py-5">
+        <div className="flex-1 overflow-y-auto px-8 py-5">
           {valores.map((campo, index) => (
             <CampoEditable
               key={campo.clave}
@@ -135,7 +130,7 @@ export function AutofillSplitReview({ pdfUrl, campos, onAplicar, onCancelar }: P
               activo={index === foco}
               onFocus={() => setFoco(index)}
               onChange={(valor) => {
-                setValores((prev) => prev.map((c, i) => i === index ? { ...c, valor } : c));
+                setOverrides((prev) => ({ ...prev, [campo.clave]: valor }));
               }}
             />
           ))}
