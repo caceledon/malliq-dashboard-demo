@@ -72,6 +72,13 @@ export interface ContractAutofillResult {
   missingFields?: string[];
   mocked?: boolean;
   source?: 'openai' | 'moonshot' | 'mock_local';
+  textSnippet?: string;
+}
+
+export interface AutofillAskResponse {
+  answer: string;
+  suggestedUpdates: Record<string, string | number | null> | null;
+  source: 'openai' | 'moonshot' | 'mock_local';
 }
 
 function trimTrailingSlash(value: string) {
@@ -215,6 +222,18 @@ export async function autofillContractFromPdf(apiBase: string, file: File): Prom
     body,
   });
 
+  return assertJson(response);
+}
+
+export async function askContractAutofill(
+  apiBase: string,
+  payload: { question: string; textSnippet: string; currentFields: Record<string, unknown> },
+): Promise<AutofillAskResponse> {
+  const response = await fetch(`${resolveApiBase(apiBase)}/contracts/autofill/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
   return assertJson(response);
 }
 

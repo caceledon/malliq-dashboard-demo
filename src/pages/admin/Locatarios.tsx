@@ -14,6 +14,7 @@ import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { cn } from '@/lib/utils';
 import { ContractEditor } from '@/components/app/ContractEditor';
+import { AutofillChat } from '@/components/AutofillChat';
 
 function createDraftContract(overrides: Partial<Contract> = {}): Contract {
   return {
@@ -156,6 +157,7 @@ export function Locatarios() {
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [autofillPendingFields, setAutofillPendingFields] = useState<string[]>([]);
   const [autofillEvidence, setAutofillEvidence] = useState<AutofillEvidenceState>(emptyAutofillEvidence);
+  const [autofillTextSnippet, setAutofillTextSnippet] = useState<string | null>(null);
   const normalizedDraft = normalizeDraftContract(draft);
 
   const filtered = insights.tenantSummaries.filter((tenant) => {
@@ -265,6 +267,7 @@ export function Locatarios() {
         fields: extractedEvidenceFields,
         rentSteps: extractedEvidenceSteps,
       });
+      setAutofillTextSnippet(typeof extracted.textSnippet === 'string' ? extracted.textSnippet : null);
 
       setEditorMessage(
         !hasAutofillContent(extracted)
@@ -291,6 +294,26 @@ export function Locatarios() {
     setEditorMessage('Contrato guardado correctamente.');
     setAutofillPendingFields([]);
     setAutofillEvidence(emptyAutofillEvidence);
+    setAutofillTextSnippet(null);
+  };
+
+  const applyChatSuggestion = (updates: Record<string, string | number | null>) => {
+    setDraft((current) => {
+      const next = { ...current } as typeof current & Record<string, unknown>;
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null || value === undefined) continue;
+        const numeric = typeof value === 'number' ? value : Number(value);
+        if (
+          ['baseRentUF', 'fixedRent', 'variableRentPct', 'commonExpenses', 'fondoPromocion', 'garantiaMonto', 'feeIngreso'].includes(key)
+        ) {
+          next[key] = Number.isFinite(numeric) ? toDraftNumber(numeric) : next[key];
+        } else {
+          next[key] = String(value);
+        }
+      }
+      return next as typeof current;
+    });
+    setEditorMessage('Sugerencia del asistente aplicada. Revisa y guarda cuando corresponda.');
   };
 
   return (
@@ -390,36 +413,60 @@ export function Locatarios() {
           </div>
         </div>
 
-        <ContractEditor
-          draft={draft}
-          onChange={setDraft}
-          onSave={saveDraft}
-          onDelete={() => {
-            actions.deleteContract(draft.id);
-            setDraft(createDraftContract());
-            setEditorMessage('Contrato eliminado del activo actual.');
-            setAutofillPendingFields([]);
-            setAutofillEvidence(emptyAutofillEvidence);
-          }}
-          onAutofill={handleAutofillPDF}
-          onNew={() => {
-            setDraft(createDraftContract());
-            setEditorMessage('');
-            setAutofillPendingFields([]);
-            setAutofillEvidence(emptyAutofillEvidence);
-          }}
-          isAutofilling={isAutofilling}
-          editorMessage={editorMessage}
-          autofillPendingFields={autofillPendingFields}
-          autofillEvidence={autofillEvidence}
-          saveBlocked={saveBlocked}
-          overlappingContracts={overlappingContracts}
-          validationIssues={validationIssues}
-          missingCoreFields={missingCoreFields}
-          contracts={state.contracts}
-          units={state.units}
-          currentMonthSales={currentMonthSales}
-        />
+        <div className="flex flex-col gap-4">
+          <ContractEditor
+            draft={draft}
+            onChange={setDraft}
+            onSave={saveDraft}
+            onDelete={() => {
+              actions.deleteContract(draft.id);
+              setDraft(createDraftContract());
+              setEditorMessage('Contrato eliminado del activo actual.');
+              setAutofillPendingFields([]);
+              setAutofillEvidence(emptyAutofillEvidence);
+              setAutofillTextSnippet(null);
+            }}
+            onAutofill={handleAutofillPDF}
+            onNew={() => {
+              setDraft(createDraftContract());
+              setEditorMessage('');
+              setAutofillPendingFields([]);
+              setAutofillEvidence(emptyAutofillEvidence);
+              setAutofillTextSnippet(null);
+            }}
+            isAutofilling={isAutofilling}
+            editorMessage={editorMessage}
+            autofillPendingFields={autofillPendingFields}
+            autofillEvidence={autofillEvidence}
+            saveBlocked={saveBlocked}
+            overlappingContracts={overlappingContracts}
+            validationIssues={validationIssues}
+            missingCoreFields={missingCoreFields}
+            contracts={state.contracts}
+            units={state.units}
+            currentMonthSales={currentMonthSales}
+          />
+          <AutofillChat
+            textSnippet={autofillTextSnippet}
+            currentFields={{
+              companyName: draft.companyName,
+              storeName: draft.storeName,
+              category: draft.category,
+              baseRentUF: draft.baseRentUF,
+              fixedRent: draft.fixedRent,
+              variableRentPct: draft.variableRentPct,
+              commonExpenses: draft.commonExpenses,
+              escalation: draft.escalation,
+              startDate: draft.startDate,
+              endDate: draft.endDate,
+              fondoPromocion: draft.fondoPromocion,
+              garantiaMonto: draft.garantiaMonto,
+              garantiaVencimiento: draft.garantiaVencimiento,
+              feeIngreso: draft.feeIngreso,
+            }}
+            onApplySuggestion={applyChatSuggestion}
+          />
+        </div>
       </div>
     </div>
   );

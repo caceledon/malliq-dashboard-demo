@@ -1335,6 +1335,7 @@ async function isAllowedEndpoint(url) {
 }
 
 const MAX_PDF_PAGES = 50;
+const MAX_AUTOFILL_SNIPPET_CHARS = 32000;
 
 async function extractUploadedText(file) {
   const extension = path.extname(file.originalname || '').toLowerCase();
@@ -1729,7 +1730,7 @@ function createAppInstance() {
       const ufActual = Number(request.body?.ufActual) || undefined;
       const areaM2 = Number(request.body?.areaM2) || undefined;
       const enriched = applyPostDerivations(normalized, textContent, { ufActual, areaM2 });
-      response.json(enriched);
+      response.json({ ...enriched, textSnippet: textContent.slice(0, MAX_AUTOFILL_SNIPPET_CHARS) });
     } catch (error) {
       console.error('Error autofilling contract:', error);
       if (error?.code === 'PDF_TOO_LARGE') {
@@ -1739,6 +1740,80 @@ function createAppInstance() {
       response.status(500).json({ error: error instanceof Error ? error.message : 'Error extrayendo datos estructurales con Inteligencia Artificial' });
     } finally {
       await discardTempFile(tempFilePath);
+    }
+  });
+
+  app.post('/api/contracts/autofill/ask', autofillLimiter, async (request, response) => {
+    try {
+      const body = request.body || {};
+      const question = String(body.question || '').trim();
+      const textSnippet = String(body.textSnippet || '').slice(0, MAX_AUTOFILL_SNIPPET_CHARS);
+      const currentFields = body.currentFields && typeof body.currentFields === 'object' ? body.currentFields : {};
+
+      if (!question) {
+        response.status(400).json({ error: 'Pregunta requerida.' });
+        return;
+      }
+      if (!textSnippet) {
+        response.status(400).json({ error: 'Falta el texto extraído del contrato.' });
+        return;
+      }
+
+      const aiConfig = getContractAutofillAiConfig();
+      if (!aiConfig) {
+        response.json({
+          answer: 'El modo local no incluye chat. Configura MOONSHOT_API_KEY o OPENAI_API_KEY para usar el asistente.',
+          suggestedUpdates: null,
+          source: 'mock_local',
+        });
+        return;
+      }
+
+      const openai = new OpenAI({
+        apiKey: aiConfig.apiKey,
+        ...(aiConfig.baseURL ? { baseURL: aiConfig.baseURL } : {}),
+      });
+
+      const systemPrompt = `Eres un asistente que responde preguntas sobre un contrato de arriendo comercial en Chile a partir del texto del contrato. Responde en español, conciso (máx 3 frases), citando la frase relevante cuando corresponda. Si la respuesta sugiere corregir algún campo del autofill, devuelve JSON. Formato de respuesta SIEMPRE:
+{
+  "answer": "texto en español",
+  "suggestedUpdates": { "<campo>": "<nuevo valor>" } | null
+}
+Los campos válidos para suggestedUpdates son: companyName, storeName, category, baseRentUF, fixedRent, variableRentPct, commonExpenses, escalation, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), fondoPromocion, garantiaMonto, garantiaVencimiento (YYYY-MM-DD), feeIngreso. Usa null si no hay sugerencias.`;
+
+      const userPrompt = `TEXTO DEL CONTRATO (recorte):\n---\n${textSnippet}\n---\n\nCAMPOS ACTUALES DEL AUTOFILL:\n${JSON.stringify(currentFields, null, 2)}\n\nPREGUNTA DEL USUARIO:\n${question}`;
+
+      const chatResponse = await openai.chat.completions.create(
+        buildContractAutofillCompletionRequest(aiConfig, [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ]),
+      );
+
+      const rawOutput = extractJsonObject(chatResponse.choices?.[0]?.message?.content || '{}');
+      let parsed;
+      try {
+        parsed = JSON.parse(rawOutput);
+      } catch {
+        response.json({
+          answer: chatResponse.choices?.[0]?.message?.content?.trim() || 'Sin respuesta.',
+          suggestedUpdates: null,
+          source: aiConfig.provider,
+        });
+        return;
+      }
+
+      response.json({
+        answer: typeof parsed.answer === 'string' ? parsed.answer : 'Sin respuesta.',
+        suggestedUpdates:
+          parsed.suggestedUpdates && typeof parsed.suggestedUpdates === 'object' && !Array.isArray(parsed.suggestedUpdates)
+            ? parsed.suggestedUpdates
+            : null,
+        source: aiConfig.provider,
+      });
+    } catch (error) {
+      console.error('Error in autofill ask:', error);
+      response.status(500).json({ error: error instanceof Error ? error.message : 'Error consultando la IA.' });
     }
   });
 
