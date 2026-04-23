@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ToastProvider } from '@/components/Toast';
 import { UndoToastProvider } from '@/components/UndoToast';
+import { AuthGate } from '@/components/AuthGate';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { CurrencyProvider } from '@/lib/currency';
 import { AppStateProvider, useAppState } from '@/store/appState';
@@ -51,13 +52,15 @@ function ActiveAssetThemeSync() {
 }
 
 function App() {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
   return (
-    <ThemeProvider>
-      <CurrencyProvider>
-        <ToastProvider>
-          <AppStateProvider>
-            <UndoToastProvider>
-              <HashRouter>
+    <AuthGate apiBase={apiBase}>
+      <ThemeProvider>
+        <CurrencyProvider>
+          <ToastProvider>
+            <AppStateProvider>
+              <UndoToastProvider>
+                <HashRouter>
               <ActiveAssetThemeSync />
               <Routes>
                 <Route element={<AppLayout />}>
@@ -81,12 +84,13 @@ function App() {
                 <Route path="/" element={<PortalSelector />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
-              </HashRouter>
-            </UndoToastProvider>
-          </AppStateProvider>
-        </ToastProvider>
-      </CurrencyProvider>
-    </ThemeProvider>
+                </HashRouter>
+              </UndoToastProvider>
+            </AppStateProvider>
+          </ToastProvider>
+        </CurrencyProvider>
+      </ThemeProvider>
+    </AuthGate>
   );
 }
 
