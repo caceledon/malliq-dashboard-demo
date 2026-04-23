@@ -1,4 +1,4 @@
-import { Menu, Moon, Printer, Sparkles, Sun } from 'lucide-react';
+import { Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 import { useTheme } from '@/lib/theme';
@@ -6,8 +6,11 @@ import { useCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/store/appState';
 
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/i.test(navigator.platform);
+
 interface NavbarProps {
   onMenuClick: () => void;
+  onOpenCommandPalette: () => void;
 }
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -31,7 +34,7 @@ function matchRouteTitle(pathname: string): string {
   return prefix ? ROUTE_TITLES[prefix] : 'Panel';
 }
 
-export function Navbar({ onMenuClick }: NavbarProps) {
+export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, ufValue, setUfValue } = useCurrency();
   const { state, actions } = useAppState();
@@ -63,30 +66,46 @@ export function Navbar({ onMenuClick }: NavbarProps) {
 
       <div style={{ flex: 1 }} />
 
-      {/* Search */}
-      <div style={{ position: 'relative', width: 340 }} className="hidden md:block">
-        <input
-          className="mq-input search"
-          placeholder="Buscar locatario, local, contrato…"
-          onFocus={(e) => e.currentTarget.select()}
+      {/* Search — opens command palette */}
+      <button
+        type="button"
+        onClick={onOpenCommandPalette}
+        title="Buscar (⌘K / Ctrl+K)"
+        className="hidden md:flex items-center mq-input search"
+        style={{
+          width: 340,
+          textAlign: 'left',
+          color: 'var(--ink-4)',
+          cursor: 'pointer',
+          background: 'var(--card)',
+          paddingLeft: 34,
+          paddingRight: 42,
+          position: 'relative',
+        }}
+      >
+        <Search
+          size={14}
+          style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-4)' }}
         />
+        <span style={{ flex: 1 }}>Buscar locatario, local, contrato…</span>
         <span
+          className="t-mono"
           style={{
             position: 'absolute',
             right: 10,
             top: '50%',
             transform: 'translateY(-50%)',
-            fontFamily: 'var(--mono)',
             fontSize: 10.5,
             color: 'var(--ink-4)',
             padding: '2px 6px',
             border: '1px solid var(--line)',
             borderRadius: 5,
+            background: 'var(--paper-2)',
           }}
         >
-          ⌘K
+          {IS_MAC ? '⌘K' : 'Ctrl K'}
         </span>
-      </div>
+      </button>
 
       {/* Portal switcher */}
       <div
