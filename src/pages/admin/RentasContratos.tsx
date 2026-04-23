@@ -7,10 +7,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { FileText, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, FileText, ShieldCheck, Wallet } from 'lucide-react';
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { buildRenewalContractTemplate, getContractDisplayValues, getContractLifecycle } from '@/lib/domain';
+import {
+  buildContractOverlapConflicts,
+  buildRenewalContractTemplate,
+  getContractDisplayValues,
+  getContractLifecycle,
+} from '@/lib/domain';
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
@@ -23,6 +29,22 @@ export function RentasContratos() {
   const signed = state.contracts.filter((contract) => contract.signatureStatus === 'firmado').length;
   const underReview = state.contracts.filter((contract) => contract.signatureStatus === 'en_revision').length;
   const pending = state.contracts.filter((contract) => contract.signatureStatus === 'pendiente').length;
+
+  const conflictsByContract = useMemo(() => {
+    const map = new Map<string, { units: string[]; otherStores: Set<string> }>();
+    for (const conflict of buildContractOverlapConflicts(state)) {
+      for (let i = 0; i < conflict.contractIds.length; i++) {
+        const id = conflict.contractIds[i];
+        const entry = map.get(id) ?? { units: [], otherStores: new Set<string>() };
+        entry.units.push(conflict.unitCode);
+        conflict.storeNames.forEach((name, idx) => {
+          if (idx !== i) entry.otherStores.add(name);
+        });
+        map.set(id, entry);
+      }
+    }
+    return map;
+  }, [state]);
 
   const chartData = insights.tenantSummaries.map((tenant) => ({
     name: tenant.storeName,
@@ -96,11 +118,22 @@ export function RentasContratos() {
               }
 
               const lifecycle = getContractLifecycle(contract);
+              const conflict = conflictsByContract.get(contract.id);
               return (
                 <tr key={tenant.id} className="border-t border-[var(--border-color)]">
                   <td className="px-4 py-3">
                     <p className="text-sm font-semibold">{tenant.storeName}</p>
                     <p className="text-xs text-[var(--sidebar-fg)]">{tenant.companyName}</p>
+                    {conflict ? (
+                      <span
+                        className="chip warn mt-2 inline-flex"
+                        title={`Superposición en ${conflict.units.join(', ')} con ${Array.from(conflict.otherStores).join(', ')}`}
+                        style={{ fontSize: 10.5, padding: '2px 7px', gap: 4 }}
+                      >
+                        <AlertTriangle size={11} />
+                        Conflicto en {conflict.units.length === 1 ? 'local' : 'locales'} {conflict.units.join(', ')}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-sm">{tenant.localCodes.join(', ')}</td>
                   <td className="px-4 py-3">

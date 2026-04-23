@@ -21,6 +21,7 @@ import type { AlertItem, TenantSummary } from '@/lib/domain';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { useServerHealth } from '@/hooks/useServerHealth';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -58,10 +59,19 @@ function today(): string {
   }
 }
 
+const AI_MODE_LABEL: Record<string, { label: string; chip: string }> = {
+  openai: { label: 'AI Autofill · OpenAI', chip: 'umber' },
+  moonshot: { label: 'AI Autofill · Moonshot', chip: 'umber' },
+  mock_local: { label: 'AI Autofill · Modo local', chip: 'info' },
+};
+
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { insights, state, assetSummaries, portfolioStats, activeAssetId, actions } = useAppState();
   const { formatCurrency } = useCurrency();
+  const serverHealth = useServerHealth(state.asset?.backendUrl ?? '/api');
+  const aiMode = serverHealth?.aiMode ?? null;
+  const aiChip = aiMode ? AI_MODE_LABEL[aiMode] : null;
 
   const topTenants = useMemo(
     () => [...insights.tenantSummaries].sort((a, b) => b.salesPerM2 - a.salesPerM2).slice(0, 5),
@@ -170,10 +180,12 @@ export function AdminDashboard() {
               <span className="dot" />
               Ocupación {insights.occupancyPct.toFixed(1)}%
             </span>
-            <span className="chip umber">
-              <span className="dot" />
-              AI Autofill · Moonshot
-            </span>
+            {aiChip ? (
+              <span className={`chip ${aiChip.chip}`} title={`Modo IA activo: ${aiMode}`}>
+                <span className="dot" />
+                {aiChip.label}
+              </span>
+            ) : null}
             {insights.pendingSignatureContracts > 0 ? (
               <span className="chip info">
                 <span className="dot" />

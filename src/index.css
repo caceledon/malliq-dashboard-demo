@@ -754,15 +754,22 @@ tbody tr:hover,
     background: white !important;
     color: #0f172a !important;
   }
+  /* Structural chrome that has no place on an executive PDF */
   aside,
-  nav,
+  .mq-topbar,
+  .mq-brand,
   .overlay-backdrop,
   [role="dialog"],
   .fixed.z-\[9999\],
+  .fixed.z-\[200\],
   .fixed.z-\[150\] {
     display: none !important;
   }
-  button,
+  /* Interactive affordances — hide the pills/buttons but keep button-shaped content cells */
+  .mq-btn,
+  .iconbtn,
+  .seg,
+  .mq-tab,
   input[type="file"],
   label:has(> input[type="file"]) {
     display: none !important;
@@ -780,6 +787,21 @@ tbody tr:hover,
     background: white !important;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+  /* Collapse the layout grid so content flows across the A4 width */
+  .flex.min-h-screen,
+  .flex.min-h-screen > div,
+  main > div {
+    max-width: none !important;
+    width: 100% !important;
+  }
+  .mq-grid-2,
+  .mq-grid-3 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
   svg { max-width: 100% !important; }
   .h-\[320px\],
