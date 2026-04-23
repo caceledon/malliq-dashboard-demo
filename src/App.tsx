@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { HashRouter, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ToastProvider } from '@/components/Toast';
+import { UndoToastProvider } from '@/components/UndoToast';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { CurrencyProvider } from '@/lib/currency';
 import { AppStateProvider, useAppState } from '@/store/appState';
@@ -55,7 +56,8 @@ function App() {
       <CurrencyProvider>
         <ToastProvider>
           <AppStateProvider>
-            <HashRouter>
+            <UndoToastProvider>
+              <HashRouter>
               <ActiveAssetThemeSync />
               <Routes>
                 <Route element={<AppLayout />}>
@@ -79,7 +81,8 @@ function App() {
                 <Route path="/" element={<PortalSelector />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
-            </HashRouter>
+              </HashRouter>
+            </UndoToastProvider>
           </AppStateProvider>
         </ToastProvider>
       </CurrencyProvider>

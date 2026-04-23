@@ -12,6 +12,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useAppState } from '@/store/appState';
+import { useUndoToast } from '@/components/UndoToast';
 import { createId, type PosConnectionProfile, type SaleRecord } from '@/lib/domain';
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
@@ -32,6 +33,7 @@ const emptyBucket: DraftBucket = {
 
 export function SalesIngestionCenter() {
   const { state, unitsByCode, actions } = useAppState();
+  const { showUndo } = useUndoToast();
   const serverSyncEnabled = Boolean(state.asset?.syncEnabled && state.asset?.backendUrl);
   const [manualContractId, setManualContractId] = useState('');
   const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
@@ -112,6 +114,13 @@ export function SalesIngestionCenter() {
         ? `Importación ${source}: ${result.added} registro(s) agregado(s)${result.duplicates > 0 ? `, ${result.duplicates} duplicado(s) omitido(s)` : ''}.`
         : `Importación ${source}: sin nuevos registros${result.duplicates > 0 ? `, ${result.duplicates} duplicado(s) detectado(s)` : ''}.`,
     );
+
+    if (result.added > 0) {
+      showUndo(
+        `${result.added} ventas agregadas (${source})`,
+        () => actions.undoImport({ addedIds: result.addedIds, importLogId: result.importLogId }),
+      );
+    }
 
     return result;
   };

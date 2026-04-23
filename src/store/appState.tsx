@@ -81,6 +81,8 @@ interface UploadDocumentInput {
 interface AddSalesResult {
   added: number;
   duplicates: number;
+  addedIds: string[];
+  importLogId?: string;
 }
 
 interface AppContextValue {
@@ -103,6 +105,7 @@ interface AppContextValue {
     deleteContract: (contractId: string) => void;
     addSales: (sales: SaleRecord[], log?: Omit<ImportLog, 'id' | 'createdAt'>) => AddSalesResult;
     deleteSale: (saleId: string) => void;
+    undoImport: (result: { addedIds: string[]; importLogId?: string }) => void;
     upsertPlanningEntry: (entry: PlanningEntry) => void;
     deletePlanningEntry: (entryId: string) => void;
     replacePlanningEntries: (entries: PlanningEntry[], type?: PlanningEntry['type']) => void;
@@ -563,10 +566,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     },
     addSales(sales, log) {
       if (!activeAssetIdRef.current) {
-        return { added: 0, duplicates: 0 };
+        return { added: 0, duplicates: 0, addedIds: [] };
       }
 
-      let result: AddSalesResult = { added: 0, duplicates: 0 };
+      let result: AddSalesResult = { added: 0, duplicates: 0, addedIds: [] };
       setPortfolio((current) =>
         updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
           const existingFingerprints = new Set(workspace.sales.map((sale) => buildSaleFingerprint(sale)));
@@ -580,9 +583,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             return true;
           });
 
+          const importLogId = log ? createId('import') : undefined;
           result = {
             added: uniqueSales.length,
             duplicates: sales.length - uniqueSales.length,
+            addedIds: uniqueSales.map((sale) => sale.id),
+            importLogId,
           };
 
           return {
@@ -593,7 +599,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             importLogs: log
               ? [
                   {
-                    id: createId('import'),
+                    id: importLogId!,
                     createdAt: new Date().toISOString(),
                     ...log,
                     importedCount: uniqueSales.length,
@@ -609,6 +615,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }),
       );
       return result;
+    },
+    undoImport(result) {
+      if (!activeAssetIdRef.current) return;
+      if (result.addedIds.length === 0 && !result.importLogId) return;
+
+      const idSet = new Set(result.addedIds);
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
+          ...workspace,
+          sales: workspace.sales.filter((sale) => !idSet.has(sale.id)),
+          importLogs: result.importLogId
+            ? workspace.importLogs.filter((log) => log.id !== result.importLogId)
+            : workspace.importLogs,
+        })),
+      );
     },
     deleteSale(saleId) {
       if (!activeAssetIdRef.current) {

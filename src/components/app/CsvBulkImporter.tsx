@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet, Upload, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { useCurrency } from '@/lib/currency';
+import { useUndoToast } from '@/components/UndoToast';
 import { formatDate } from '@/lib/format';
 import { buildSaleFingerprint, createId, type SaleRecord } from '@/lib/domain';
 import { materializeSales, parseAmount, parseCsvRows, type ParsedSaleDraft } from '@/lib/importers';
@@ -58,6 +59,7 @@ function parseDate(value: string): string | undefined {
 
 export function CsvBulkImporter() {
   const { state, unitsByCode, actions } = useAppState();
+  const { showUndo } = useUndoToast();
   const { formatCurrency } = useCurrency();
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -179,12 +181,18 @@ export function CsvBulkImporter() {
   const handleImport = () => {
     const toImport = finalPreviews.filter((p) => p.selected).map((p) => p.record);
     if (toImport.length === 0) return;
-    actions.addSales(toImport, {
+    const result = actions.addSales(toImport, {
       source: 'manual',
       status: 'success',
       importedCount: toImport.length,
       note: `Carga masiva CSV: ${toImport.length} registros importados.`,
     });
+    if (result.added > 0) {
+      const label = result.duplicates > 0
+        ? `${result.added} ventas agregadas · ${result.duplicates} duplicado(s) omitido(s)`
+        : `${result.added} ventas agregadas`;
+      showUndo(label, () => actions.undoImport({ addedIds: result.addedIds, importLogId: result.importLogId }));
+    }
     // Reset
     setRawCsv('');
     setHeaders([]);
