@@ -19,7 +19,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 export function Configuracion() {
   const navigate = useNavigate();
   const { state, actions, assetSummaries, portfolioStats, activeAssetId } = useAppState();
-  const { formatCurrency } = useCurrency();
+  const { currency, setCurrency, ufValue, setUfValue, formatCurrency } = useCurrency();
   const { theme, setTheme } = useTheme();
   const [assetName, setAssetName] = useState(state.asset?.name ?? '');
   const [city, setCity] = useState(state.asset?.city ?? '');
@@ -338,6 +338,43 @@ export function Configuracion() {
                 {theme === 'dark' ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
                 {theme === 'dark' ? 'Usar modo claro' : 'Usar modo oscuro'}
               </button>
+              <p className="mt-2 text-xs text-[var(--sidebar-fg)]">
+                La preferencia se guarda en el activo y se propaga en la sincronización.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border-color)] p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Moneda</p>
+              <div className="mt-3 inline-flex rounded-xl border border-[var(--border-color)] p-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrency('CLP')}
+                  className={`rounded-lg px-3 py-1.5 text-sm ${currency === 'CLP' ? 'bg-[var(--card-bg)] font-semibold' : 'text-[var(--sidebar-fg)]'}`}
+                >
+                  CLP
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrency('UF')}
+                  className={`rounded-lg px-3 py-1.5 text-sm ${currency === 'UF' ? 'bg-[var(--card-bg)] font-semibold' : 'text-[var(--sidebar-fg)]'}`}
+                >
+                  UF
+                </button>
+              </div>
+              {currency === 'UF' ? (
+                <label className="mt-3 block">
+                  <span className="text-xs text-[var(--sidebar-fg)]">Valor UF (CLP)</span>
+                  <input
+                    type="number"
+                    value={ufValue}
+                    onChange={(e) => setUfValue(Number(e.target.value) || 0)}
+                    className="mt-1 w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm"
+                    min={0}
+                  />
+                </label>
+              ) : null}
+              <p className="mt-2 text-xs text-[var(--sidebar-fg)]">
+                Referencia: {formatCurrency(1000000)} equivalen a {formatCurrency(1000000, { unit: currency === 'UF' ? 'CLP' : 'UF' })}.
+              </p>
             </div>
           </div>
         </div>

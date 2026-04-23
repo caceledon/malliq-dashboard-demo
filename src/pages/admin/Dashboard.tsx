@@ -18,6 +18,7 @@ import { InteractiveMap } from '@/components/InteractiveMap';
 import { AreaChart, Delta, Donut, HealthRing, Kpi, LifeChip, TenantLogo } from '@/components/mallq/ui';
 import { getContractLifecycle } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
+import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 
@@ -59,7 +60,7 @@ function today(): string {
 
 export function AdminDashboard() {
   const navigate = useNavigate();
-  const { insights, state } = useAppState();
+  const { insights, state, assetSummaries, portfolioStats, activeAssetId, actions } = useAppState();
   const { formatCurrency } = useCurrency();
 
   const topTenants = useMemo(
@@ -240,6 +241,46 @@ export function AdminDashboard() {
           sparkColor="var(--ok)"
         />
       </div>
+
+      {/* PORTFOLIO COMPARISON STRIP — only when managing multiple assets */}
+      {assetSummaries.length > 1 ? (
+        <div className="mq-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
+          <div className="mq-card-hd">
+            <div>
+              <div className="t-eyebrow">Comparador · portafolio</div>
+              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+                {portfolioStats.assetCount} activos · {shortMoney(portfolioStats.monthlySales)} ventas agregadas
+              </h3>
+            </div>
+            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
+              Detalle
+            </button>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${Math.min(assetSummaries.length, 4)}, minmax(0, 1fr))`,
+              gap: 1,
+              background: 'var(--line)',
+            }}
+          >
+            {assetSummaries.map((asset) => (
+              <AssetCompareCell
+                key={asset.id}
+                asset={asset}
+                active={asset.id === activeAssetId}
+                onClick={() => {
+                  if (asset.id !== activeAssetId) {
+                    actions.switchAsset(asset.id);
+                  } else {
+                    navigate('/admin/activos');
+                  }
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* HEATMAP HERO */}
       <div className="mq-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
@@ -625,6 +666,70 @@ function AlertRow({ alert, index }: { alert: AlertItem; index: number }) {
       </div>
       <ArrowUpRight size={14} style={{ color: 'var(--ink-4)', flex: 'none' }} />
     </div>
+  );
+}
+
+function AssetCompareCell({
+  asset,
+  active,
+  onClick,
+}: {
+  asset: PortfolioAssetSummary;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const ratio = asset.totalUnits > 0 ? asset.occupiedUnits / asset.totalUnits : 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '14px 16px',
+        textAlign: 'left',
+        background: active ? 'var(--umber-wash)' : 'var(--card)',
+        border: 0,
+        borderLeft: active ? '2px solid var(--umber)' : '2px solid transparent',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div className="row" style={{ gap: 10, justifyContent: 'space-between' }}>
+        <div style={{ minWidth: 0 }}>
+          <div
+            className="truncate"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: active ? 'var(--umber-ink)' : 'var(--ink-1)',
+            }}
+          >
+            {asset.name}
+          </div>
+          <div className="t-dim truncate" style={{ fontSize: 11 }}>
+            {asset.city ?? '—'}
+          </div>
+        </div>
+        <Donut value={ratio} size={42} stroke={5} color={active ? 'var(--umber)' : 'var(--ink-2)'} />
+      </div>
+      <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+        <span className="t-mono" style={{ fontSize: 11.5, color: 'var(--ink-1)' }}>
+          {asset.occupancyPct.toFixed(1)}%
+          <span className="t-dim" style={{ fontWeight: 400 }}> ocup.</span>
+        </span>
+        <span className="t-mono" style={{ fontSize: 11.5, color: 'var(--ink-1)' }}>
+          {shortMoney(asset.monthlySales)}
+          <span className="t-dim" style={{ fontWeight: 400 }}> ventas</span>
+        </span>
+        {asset.alertCount > 0 ? (
+          <span className="chip warn" style={{ fontSize: 10.5, padding: '1px 8px' }}>
+            <span className="dot" />
+            {asset.alertCount}
+          </span>
+        ) : null}
+      </div>
+    </button>
   );
 }
 
