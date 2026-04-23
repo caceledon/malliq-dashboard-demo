@@ -6,7 +6,9 @@ import { SetupWizard } from '@/components/app/SetupWizard';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandPalette, type CommandItem } from '@/components/CommandPalette';
+import { ShortcutsHelp } from '@/components/ShortcutsHelp';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAppState } from '@/store/appState';
 
 function useCommandItems(onClose: () => void): CommandItem[] {
@@ -98,6 +100,7 @@ function AppLayoutInner({
   const [mobileOpen, setMobileOpen] = useState(false);
   const { insights } = useAppState();
   const items = useCommandItems(closePalette);
+  const { helpOpen, setHelpOpen, shortcuts } = useKeyboardShortcuts();
 
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--paper)' }}>
@@ -117,6 +120,7 @@ function AppLayoutInner({
       <GatewayStatus />
       {!insights.isSetupComplete ? <SetupWizard /> : null}
       <CommandPalette open={paletteOpen} onClose={closePalette} items={items} />
+      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} shortcuts={shortcuts} />
     </div>
   );
 }
