@@ -1334,6 +1334,8 @@ async function isAllowedEndpoint(url) {
   }
 }
 
+const MAX_PDF_PAGES = 50;
+
 async function extractUploadedText(file) {
   const extension = path.extname(file.originalname || '').toLowerCase();
   const mimeType = String(file.mimetype || '').toLowerCase();
@@ -1342,6 +1344,12 @@ async function extractUploadedText(file) {
     const buffer = await fs.readFile(file.path);
     const parser = new PDFParse({ data: buffer });
     try {
+      const info = await parser.getInfo();
+      if (info?.total > MAX_PDF_PAGES) {
+        const error = new Error(`PDF excede el máximo de ${MAX_PDF_PAGES} páginas.`);
+        error.code = 'PDF_TOO_LARGE';
+        throw error;
+      }
       const pdfData = await parser.getText();
       return String(pdfData.text || '').trim();
     } finally {
@@ -1412,6 +1420,13 @@ function createAppInstance() {
     legacyHeaders: false,
   });
 
+  const archiveWriteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   const PROD_API_KEY = process.env.API_KEY || null;
 
   app.use('/api', (req, res, next) => {
@@ -1460,7 +1475,7 @@ function createAppInstance() {
     }
   });
 
-  app.put('/api/archive', async (request, response) => {
+  app.put('/api/archive', archiveWriteLimiter, async (request, response) => {
     try {
       const zodResult = ArchivePutSchema.safeParse(request.body || {});
       if (!zodResult.success) {
@@ -1717,6 +1732,10 @@ function createAppInstance() {
       response.json(enriched);
     } catch (error) {
       console.error('Error autofilling contract:', error);
+      if (error?.code === 'PDF_TOO_LARGE') {
+        response.status(413).json({ error: error.message });
+        return;
+      }
       response.status(500).json({ error: error instanceof Error ? error.message : 'Error extrayendo datos estructurales con Inteligencia Artificial' });
     } finally {
       await discardTempFile(tempFilePath);
