@@ -1,10 +1,12 @@
-import { Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LogOut, Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 import { useTheme } from '@/lib/theme';
 import { useCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/store/appState';
+import { getAuthUser, logout, subscribeAuthUser, type AuthUser } from '@/lib/auth';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/i.test(navigator.platform);
 
@@ -44,6 +46,8 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
   const assetName = state.asset?.name ?? 'Sin activo';
   const pageTitle = matchRouteTitle(location.pathname);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getAuthUser());
+  useEffect(() => subscribeAuthUser(setAuthUser), []);
 
   return (
     <nav className="mq-topbar">
@@ -191,6 +195,25 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
       >
         <Sparkles size={14} /> Asistente MallQ
       </button>
+
+      {authUser ? (
+        <div className="row hidden lg:flex" style={{ gap: 6 }}>
+          <span className="t-dim truncate" style={{ fontSize: 11.5, maxWidth: 160 }} title={authUser.email}>
+            {authUser.displayName ?? authUser.email}
+          </span>
+          <button
+            type="button"
+            className="iconbtn"
+            onClick={() => {
+              logout();
+              window.location.reload();
+            }}
+            title="Cerrar sesión"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
+      ) : null}
     </nav>
   );
 }

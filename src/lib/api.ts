@@ -1,4 +1,5 @@
 import type { BackupArchive, Contract, DocumentKind, DocumentRecord } from '@/lib/domain';
+import { authFetch } from '@/lib/auth';
 
 export interface ServerHealth {
   ok: boolean;
@@ -113,12 +114,12 @@ async function assertJson(response: Response) {
 }
 
 export async function fetchServerHealth(apiBase: string): Promise<ServerHealth> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/health`);
+  const response = await authFetch(`${resolveApiBase(apiBase)}/health`);
   return assertJson(response);
 }
 
 export async function pushArchive(apiBase: string, archive: BackupArchive, force = false): Promise<{ ok: boolean; updatedAt: string; revision: number }> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/archive${force ? '?force=1' : ''}`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/archive${force ? '?force=1' : ''}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -129,7 +130,7 @@ export async function pushArchive(apiBase: string, archive: BackupArchive, force
 }
 
 export async function pullArchive(apiBase: string): Promise<BackupArchive> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/archive`);
+  const response = await authFetch(`${resolveApiBase(apiBase)}/archive`);
   return assertJson(response);
 }
 
@@ -152,7 +153,7 @@ export async function uploadRemoteDocument(
   body.set('note', payload.note ?? '');
   body.set('file', payload.file);
 
-  const response = await fetch(`${resolveApiBase(apiBase)}/documents`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/documents`, {
     method: 'POST',
     body,
   });
@@ -161,14 +162,14 @@ export async function uploadRemoteDocument(
 }
 
 export async function deleteRemoteDocument(apiBase: string, documentId: string): Promise<RemoteDocumentMutationResult> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/documents/${documentId}`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/documents/${documentId}`, {
     method: 'DELETE',
   });
   return assertJson(response);
 }
 
 export async function downloadRemoteDocument(apiBase: string, documentId: string): Promise<Blob> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/documents/${documentId}/download`);
+  const response = await authFetch(`${resolveApiBase(apiBase)}/documents/${documentId}/download`);
   if (!response.ok) {
     throw new Error(await response.text());
   }
@@ -184,7 +185,7 @@ export async function proxyPosRequest(
     requestBody?: string;
   },
 ): Promise<{ status: number; body: string }> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/connectors/pos/proxy`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/connectors/pos/proxy`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -206,7 +207,7 @@ export async function ingestFiscalText(
     body.set('file', payload.file);
   }
 
-  const response = await fetch(`${resolveApiBase(apiBase)}/connectors/fiscal/ingest`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/connectors/fiscal/ingest`, {
     method: 'POST',
     body,
   });
@@ -217,7 +218,7 @@ export async function autofillContractFromPdf(apiBase: string, file: File): Prom
   const body = new FormData();
   body.set('file', file);
 
-  const response = await fetch(`${resolveApiBase(apiBase)}/contracts/autofill`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/contracts/autofill`, {
     method: 'POST',
     body,
   });
@@ -229,7 +230,7 @@ export async function askContractAutofill(
   apiBase: string,
   payload: { question: string; textSnippet: string; currentFields: Record<string, unknown> },
 ): Promise<AutofillAskResponse> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/contracts/autofill/ask`, {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/contracts/autofill/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -249,7 +250,7 @@ export interface ActivityItem {
 
 
 export async function fetchRecentActivities(apiBase: string): Promise<{ activities: ActivityItem[] }> {
-  const response = await fetch(`${resolveApiBase(apiBase)}/activities`);
+  const response = await authFetch(`${resolveApiBase(apiBase)}/activities`);
   return assertJson(response);
 }
 

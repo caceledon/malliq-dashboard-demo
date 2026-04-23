@@ -14,6 +14,16 @@ import './env.js';
 import { fetchFullState, getMeta, incrementRevision, replaceFullState, logActivity, getRecentActivities } from './db.js';
 import { buildRichExtractionMessages } from './autofill/richPrompt.js';
 import { applyPostDerivations } from './autofill/postDerivations.js';
+import {
+  buildAuthMiddleware,
+  createUser,
+  ensureAuthSchema,
+  findUserById,
+  hasAnyUser,
+  issueToken,
+  publicUser,
+  verifyPassword,
+} from './auth.js';
 
 const require = createRequire(import.meta.url);
 const { PDFParse } = require('pdf-parse');
@@ -1442,16 +1452,91 @@ function createAppInstance() {
     next();
   });
 
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.post('/api/auth/register', authLimiter, async (request, response) => {
+    try {
+      const { email, password, displayName } = request.body || {};
+      if (!email || !password) {
+        response.status(400).json({ error: 'Email y contraseña son requeridos.' });
+        return;
+      }
+      const bootstrapOpen = !(await hasAnyUser());
+      if (!bootstrapOpen) {
+        const header = request.headers.authorization || '';
+        const match = header.match(/^Bearer\s+(.+)$/i);
+        if (!match) {
+          response.status(401).json({ error: 'Solo usuarios autenticados con rol admin pueden registrar nuevos usuarios.' });
+          return;
+        }
+        const { verifyToken } = await import('./auth.js');
+        const payload = await verifyToken(match[1]);
+        const actingUser = payload ? await findUserById(payload.sub) : null;
+        if (!actingUser || actingUser.role !== 'admin') {
+          response.status(403).json({ error: 'Se requiere rol admin.' });
+          return;
+        }
+      }
+      const role = bootstrapOpen ? 'admin' : (request.body?.role ?? 'member');
+      const user = await createUser({ email, password, displayName, role });
+      const token = await issueToken(user);
+      void logActivity('auth_register', 'user', user.id, user.email, { bootstrap: bootstrapOpen });
+      response.status(201).json({ token, user });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : 'Error registrando usuario.' });
+    }
+  });
+
+  app.post('/api/auth/login', authLimiter, async (request, response) => {
+    try {
+      const { email, password } = request.body || {};
+      if (!email || !password) {
+        response.status(400).json({ error: 'Email y contraseña son requeridos.' });
+        return;
+      }
+      const user = await verifyPassword(email, password);
+      if (!user) {
+        response.status(401).json({ error: 'Credenciales inválidas.' });
+        return;
+      }
+      const token = await issueToken(user);
+      void logActivity('auth_login', 'user', user.id, user.email, null);
+      response.json({ token, user: publicUser(user) });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'Error iniciando sesión.' });
+    }
+  });
+
+  // Must run after the PROD_API_KEY gate and after /api/auth/login|register
+  // are registered, but before resource routes — so mount here.
+  app.use('/api', buildAuthMiddleware());
+
+  app.get('/api/auth/me', async (request, response) => {
+    if (!request.user) {
+      response.status(401).json({ error: 'No autenticado.' });
+      return;
+    }
+    response.json({ user: request.user });
+  });
+
   app.get('/api/health', async (_request, response) => {
     try {
       const state = await loadState();
       const meta = await loadMeta();
+      const anyUser = await hasAnyUser();
       response.json({
         ok: true,
         archiveExists: hasMeaningfulState(state),
         updatedAt: meta.updatedAt ?? state.asset?.lastSyncedAt ?? null,
         revision: Number(meta.revision || 0),
         aiMode: getContractAutofillAiConfig()?.provider ?? 'mock_local',
+        authRequired: anyUser || process.env.MALLIQ_REQUIRE_AUTH === '1',
+        authBootstrapped: anyUser,
         summary: buildStateSummary(state),
       });
     } catch (error) {
@@ -1881,6 +1966,7 @@ export function createApp() {
 
 export async function startServer(port = PORT) {
   await ensureStorage();
+  await ensureAuthSchema();
   const app = createApp();
   return app.listen(port, () => {
     console.log(`MallIQ API escuchando en http://localhost:${port}`);
