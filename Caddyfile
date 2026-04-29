@@ -1,0 +1,19 @@
+do-up.cl, www.do-up.cl {
+	encode gzip zstd
+	reverse_proxy app:4000
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	@apiOrAuth path /api/* /health
+	handle @apiOrAuth {
+		reverse_proxy app:4000
+	}
+
+	handle {
+		reverse_proxy app:4000
+	}
+}

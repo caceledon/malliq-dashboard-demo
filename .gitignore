@@ -14,6 +14,11 @@ dist-ssr
 server/data/*
 !server/data/.gitkeep
 
+# Production deploy artifacts
+.env.production
+data/
+infra/aws/*.pem
+
 # Design reference (not shipped)
 .mallq_design/
 

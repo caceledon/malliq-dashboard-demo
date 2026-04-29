@@ -1389,6 +1389,7 @@ function extractJsonObject(rawOutput) {
 
 function createAppInstance() {
   const app = express();
+  app.set('trust proxy', 1);
   if (process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGINS) {
     const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
     app.use(cors({
