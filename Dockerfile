@@ -33,7 +33,4 @@ RUN mkdir -p /app/server/data && chown -R malliq:malliq /app/server/data
 USER malliq
 EXPOSE 4000
 
-HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=3 \
-  CMD wget -q -O- http://127.0.0.1:4000/health || exit 1
-
 CMD ["node", "server/index.js"]
