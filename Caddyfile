@@ -1,4 +1,4 @@
-do-up.cl, www.do-up.cl {
+do-up.cl {
 	encode gzip zstd
 	reverse_proxy app:4000
 
