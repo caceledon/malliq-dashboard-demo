@@ -2,6 +2,7 @@ import cors from 'cors';
 import dns from 'node:dns/promises';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
+import helmet from 'helmet';
 import fs from 'node:fs/promises';
 import multer from 'multer';
 import net from 'node:net';
@@ -1398,6 +1399,40 @@ function extractJsonObject(rawOutput) {
 function createAppInstance() {
   const app = express();
   app.set('trust proxy', 1);
+
+  // Security headers. Caddy already terminates TLS / HSTS in production;
+  // helmet covers the application layer (X-Content-Type-Options,
+  // Referrer-Policy, X-Frame-Options=DENY, COOP, etc.) and gives us a CSP
+  // that matches the self-hosted footprint after C1/C2:
+  //   - default-src 'self'
+  //   - 'unsafe-inline' for styles (Tailwind injects style attrs and styled
+  //     components rely on inline style attributes throughout the SPA)
+  //   - mindicador.cl for the UF API (server-side) — not actually fetched
+  //     from the browser, so not in connect-src
+  //   - data: + blob: for downloaded contract previews and OCR thumbnails
+  //   - api.openai.com / api.moonshot.cn omitted (server-only)
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'default-src': ["'self'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'font-src': ["'self'", 'data:'],
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'connect-src': ["'self'"],
+          // ContractPreviewModal embeds downloaded PDFs via <iframe src={blobUrl}>
+          'frame-src': ["'self'", 'blob:'],
+          'object-src': ["'none'"],
+          'frame-ancestors': ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'same-site' },
+    }),
+  );
+
   if (process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGINS) {
     const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
     app.use(cors({
