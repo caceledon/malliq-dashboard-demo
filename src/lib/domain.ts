@@ -1436,6 +1436,65 @@ export function buildForecastBands(
   };
 }
 
+// C5 contract diff: per-field comparison between two contract drafts.
+// Used by ContractEditor to show what an autofill changed before the user saves.
+const CONTRACT_DIFF_FIELDS: { key: keyof Contract; label: string; kind: 'text' | 'currency-clp' | 'currency-uf' | 'percent' | 'date' }[] = [
+  { key: 'companyName', label: 'Razón social', kind: 'text' },
+  { key: 'storeName', label: 'Nombre tienda', kind: 'text' },
+  { key: 'category', label: 'Categoría', kind: 'text' },
+  { key: 'baseRentUF', label: 'Renta fija UF/m²', kind: 'currency-uf' },
+  { key: 'fixedRent', label: 'Renta fija CLP', kind: 'currency-clp' },
+  { key: 'variableRentPct', label: 'Renta variable', kind: 'percent' },
+  { key: 'commonExpenses', label: 'Gastos comunes', kind: 'currency-clp' },
+  { key: 'escalation', label: 'Reajuste / condiciones', kind: 'text' },
+  { key: 'startDate', label: 'Fecha de inicio', kind: 'date' },
+  { key: 'endDate', label: 'Fecha de término', kind: 'date' },
+  { key: 'fondoPromocion', label: 'Fondo de promoción', kind: 'currency-clp' },
+  { key: 'garantiaMonto', label: 'Monto garantía', kind: 'currency-clp' },
+  { key: 'garantiaVencimiento', label: 'Vencimiento garantía', kind: 'date' },
+  { key: 'feeIngreso', label: 'Fee de ingreso', kind: 'currency-clp' },
+];
+
+export interface ContractFieldDiff {
+  key: string;
+  label: string;
+  kind: 'text' | 'currency-clp' | 'currency-uf' | 'percent' | 'date';
+  before: unknown;
+  after: unknown;
+}
+
+function normalizeForDiff(value: unknown): unknown {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  return value;
+}
+
+export function buildContractDiff(prior: Contract | null | undefined, next: Contract | null | undefined): ContractFieldDiff[] {
+  if (!prior || !next) return [];
+  const diffs: ContractFieldDiff[] = [];
+  for (const field of CONTRACT_DIFF_FIELDS) {
+    const before = normalizeForDiff(prior[field.key]);
+    const after = normalizeForDiff(next[field.key]);
+    if (before !== after) {
+      diffs.push({ key: field.key as string, label: field.label, kind: field.kind, before, after });
+    }
+  }
+
+  const priorSteps = (prior.rentSteps || []).map((s) => `${s.startDate}|${s.endDate}|${s.rentaFijaUfM2}`).join(';');
+  const nextSteps = (next.rentSteps || []).map((s) => `${s.startDate}|${s.endDate}|${s.rentaFijaUfM2}`).join(';');
+  if (priorSteps !== nextSteps) {
+    diffs.push({
+      key: 'rentSteps',
+      label: 'Escalonamientos de renta',
+      kind: 'text',
+      before: prior.rentSteps?.length ?? 0,
+      after: next.rentSteps?.length ?? 0,
+    });
+  }
+
+  return diffs;
+}
+
 export function buildContractOverlapConflicts(state: AppState): ContractOverlapConflict[] {
   return state.units
     .map((unit) => {

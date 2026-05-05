@@ -163,6 +163,9 @@ export function Locatarios() {
   const [autofillPendingFields, setAutofillPendingFields] = useState<string[]>([]);
   const [autofillEvidence, setAutofillEvidence] = useState<AutofillEvidenceState>(emptyAutofillEvidence);
   const [autofillTextSnippet, setAutofillTextSnippet] = useState<string | null>(null);
+  // Snapshot of the draft taken at the moment a PDF autofill starts. Used by
+  // ContractEditor to render the per-field "qué cambió" diff (C5).
+  const [autofillPriorContract, setAutofillPriorContract] = useState<Contract | null>(null);
   const normalizedDraft = normalizeDraftContract(draft);
 
   const filtered = insights.tenantSummaries.filter((tenant) => {
@@ -211,6 +214,10 @@ export function Locatarios() {
   const handleAutofillPDF = async (file: File) => {
     setIsAutofilling(true);
     setEditorMessage('Procesando PDF con IA...');
+    // Capture the pre-autofill draft so the editor can show what the autofill
+    // changed once it returns. We snapshot here rather than after extraction so
+    // any partial fills during the request still get a stable comparison base.
+    setAutofillPriorContract({ ...draft });
 
     try {
       const extracted = await autofillContractFromPdf(resolveApiBase(state.asset?.backendUrl), file);
@@ -300,6 +307,7 @@ export function Locatarios() {
     setAutofillPendingFields([]);
     setAutofillEvidence(emptyAutofillEvidence);
     setAutofillTextSnippet(null);
+    setAutofillPriorContract(null);
   };
 
   const applyChatSuggestion = (updates: Record<string, string | number | null>) => {
@@ -504,6 +512,7 @@ export function Locatarios() {
               setAutofillPendingFields([]);
               setAutofillEvidence(emptyAutofillEvidence);
               setAutofillTextSnippet(null);
+              setAutofillPriorContract(null);
             }}
             onAutofill={handleAutofillPDF}
             onNew={() => {
@@ -512,6 +521,7 @@ export function Locatarios() {
               setAutofillPendingFields([]);
               setAutofillEvidence(emptyAutofillEvidence);
               setAutofillTextSnippet(null);
+              setAutofillPriorContract(null);
             }}
             isAutofilling={isAutofilling}
             editorMessage={editorMessage}
@@ -524,6 +534,8 @@ export function Locatarios() {
             contracts={state.contracts}
             units={state.units}
             currentMonthSales={currentMonthSales}
+            priorContract={autofillPriorContract}
+            onClearPriorContract={() => setAutofillPriorContract(null)}
           />
           <AutofillChat
             textSnippet={autofillTextSnippet}

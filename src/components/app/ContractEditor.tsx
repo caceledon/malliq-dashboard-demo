@@ -2,9 +2,11 @@ import { useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import { Building2, FileSignature, Sparkles, Loader2 } from 'lucide-react';
 import {
   buildContractCommercialSnapshot,
+  buildContractDiff,
   createId,
   getContractDisplayValues,
   type Contract,
+  type ContractFieldDiff,
   type CurrencyTag,
   type SignatureStatus,
   type AssetUnit,
@@ -61,6 +63,10 @@ interface ContractEditorProps {
   contracts: Contract[];
   units: AssetUnit[];
   currentMonthSales: number;
+  // Snapshot of the contract before the most recent autofill landed, so we can
+  // show a per-field "qué cambió" diff before save (C5).
+  priorContract?: Contract | null;
+  onClearPriorContract?: () => void;
 }
 
 export function ContractEditor({
@@ -81,6 +87,8 @@ export function ContractEditor({
   contracts,
   units,
   currentMonthSales,
+  priorContract = null,
+  onClearPriorContract,
 }: ContractEditorProps) {
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
@@ -142,6 +150,8 @@ export function ContractEditor({
             {editorMessage}
           </div>
         ) : null}
+        <ContractDiffPanel prior={priorContract} next={draft} onDismiss={onClearPriorContract} />
+
         {(draft.baseRentUF || 0) > 0 && (draft.fixedRent || 0) === 0 ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
             <p className="font-semibold">Revisa la renta fija mensual</p>
@@ -805,4 +815,106 @@ function sanitizeDraftForPreview(draft: Contract): Contract {
       rentaFijaUfM2: Number.isFinite(step.rentaFijaUfM2) ? step.rentaFijaUfM2 : 0,
     })),
   };
+}
+
+function formatDiffValue(value: unknown, kind: ContractFieldDiff['kind']): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (kind === 'percent' && typeof value === 'number') return `${value.toFixed(2)}%`;
+  if (kind === 'currency-clp' && typeof value === 'number') {
+    return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
+  }
+  if (kind === 'currency-uf' && typeof value === 'number') return `${value.toFixed(4)} UF/m²`;
+  if (kind === 'date' && typeof value === 'string') {
+    const trimmed = value.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : String(value);
+  }
+  return String(value);
+}
+
+function ContractDiffPanel({
+  prior,
+  next,
+  onDismiss,
+}: {
+  prior: Contract | null | undefined;
+  next: Contract;
+  onDismiss?: () => void;
+}) {
+  if (!prior) return null;
+  const diffs = buildContractDiff(prior, next);
+  if (diffs.length === 0) return null;
+  return (
+    <div
+      className="rounded-2xl border"
+      style={{
+        borderColor: 'color-mix(in oklab, var(--violet-soft) 70%, var(--hairline))',
+        background: 'color-mix(in oklab, var(--violet-soft) 35%, var(--surface))',
+        padding: 16,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div className="t-eyebrow">Qué cambió en este autofill</div>
+          <p className="mt-1 text-xs" style={{ color: 'var(--ink-2)' }}>
+            Revisa los {diffs.length} {diffs.length === 1 ? 'campo' : 'campos'} antes de guardar.
+          </p>
+        </div>
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-xs"
+            style={{ color: 'var(--ink-3)', background: 'none', border: 0, cursor: 'pointer' }}
+          >
+            Cerrar
+          </button>
+        ) : null}
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {diffs.map((diff) => (
+          <div
+            key={diff.key}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '160px 1fr 18px 1fr',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 10px',
+              background: 'var(--surface)',
+              border: '1px solid var(--hairline)',
+              borderRadius: 10,
+              fontSize: 12.5,
+            }}
+          >
+            <span style={{ color: 'var(--ink-3)' }}>{diff.label}</span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--ink-3)',
+                textDecoration: 'line-through',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {formatDiffValue(diff.before, diff.kind)}
+            </span>
+            <span style={{ color: 'var(--violet-deep)', textAlign: 'center' }}>→</span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--ink-1)',
+                fontWeight: 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {formatDiffValue(diff.after, diff.kind)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
