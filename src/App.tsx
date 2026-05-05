@@ -24,6 +24,7 @@ const Alertas = lazy(() => import('@/pages/admin/Alertas').then((module) => ({ d
 const Configuracion = lazy(() => import('@/pages/admin/Configuracion').then((module) => ({ default: module.Configuracion })));
 const Simulador = lazy(() => import('@/pages/admin/Simulador').then((module) => ({ default: module.Simulador })));
 const Asistente = lazy(() => import('@/pages/admin/Asistente').then((module) => ({ default: module.Asistente })));
+const DesignLab = lazy(() => import('@/pages/admin/DesignLab').then((module) => ({ default: module.DesignLab })));
 const LocatarioDashboard = lazy(() => import('@/pages/locatario/Dashboard').then((module) => ({ default: module.LocatarioDashboard })));
 const LocatarioContrato = lazy(() => import('@/pages/locatario/Contrato').then((module) => ({ default: module.LocatarioContrato })));
 const LocatarioVentas = lazy(() => import('@/pages/locatario/Ventas').then((module) => ({ default: module.LocatarioVentas })));
@@ -140,6 +141,7 @@ function App() {
                   <Route path="configuracion" element={<AdminOnly>{withSuspense(<Configuracion />)}</AdminOnly>} />
                   <Route path="simulador" element={<AdminOnly>{withSuspense(<Simulador />)}</AdminOnly>} />
                   <Route path="asistente" element={<AdminOnly>{withSuspense(<Asistente />)}</AdminOnly>} />
+                  <Route path="design-lab" element={<AdminOnly>{withSuspense(<DesignLab />)}</AdminOnly>} />
                 </Route>
               </Routes>
             </AppShell>

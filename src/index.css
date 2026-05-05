@@ -25,22 +25,29 @@
    Cream + ink, mint primary, violet for AI, hairline borders
    ============================================================ */
 :root {
-  /* --- BASE SURFACES (cream tones) --- */
-  --bg-deep: oklch(0.985 0.006 85);
-  --bg: oklch(0.992 0.004 85);
-  --surface: #ffffff;
-  --surface-2: oklch(0.975 0.008 82);
-  --surface-3: oklch(0.955 0.010 78);
+  /* --- BASE SURFACES (warm cream — never pure white in app shell) --- */
+  --bg-deep: oklch(0.95 0.018 82);
+  --bg: oklch(0.97 0.015 85);
+  --surface: oklch(0.985 0.010 85);
+  --surface-2: oklch(0.965 0.012 82);
+  --surface-3: oklch(0.94 0.014 78);
 
-  /* --- INK (charcoal warm-cool) --- */
-  --ink-1: oklch(0.20 0.012 270);
-  --ink-2: oklch(0.34 0.012 270);
-  --ink-3: oklch(0.54 0.012 270);
-  --ink-4: oklch(0.70 0.010 270);
+  /* --- INK (warm undertone, not cool — body text aims for ~92% against bg) --- */
+  --ink-1: oklch(0.22 0.012 60);
+  --ink-2: oklch(0.34 0.012 60);
+  --ink-3: oklch(0.54 0.012 60);
+  --ink-4: oklch(0.70 0.010 60);
 
-  /* --- HAIRLINES --- */
-  --hairline: oklch(0.92 0.005 270);
-  --hairline-strong: oklch(0.84 0.008 270);
+  /* --- HAIRLINES (alpha-driven, scale with surface) --- */
+  --hairline: oklch(0.22 0.012 60 / 0.10);
+  --hairline-strong: oklch(0.22 0.012 60 / 0.18);
+
+  /* --- ACCENT (Claude coral/clay — primary CTAs, key data emphasis only) --- */
+  --accent: oklch(0.68 0.16 35);
+  --accent-deep: oklch(0.55 0.16 35);
+  --accent-soft: oklch(0.95 0.06 35);
+  --focus-ring: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+  --shadow-card: 0 24px 60px -24px color-mix(in oklab, var(--ink-1) 12%, transparent);
 
   /* --- MINT (primary CTA + health-positive) --- */
   --mint: oklch(0.72 0.13 165);
