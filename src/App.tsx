@@ -22,6 +22,7 @@ const Ecosistema = lazy(() => import('@/pages/admin/Ecosistema').then((module) =
 const Alertas = lazy(() => import('@/pages/admin/Alertas').then((module) => ({ default: module.Alertas })));
 const Configuracion = lazy(() => import('@/pages/admin/Configuracion').then((module) => ({ default: module.Configuracion })));
 const Simulador = lazy(() => import('@/pages/admin/Simulador').then((module) => ({ default: module.Simulador })));
+const Asistente = lazy(() => import('@/pages/admin/Asistente').then((module) => ({ default: module.Asistente })));
 const LocatarioDashboard = lazy(() => import('@/pages/locatario/Dashboard').then((module) => ({ default: module.LocatarioDashboard })));
 const LocatarioContrato = lazy(() => import('@/pages/locatario/Contrato').then((module) => ({ default: module.LocatarioContrato })));
 const LocatarioVentas = lazy(() => import('@/pages/locatario/Ventas').then((module) => ({ default: module.LocatarioVentas })));
@@ -77,6 +78,7 @@ function App() {
                   <Route path="/admin/alertas" element={<AdminOnly>{withSuspense(<Alertas />)}</AdminOnly>} />
                   <Route path="/admin/configuracion" element={<AdminOnly>{withSuspense(<Configuracion />)}</AdminOnly>} />
                   <Route path="/admin/simulador" element={<AdminOnly>{withSuspense(<Simulador />)}</AdminOnly>} />
+                  <Route path="/admin/asistente" element={<AdminOnly>{withSuspense(<Asistente />)}</AdminOnly>} />
 
                   <Route path="/locatario/dashboard" element={<LocatarioOnly>{withSuspense(<LocatarioDashboard />)}</LocatarioOnly>} />
                   <Route path="/locatario/contrato" element={<LocatarioOnly>{withSuspense(<LocatarioContrato />)}</LocatarioOnly>} />

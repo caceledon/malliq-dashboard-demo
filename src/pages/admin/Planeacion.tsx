@@ -6,6 +6,7 @@ import { formatPercent } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { TopBar } from '@/components/mallq/ui';
 
 function parsePlanningRows(raw: string, type: PlanType): PlanningEntry[] {
   return raw
@@ -102,13 +103,16 @@ export function Planeacion() {
   };
 
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-bold md:text-2xl">Presupuesto y forecast</h1>
-        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-          Planeación comercial editable con carga manual o masiva, respaldo documental y generación automática.
-        </p>
-      </div>
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <TopBar
+        eyebrow="Planeación"
+        title={
+          <>
+            Presupuesto y <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>forecast</i>.
+          </>
+        }
+        sub="Planeación comercial editable con carga manual o masiva, respaldo documental y generación automática."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <PlanningMetric

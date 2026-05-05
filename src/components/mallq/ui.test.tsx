@@ -3,27 +3,28 @@ import { describe, expect, it } from 'vitest';
 import { Delta, Donut, HealthRing, Kpi, LifeChip, TenantLogo } from './ui';
 
 describe('Delta', () => {
-  it('renders +X% with .up styling for positive values', () => {
+  it('renders +X% with up arrow + mint color for positive values', () => {
     const { container } = render(<Delta v={0.125} />);
-    const span = container.querySelector('.delta');
+    const span = container.querySelector('span.mq-mono');
     expect(span).not.toBeNull();
-    expect(span).toHaveClass('up');
+    // mint-deep is the positive tone; coral is negative; ink-3 is zero
+    expect(span?.getAttribute('style')).toMatch(/var\(--mint-deep\)/);
     expect(container.textContent).toMatch(/12\.5%/);
     expect(container.textContent).toContain('▲');
   });
 
-  it('renders -X% with .down styling for negative values', () => {
+  it('renders -X% with down arrow + coral color for negative values', () => {
     const { container } = render(<Delta v={-0.08} />);
-    const span = container.querySelector('.delta');
-    expect(span).toHaveClass('down');
+    const span = container.querySelector('span.mq-mono');
+    expect(span?.getAttribute('style')).toMatch(/var\(--coral\)/);
     expect(container.textContent).toMatch(/8\.0%/);
     expect(container.textContent).toContain('▼');
   });
 
-  it('renders ±0% for exact zero without direction', () => {
+  it('renders ±0% for exact zero without direction arrow', () => {
     const { container } = render(<Delta v={0} />);
     expect(container.textContent).toContain('±0%');
-    expect(container.querySelector('.delta')).toBeNull();
+    expect(container.textContent).not.toMatch(/[▲▼]/);
   });
 });
 
@@ -56,23 +57,36 @@ describe('Donut', () => {
 });
 
 describe('HealthRing', () => {
-  it('colors the ring with --ok above 85', () => {
+  // The ramp is now 5 buckets (A→E) keyed to --health-a..e tokens.
+  it('colors the ring with --health-a for scores ≥ 88', () => {
     const { container } = render(<HealthRing value={90} />);
     const circles = container.querySelectorAll('circle');
-    expect(circles[1].getAttribute('stroke')).toBe('var(--ok)');
+    expect(circles[1].getAttribute('stroke')).toBe('var(--health-a)');
     expect(container.textContent).toContain('90');
   });
 
-  it('colors the ring with --warn between 70 and 84', () => {
-    const { container } = render(<HealthRing value={75} />);
+  it('colors the ring with --health-b for scores 76–87', () => {
+    const { container } = render(<HealthRing value={80} />);
     const circles = container.querySelectorAll('circle');
-    expect(circles[1].getAttribute('stroke')).toBe('var(--warn)');
+    expect(circles[1].getAttribute('stroke')).toBe('var(--health-b)');
   });
 
-  it('colors the ring with --danger below 70', () => {
-    const { container } = render(<HealthRing value={40} />);
+  it('colors the ring with --health-c for scores 60–75', () => {
+    const { container } = render(<HealthRing value={65} />);
     const circles = container.querySelectorAll('circle');
-    expect(circles[1].getAttribute('stroke')).toBe('var(--danger)');
+    expect(circles[1].getAttribute('stroke')).toBe('var(--health-c)');
+  });
+
+  it('colors the ring with --health-d for scores 44–59', () => {
+    const { container } = render(<HealthRing value={50} />);
+    const circles = container.querySelectorAll('circle');
+    expect(circles[1].getAttribute('stroke')).toBe('var(--health-d)');
+  });
+
+  it('colors the ring with --health-e for scores below 44', () => {
+    const { container } = render(<HealthRing value={20} />);
+    const circles = container.querySelectorAll('circle');
+    expect(circles[1].getAttribute('stroke')).toBe('var(--health-e)');
   });
 });
 

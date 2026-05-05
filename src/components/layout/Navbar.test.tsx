@@ -31,10 +31,13 @@ describe('Navbar', () => {
     localStorage.clear();
   });
 
-  it('renders the breadcrumb title for the active admin route', () => {
-    renderNavbar({ initialRoute: '/admin/dashboard' });
-    expect(screen.getByText(/Dashboard operativo/)).toBeInTheDocument();
-    expect(screen.getByText(/Sin activo/)).toBeInTheDocument();
+  it('renders the navbar shell without a per-page title (each page renders its own TopBar)', () => {
+    const { container } = renderNavbar({ initialRoute: '/admin/dashboard' });
+    // The breadcrumb / page-title block was intentionally removed in the
+    // editorial redesign — pages now own their own header via <TopBar>.
+    expect(container.querySelector('.breadcrumb')).toBeNull();
+    // The search trigger is still rendered as the navbar's primary input.
+    expect(screen.getByTitle(/Buscar/)).toBeInTheDocument();
   });
 
   it('opens the command palette when the search trigger is clicked', () => {

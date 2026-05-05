@@ -17,6 +17,8 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { ContractEditor } from '@/components/app/ContractEditor';
 import { AutofillChat } from '@/components/AutofillChat';
+import { SemaforoStrip, TopBar } from '@/components/mallq/ui';
+import { healthBucket, type HealthBucket } from '@/components/mallq/helpers';
 
 function createDraftContract(overrides: Partial<Contract> = {}): Contract {
   return {
@@ -319,25 +321,39 @@ export function Locatarios() {
     setEditorMessage('Sugerencia del asistente aplicada. Revisa y guarda cuando corresponda.');
   };
 
+  const semaforoBuckets: Record<HealthBucket, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  for (const t of insights.tenantSummaries) semaforoBuckets[healthBucket(t.healthScorePct)] += 1;
+
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-xl font-bold md:text-2xl">Locatarios y contratos</h1>
-          <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-            La ficha de tienda se completa automáticamente desde el contrato y permite corrección manual antes de guardar.
-          </p>
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <TopBar
+        eyebrow="Locatarios"
+        title={
+          <>
+            Salud por <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>semáforo</i>.
+          </>
+        }
+        sub="La ficha de tienda se completa automáticamente desde el contrato y permite corrección manual antes de guardar."
+        right={
+          <div
+            className="flex items-center gap-2 rounded-xl border border-[var(--hairline)] bg-[var(--surface)] px-3 py-2"
+          >
+            <Search className="h-4 w-4 text-[var(--ink-3)]" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar tienda, empresa, rubro o local"
+              className="w-[260px] bg-transparent text-sm outline-none"
+            />
+          </div>
+        }
+      />
+
+      {insights.tenantSummaries.length > 0 ? (
+        <div style={{ marginBottom: 18 }}>
+          <SemaforoStrip buckets={semaforoBuckets} />
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2">
-          <Search className="h-4 w-4 text-[var(--sidebar-fg)]" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar tienda, empresa, rubro o local"
-            className="w-[260px] bg-transparent text-sm outline-none"
-          />
-        </div>
-      </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="space-y-4">

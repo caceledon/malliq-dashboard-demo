@@ -1,28 +1,26 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowUpRight, Bot, ChevronRight, FileText, Sparkles, Upload } from 'lucide-react';
 import {
-  AlertTriangle,
-  ArrowUpRight,
-  Calendar,
-  ExternalLink,
-  FileText,
-  Flame,
-  Plug2,
-  Receipt,
-  Sparkles,
-  TrendingDown,
-  Upload,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react';
-import { InteractiveMap } from '@/components/InteractiveMap';
-import { AreaChart, Delta, Donut, HealthRing, Kpi, LifeChip, TenantLogo } from '@/components/mallq/ui';
+  AiTask,
+  Bento,
+  CategoryHeatmap,
+  Delta,
+  ExpiryRiver,
+  HealthRing,
+  KpiTile,
+  LifeChip,
+  Pill,
+  Spark,
+  TenantLogo,
+  TopBar,
+} from '@/components/mallq/ui';
 import { diffInDays, getContractLifecycle } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
-import { useServerHealth } from '@/hooks/useServerHealth';
+import { healthBucket, formatM } from '@/components/mallq/helpers';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -32,48 +30,24 @@ function monthKeyToLabel(month: string): string {
   return MONTH_LABELS[idx] ?? month;
 }
 
-function shortMoney(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
-  return `$${Math.round(n)}`;
-}
-
-function pctSign(n: number, d = 1): string {
-  return `${n >= 0 ? '+' : ''}${(n * 100).toFixed(d)}%`;
-}
-
-function today(): string {
+function todayLabel(): string {
   try {
-    const fmt = new Intl.DateTimeFormat('es-CL', {
+    return new Intl.DateTimeFormat('es-CL', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    return fmt.format(new Date());
+    }).format(new Date());
   } catch {
-    return new Date().toLocaleString();
+    return new Date().toLocaleDateString();
   }
 }
-
-const AI_MODE_LABEL: Record<string, { label: string; chip: string }> = {
-  openai: { label: 'AI Autofill · OpenAI', chip: 'umber' },
-  moonshot: { label: 'AI Autofill · Moonshot', chip: 'umber' },
-  mock_local: { label: 'AI Autofill · Modo local', chip: 'info' },
-};
 
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { insights, state, assetSummaries, portfolioStats, activeAssetId, actions } = useAppState();
   const { formatCurrency } = useCurrency();
   const [healthLegendOpen, setHealthLegendOpen] = useState(false);
-  const serverHealth = useServerHealth(state.asset?.backendUrl ?? '/api');
-  const aiMode = serverHealth?.aiMode ?? null;
-  const aiChip = aiMode ? AI_MODE_LABEL[aiMode] : null;
 
   const topTenants = useMemo(
     () => [...insights.tenantSummaries].sort((a, b) => b.salesPerM2 - a.salesPerM2).slice(0, 5),
@@ -88,55 +62,11 @@ export function AdminDashboard() {
     [insights.tenantSummaries],
   );
 
-  const activeUnitIds = useMemo(() => {
-    const set = new Set<string>();
-    state.contracts
-      .filter((c) => getContractLifecycle(c) !== 'vencido')
-      .forEach((c) => c.localIds.forEach((id) => set.add(id)));
-    return set;
-  }, [state.contracts]);
-
-  const occupiedM2 = useMemo(
-    () => state.units.filter((u) => activeUnitIds.has(u.id)).reduce((sum, u) => sum + u.areaM2, 0),
-    [state.units, activeUnitIds],
-  );
-  const totalM2 = insights.totalAreaM2 || 1;
-  const vacantM2 = Math.max(totalM2 - occupiedM2, 0);
-  const occupancyRatio = occupiedM2 / totalM2;
-
-  const [salesRange, setSalesRange] = useState<'12M' | 'YTD' | 'QTD'>('12M');
-  // chartSeries is generated as the last 6 months; the seg buttons just slice it.
-  // YTD = months in the current calendar year inferred from offset (newest entry
-  // is the current month).
-  const visibleSeries = useMemo(() => {
-    const all = insights.chartSeries;
-    if (all.length === 0) return all;
-    if (salesRange === 'QTD') return all.slice(-3);
-    if (salesRange === 'YTD') {
-      const today = new Date();
-      const currentMonthIndex = today.getMonth(); // 0-11
-      // The chart spans (length-1) months back from today, so the entry at
-      // position i corresponds to (currentMonthIndex - (length-1) + i). Months
-      // with computed value < 0 belong to the previous year and are dropped.
-      return all.filter((_, i) => currentMonthIndex - (all.length - 1) + i >= 0);
-    }
-    return all;
-  }, [insights.chartSeries, salesRange]);
-
-  const salesTrend = visibleSeries.map((p) => p.sales);
-  const salesLabels = visibleSeries.map((p) => monthKeyToLabel(p.month));
+  const salesTrend = useMemo(() => insights.chartSeries.map((p) => p.sales), [insights.chartSeries]);
+  const rentTrend = useMemo(() => insights.chartSeries.map((p) => p.rent), [insights.chartSeries]);
   const lastSales = salesTrend[salesTrend.length - 1] ?? 0;
   const prevSales = salesTrend[salesTrend.length - 2] ?? 0;
   const momSales = prevSales > 0 ? (lastSales - prevSales) / prevSales : 0;
-
-  const rentTrend = visibleSeries.map((p) => p.rent);
-
-  const salesBySource = {
-    manual: state.sales.filter((s) => s.source === 'manual').reduce((acc, s) => acc + s.grossAmount, 0),
-    ocr: state.sales.filter((s) => s.source === 'ocr').reduce((acc, s) => acc + s.grossAmount, 0),
-    fiscal: state.sales.filter((s) => s.source === 'fiscal_printer').reduce((acc, s) => acc + s.grossAmount, 0),
-    pos: state.sales.filter((s) => s.source === 'pos_connection').reduce((acc, s) => acc + s.grossAmount, 0),
-  };
 
   const avgHealth = useMemo(() => {
     const vals = insights.tenantSummaries.map((t) => t.healthScorePct);
@@ -150,485 +80,290 @@ export function AdminDashboard() {
   const activeCount = insights.tenantSummaries.filter((t) => t.lifecycle === 'vigente').length;
 
   const renewalQueue = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
     return insights.tenantSummaries
       .filter((t) => t.lifecycle !== 'vencido' && t.endDate)
-      .map((t) => ({ tenant: t, daysToEnd: diffInDays(today, new Date(t.endDate)) }))
+      .map((t) => ({ tenant: t, daysToEnd: diffInDays(todayDate, new Date(t.endDate)) }))
       .filter(({ daysToEnd }) => Number.isFinite(daysToEnd) && daysToEnd >= 0 && daysToEnd <= 90)
       .sort((a, b) => a.daysToEnd - b.daysToEnd);
   }, [insights.tenantSummaries]);
 
-  const avgSalesPerM2 = insights.averageSalesPerM2;
+  // Active vs vacant areas
+  const activeUnitIds = useMemo(() => {
+    const set = new Set<string>();
+    state.contracts.filter((c) => getContractLifecycle(c) !== 'vencido').forEach((c) => c.localIds.forEach((id) => set.add(id)));
+    return set;
+  }, [state.contracts]);
+  const occupiedM2 = useMemo(
+    () => state.units.filter((u) => activeUnitIds.has(u.id)).reduce((sum, u) => sum + u.areaM2, 0),
+    [state.units, activeUnitIds],
+  );
+  const totalM2 = insights.totalAreaM2 || 1;
+  const vacantM2 = Math.max(totalM2 - occupiedM2, 0);
 
+  const avgSalesPerM2 = insights.averageSalesPerM2;
   const vacancies = insights.vacantUnits;
 
+  // Category heatmap mock built from real categories + sales (last 6 months)
+  const heatmapData = useMemo(() => {
+    if (insights.tenantSummaries.length === 0) return null;
+    const cats = new Map<string, number[]>();
+    for (const t of insights.tenantSummaries) {
+      const key = t.category || 'Otros';
+      if (!cats.has(key)) cats.set(key, new Array(insights.chartSeries.length).fill(0));
+      const arr = cats.get(key)!;
+      // Distribute the tenant's current monthly sales across the chart series proportionally
+      const total = insights.chartSeries.reduce((s, p) => s + p.sales, 0) || 1;
+      insights.chartSeries.forEach((p, i) => {
+        arr[i] += (t.salesCurrent * p.sales) / total;
+      });
+    }
+    const months = insights.chartSeries.map((p) => monthKeyToLabel(p.month));
+    const categories = Array.from(cats.entries())
+      .map(([name, values]) => ({ name, values }))
+      .slice(0, 6);
+    return { months, categories };
+  }, [insights.chartSeries, insights.tenantSummaries]);
+
+  const expiryBuckets = useMemo(() => {
+    const within30 = renewalQueue.filter((r) => r.daysToEnd <= 30).length;
+    const within60 = renewalQueue.filter((r) => r.daysToEnd > 30 && r.daysToEnd <= 60).length;
+    const within90 = renewalQueue.filter((r) => r.daysToEnd > 60 && r.daysToEnd <= 90).length;
+    return [
+      { label: '≤ 30 días', count: within30, tone: 'coral' as const },
+      { label: '31–60 días', count: within60, tone: 'amber' as const },
+      { label: '61–90 días', count: within90, tone: 'mint' as const },
+    ];
+  }, [renewalQueue]);
+
   return (
-    <div className="fadeUp" style={{ padding: '24px 28px 56px' }}>
-      {/* HERO STRIP */}
-      <div
-        className="mq-card"
-        style={{
-          padding: '32px 36px',
-          marginBottom: 24,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 32,
-          borderRadius: 32,
-          overflow: 'hidden',
-          position: 'relative',
-          background: 'rgba(255, 255, 255, 0.4)',
-          backdropFilter: 'blur(30px)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            right: -60,
-            top: -60,
-            width: 320,
-            height: 320,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--umber), transparent)',
-            opacity: 0.15,
-            filter: 'blur(60px)',
-          }}
-        />
-
-        <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-[24px] bg-white p-1.5 shadow-2xl ring-1 ring-black/5 z-10 transition-transform duration-500 hover:scale-105">
-          <div className="h-full w-full rounded-[18px] bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-bold text-2xl">
-            MQ
-          </div>
-        </div>
-
-        <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
-          <div className="t-eyebrow" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Zap size={12} className="text-orange-500" />
-            {today()}
-          </div>
-          <h1 className="t-display" style={{ fontSize: 32, margin: 0, lineHeight: 1.1, fontWeight: 900 }}>
+    <div style={{ padding: '8px 28px 56px' }}>
+      <TopBar
+        eyebrow={`Cockpit · ${todayLabel()}`}
+        title={
+          <>
             Panel de Control.{' '}
-            <span className="t-muted" style={{ fontWeight: 400, opacity: 0.7 }}>
+            <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>
               {momSales > 0
-                ? `Crecimiento del ${pctSign(momSales)} detectado.`
-                : 'Inteligencia de activos en tiempo real.'}
+                ? `Crecimiento del ${(momSales * 100).toFixed(1)}% detectado.`
+                : 'Inteligencia de portafolio en tiempo real.'}
             </span>
-          </h1>
-          <div className="row-wrap" style={{ marginTop: 14, gap: 10 }}>
-            <span className="chip ok">
-              <span className="dot" />
-              Ocupación {insights.occupancyPct.toFixed(1)}%
-            </span>
-            {aiChip ? (
-              <span className={`chip ${aiChip.chip}`} title={`Modo IA activo: ${aiMode}`}>
-                <span className="dot" />
-                {aiChip.label}
-              </span>
-            ) : null}
-            {insights.pendingSignatureContracts > 0 ? (
-              <span className="chip info">
-                <span className="dot" />
-                {insights.pendingSignatureContracts} contratos en firma
-              </span>
-            ) : null}
-            {renewalsSoon + expired > 0 ? (
-              <span className="chip warn">
-                <span className="dot" />
-                {renewalsSoon + expired} vencimientos próximos
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <div className="row" style={{ gap: 8, zIndex: 1 }}>
-          <button type="button" className="mq-btn" onClick={() => navigate('/admin/cargas')}>
-            <Upload size={14} /> Cargar ventas
-          </button>
-          <button type="button" className="mq-btn" onClick={() => navigate('/admin/rentas')}>
-            <FileText size={14} /> Contratos
-          </button>
-          <button type="button" className="mq-btn umber" onClick={() => navigate('/admin/activos')}>
-            <Flame size={14} /> Ver heatmap
-          </button>
-        </div>
-      </div>
+          </>
+        }
+        sub={`${insights.tenantSummaries.length} locatarios · ${state.units.length} locales · ${assetSummaries.length} activo${assetSummaries.length === 1 ? '' : 's'}`}
+        right={
+          <>
+            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/cargas')}>
+              <Upload size={14} /> Cargar ventas
+            </button>
+            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/rentas')}>
+              <FileText size={14} /> Contratos
+            </button>
+            <button type="button" className="mq-btn primary sm" onClick={() => navigate('/admin/asistente')}>
+              <Bot size={14} /> Asistente
+            </button>
+          </>
+        }
+      />
 
-      {/* KPI STRIP */}
-      <div className="kpi-grid" style={{ marginBottom: 18 }}>
-        <Kpi
-          label="Ocupación"
+      {/* HERO BENTO: KPI tiles */}
+      <Bento style={{ marginBottom: 20 }}>
+        <KpiTile
+          span={3}
+          eyebrow="Ocupación"
           value={`${insights.occupancyPct.toFixed(1)}%`}
-          trend={`${activeCount} locatarios activos · ${vacancies} vacantes`}
-          sparkData={rentTrend.length > 0 ? rentTrend : [0, 0]}
-          sparkColor="var(--ok)"
+          spark={rentTrend.length > 0 ? rentTrend : [0, 0]}
+          color="var(--mint-deep)"
+          foot={`${activeCount} activos · ${vacancies} vacantes`}
         />
-        <Kpi
-          label="Ventas del mes"
-          value={shortMoney(lastSales || insights.monthlySales)}
-          trend="vs mes anterior"
+        <KpiTile
+          span={3}
+          eyebrow="Ventas del mes"
+          value={formatM(lastSales || insights.monthlySales)}
           delta={momSales}
-          sparkData={salesTrend.length > 0 ? salesTrend : [0, 0]}
-          sparkColor="var(--umber)"
+          spark={salesTrend.length > 0 ? salesTrend : [0, 0]}
+          color="var(--violet)"
+          foot="vs mes anterior"
         />
-        <Kpi
-          label="Renta proyectada"
-          value={shortMoney(insights.monthlyRent)}
-          trend="Fija + variable + GC"
-          sparkData={rentTrend.length > 0 ? rentTrend : [0, 0]}
-          sparkColor="var(--info)"
+        <KpiTile
+          span={2}
+          eyebrow="Renta proyectada"
+          value={formatM(insights.monthlyRent)}
+          spark={rentTrend.length > 0 ? rentTrend : [0, 0]}
+          color="var(--sky)"
+          foot="Fija + variable + GC"
         />
-        <Kpi
-          label="Ventas / m²"
-          value={shortMoney(avgSalesPerM2)}
-          trend="Promedio portafolio"
-          sparkData={salesTrend.length > 0 ? salesTrend : [0, 0]}
-          sparkColor="var(--warn)"
+        <KpiTile
+          span={2}
+          eyebrow="Ventas / m²"
+          value={formatM(avgSalesPerM2)}
+          spark={salesTrend.length > 0 ? salesTrend : [0, 0]}
+          color="var(--amber)"
+          foot="Promedio portafolio"
         />
-        <div
-          role="button"
-          tabIndex={0}
+        <KpiTile
+          span={2}
+          eyebrow="Salud promedio"
+          value={`${avgHealth}/100`}
+          color="var(--mint)"
+          foot={`${healthAbove90} ≥90 · ${healthBelow65} <65 · click`}
           onClick={() => setHealthLegendOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              setHealthLegendOpen(true);
-            }
-          }}
-          title="Cómo se calcula la salud promedio"
-          style={{ cursor: 'pointer' }}
-        >
-          <Kpi
-            label="Salud promedio"
-            value={String(avgHealth)}
-            unit="/100"
-            trend={`${healthAbove90} ≥90 · ${healthBelow65} <65 · click para detalle`}
-            sparkData={salesTrend.length > 0 ? salesTrend.map(() => avgHealth) : [0, 0]}
-            sparkColor="var(--ok)"
-          />
-        </div>
-      </div>
+        />
+      </Bento>
 
-      {/* PORTFOLIO COMPARISON STRIP — only when managing multiple assets */}
-      {assetSummaries.length > 1 ? (
-        <div className="mq-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
-          <div className="mq-card-hd">
-            <div>
-              <div className="t-eyebrow">Comparador · portafolio</div>
-              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
-                {portfolioStats.assetCount} activos · {shortMoney(portfolioStats.monthlySales)} ventas agregadas
-              </h3>
-            </div>
-            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
-              Detalle
-            </button>
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${Math.min(assetSummaries.length, 4)}, minmax(0, 1fr))`,
-              gap: 1,
-              background: 'var(--line)',
-            }}
-          >
-            {assetSummaries.map((asset) => (
-              <AssetCompareCell
-                key={asset.id}
-                asset={asset}
-                active={asset.id === activeAssetId}
-                onClick={() => {
-                  if (asset.id !== activeAssetId) {
-                    actions.switchAsset(asset.id);
-                  } else {
-                    navigate('/admin/activos');
-                  }
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* HEATMAP HERO */}
-      <div className="glass-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
-        <div className="mq-card-hd">
-          <div>
-            <div className="t-eyebrow">Mapa operativo</div>
-            <h3
-              style={{
-                margin: '4px 0 2px',
-                fontFamily: 'var(--display)',
-                fontSize: 16,
-                fontWeight: 600,
-                color: 'var(--ink-1)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Heatmap de ventas por m² · {state.asset?.name ?? 'Activo'}
-            </h3>
-            <div className="t-muted" style={{ fontSize: 12.5 }}>
-              Click en un local para ver el detalle. Intensidad proporcional al rendimiento vs promedio.
-            </div>
-          </div>
-          <div className="row" style={{ gap: 6 }}>
-            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
-              <ExternalLink size={13} /> Expandir
-            </button>
-          </div>
-        </div>
-        <div style={{ padding: 18 }}>
-          <InteractiveMap />
-        </div>
-        <div className="heat-legend">
-          <span className="t-eyebrow">Ventas / m²</span>
-          <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-            &lt; {shortMoney(avgSalesPerM2 * 0.55)}
-          </span>
-          <div className="heat-ramp" />
-          <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-            &gt; {shortMoney(avgSalesPerM2 * 1.35)}
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 11 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                background: 'var(--heat-vacant)',
-                border: '1px solid var(--line)',
-                borderRadius: 2,
-              }}
-            />
-            Vacante
-          </span>
-          <div className="row" style={{ gap: 14, marginLeft: 'auto' }}>
-            <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-              {insights.totalUnits} locales
-            </span>
-            <span className="t-mono" style={{ fontSize: 11, color: 'var(--ink-3) ' }}>
-              · {vacancies} vacantes
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* TWO COLUMN ROW */}
-      <div className="mq-grid-2" style={{ marginBottom: 18 }}>
-        {/* Sales trend */}
-        <div className="glass-card">
-          <div className="mq-card-hd">
-            <div>
-              <div className="t-eyebrow">Venta mensual</div>
-              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 16, fontWeight: 600 }}>
-                {formatCurrency(lastSales || insights.monthlySales)}{' '}
-                {momSales !== 0 ? (
-                  <span
-                    className="t-mono"
-                    style={{
-                      fontSize: 12,
-                      color: momSales > 0 ? 'var(--ok)' : 'var(--danger)',
-                      fontWeight: 400,
-                      marginLeft: 6,
-                    }}
-                  >
-                    {momSales > 0 ? '▲' : '▼'} {pctSign(momSales)}
-                  </span>
-                ) : null}
-              </h3>
-            </div>
-            <div className="seg" role="tablist" aria-label="Rango de ventas">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={salesRange === '12M'}
-                className={salesRange === '12M' ? 'on' : undefined}
-                onClick={() => setSalesRange('12M')}
-              >
-                12M
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={salesRange === 'YTD'}
-                className={salesRange === 'YTD' ? 'on' : undefined}
-                onClick={() => setSalesRange('YTD')}
-              >
-                YTD
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={salesRange === 'QTD'}
-                className={salesRange === 'QTD' ? 'on' : undefined}
-                onClick={() => setSalesRange('QTD')}
-              >
-                QTD
+      {/* MIDDLE: Asset comparison (8) + alerts (4) — comparison hidden when no assets */}
+      <Bento style={{ marginBottom: 20 }}>
+        {assetSummaries.length > 0 ? (
+          <div className="mq-card span-8" style={{ padding: 0 }}>
+            <div className="mq-card-hd">
+              <div>
+                <div className="mq-h-eyebrow">Comparador · portafolio</div>
+                <div className="mq-h2" style={{ marginTop: 6 }}>
+                  {portfolioStats.assetCount} activo{portfolioStats.assetCount === 1 ? '' : 's'} ·{' '}
+                  {formatCurrency(portfolioStats.monthlySales)}
+                </div>
+              </div>
+              <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
+                Detalle <ArrowUpRight size={13} />
               </button>
             </div>
-          </div>
-          <div style={{ padding: '8px 10px 6px' }}>
-            {salesTrend.length > 0 ? (
-              <AreaChart data={salesTrend} labels={salesLabels} format={shortMoney} stroke="var(--umber)" />
-            ) : (
-              <div className="t-muted" style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-                Aún no hay ventas registradas.
-              </div>
-            )}
-          </div>
-          <div
-            style={{
-              padding: '10px 18px 14px',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4,1fr)',
-              gap: 14,
-              borderTop: '1px solid var(--line)',
-            }}
-          >
-            <MiniStat label="Manual" val={shortMoney(salesBySource.manual)} color="var(--ink-1)" />
-            <MiniStat label="OCR" val={shortMoney(salesBySource.ocr)} color="var(--umber)" />
-            <MiniStat label="Fiscal" val={shortMoney(salesBySource.fiscal)} color="var(--ok)" />
-            <MiniStat label="POS" val={shortMoney(salesBySource.pos)} color="var(--info)" />
-          </div>
-        </div>
-
-        {/* Occupancy + watchlist */}
-        <div className="glass-card">
-          <div className="mq-card-hd">
-            <div>
-              <div className="t-eyebrow">Ocupación</div>
-              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 16, fontWeight: 600 }}>
-                {insights.occupancyPct.toFixed(1)}% del GLA
-              </h3>
-            </div>
-            <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
-              Detalle
-            </button>
-          </div>
-          <div className="mq-card-bd" style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            <Donut value={isFinite(occupancyRatio) ? occupancyRatio : 0} size={120} stroke={14} color="var(--umber)" />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span className="t-muted" style={{ fontSize: 12 }}>
-                  Ocupado
-                </span>
-                <span className="t-num">{new Intl.NumberFormat('es-CL').format(Math.round(occupiedM2))} m²</span>
-              </div>
-              <div className="mq-bar ok">
-                <span style={{ width: `${Math.min(occupancyRatio * 100, 100).toFixed(1)}%` }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0 8px' }}>
-                <span className="t-muted" style={{ fontSize: 12 }}>
-                  Vacante
-                </span>
-                <span className="t-num">{new Intl.NumberFormat('es-CL').format(Math.round(vacantM2))} m²</span>
-              </div>
-              <div className="mq-bar warn">
-                <span style={{ width: `${Math.min((vacantM2 / totalM2) * 100, 100).toFixed(1)}%` }} />
-              </div>
-              <div style={{ marginTop: 14, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-                {state.prospects.length} prospecto{state.prospects.length === 1 ? '' : 's'} activos para {vacancies}{' '}
-                local{vacancies === 1 ? '' : 'es'} vacante{vacancies === 1 ? '' : 's'}.
-              </div>
+            <div style={{ padding: '4px 12px 14px' }}>
+              {assetSummaries.map((asset, i) => (
+                <AssetRow
+                  key={asset.id}
+                  asset={asset}
+                  active={asset.id === activeAssetId}
+                  index={i}
+                  trend={salesTrend}
+                  onClick={() => {
+                    if (asset.id === activeAssetId) navigate('/admin/activos');
+                    else actions.switchAsset(asset.id);
+                  }}
+                />
+              ))}
             </div>
           </div>
-        </div>
-      </div>
+        ) : null}
 
-      {/* THREE COLUMN ROW */}
-      <div className="mq-grid-3">
-        {/* top performers */}
-        <div className="glass-card">
+        <div className={`mq-card ${assetSummaries.length > 0 ? 'span-4' : 'span-12'}`} style={{ padding: 0 }}>
           <div className="mq-card-hd">
             <div>
-              <div className="t-eyebrow">Top ventas / m²</div>
-              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
-                Rendimiento líder
-              </h3>
-            </div>
-            <button type="button" className="mq-btn ghost sm" onClick={() => navigate('/admin/locatarios')}>
-              Todos
-            </button>
-          </div>
-          <div style={{ padding: '4px 6px' }}>
-            {topTenants.length === 0 ? (
-              <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
-                Aún no hay ventas por locatario.
-              </div>
-            ) : (
-              topTenants.map((t, i) => (
-                <TopRow key={t.id} tenant={t} index={i} onClick={() => navigate(`/admin/locatarios/${t.id}`)} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* watchlist */}
-        <div className="glass-card">
-          <div className="mq-card-hd">
-            <div>
-              <div className="t-eyebrow">Watchlist · salud</div>
-              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
-                Requieren atención
-              </h3>
-            </div>
-            <span className="chip warn">
-              <span className="dot" />
-              {watchlist.length} casos
-            </span>
-          </div>
-          <div style={{ padding: '4px 6px' }}>
-            {watchlist.length === 0 ? (
-              <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
-                Ningún locatario por debajo del umbral.
-              </div>
-            ) : (
-              watchlist.map((t, i) => (
-                <WatchRow key={t.id} tenant={t} index={i} onClick={() => navigate(`/admin/locatarios/${t.id}`)} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* alerts feed */}
-        <div className="glass-card">
-          <div className="mq-card-hd">
-            <div>
-              <div className="t-eyebrow">Actividad · hoy</div>
-              <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+              <div className="mq-h-eyebrow">Actividad · hoy</div>
+              <div className="mq-h2" style={{ marginTop: 6 }}>
                 Feed operativo
-              </h3>
+              </div>
             </div>
             <button type="button" className="mq-btn ghost sm" onClick={() => navigate('/admin/alertas')}>
               Ver todo
             </button>
           </div>
-          <div style={{ padding: '4px 6px' }}>
+          <div style={{ padding: '4px 6px 12px' }}>
             {insights.alerts.length === 0 ? (
-              <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
-                No hay alertas activas.
-              </div>
+              <div style={{ padding: 20, color: 'var(--ink-3)', fontSize: 12.5 }}>No hay alertas activas.</div>
             ) : (
-              insights.alerts.slice(0, 5).map((a, i) => <AlertRow key={a.id ?? i} alert={a} index={i} />)
+              insights.alerts.slice(0, 6).map((a) => <AlertRow key={a.id} alert={a} />)
             )}
           </div>
         </div>
-      </div>
+      </Bento>
 
-      {/* RENEWAL QUEUE — contracts ending within 90 days */}
-      <div className="glass-card" style={{ marginTop: 16 }}>
+      {/* BOTTOM: Heatmap (5) + Expiry River (4) + AI Task (3) */}
+      <Bento style={{ marginBottom: 20 }}>
+        <div className="span-5">
+          {heatmapData ? (
+            <CategoryHeatmap months={heatmapData.months} categories={heatmapData.categories} />
+          ) : (
+            <div className="mq-card" style={{ padding: 16, color: 'var(--ink-3)', fontSize: 12.5 }}>
+              Sin ventas para construir el mapa de calor.
+            </div>
+          )}
+        </div>
+        <div className="span-4">
+          <ExpiryRiver counts={expiryBuckets} />
+        </div>
+        <div className="span-3">
+          <AiTask
+            eyebrow="Asistente IA"
+            title={
+              <>
+                Pregunta a tu <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>cockpit</i>.
+              </>
+            }
+            body="¿Qué locatarios cayeron 20% este mes? ¿Cuál es el ROI esperado del próximo refit? El asistente entiende tu portafolio."
+            cta={
+              <button
+                type="button"
+                onClick={() => navigate('/admin/asistente')}
+                className="mq-btn violet sm"
+                style={{ marginTop: 8 }}
+              >
+                <Sparkles size={13} /> Abrir asistente
+              </button>
+            }
+          />
+        </div>
+      </Bento>
+
+      {/* TWO COLUMN: Top performers + Watchlist */}
+      <Bento style={{ marginBottom: 20 }}>
+        <div className="mq-card span-6" style={{ padding: 0 }}>
+          <div className="mq-card-hd">
+            <div>
+              <div className="mq-h-eyebrow">Top ventas / m²</div>
+              <div className="mq-h2" style={{ marginTop: 6 }}>
+                Rendimiento líder
+              </div>
+            </div>
+            <button type="button" className="mq-btn ghost sm" onClick={() => navigate('/admin/locatarios')}>
+              Todos
+            </button>
+          </div>
+          <div style={{ padding: '4px 6px 14px' }}>
+            {topTenants.length === 0 ? (
+              <div style={{ padding: 20, color: 'var(--ink-3)', fontSize: 12.5 }}>Aún no hay ventas por locatario.</div>
+            ) : (
+              topTenants.map((t, i) => <TopRow key={t.id} tenant={t} index={i} onClick={() => navigate(`/admin/locatarios/${t.id}`)} />)
+            )}
+          </div>
+        </div>
+
+        <div className="mq-card span-6" style={{ padding: 0 }}>
+          <div className="mq-card-hd">
+            <div>
+              <div className="mq-h-eyebrow">Watchlist · salud</div>
+              <div className="mq-h2" style={{ marginTop: 6 }}>
+                Requieren atención
+              </div>
+            </div>
+            <Pill tone={watchlist.length > 0 ? 'amber' : 'mint'}>{watchlist.length} casos</Pill>
+          </div>
+          <div style={{ padding: '4px 6px 14px' }}>
+            {watchlist.length === 0 ? (
+              <div style={{ padding: 20, color: 'var(--ink-3)', fontSize: 12.5 }}>Ningún locatario por debajo del umbral.</div>
+            ) : (
+              watchlist.map((t, i) => <WatchRow key={t.id} tenant={t} index={i} onClick={() => navigate(`/admin/locatarios/${t.id}`)} />)
+            )}
+          </div>
+        </div>
+      </Bento>
+
+      {/* RENEWALS — keep the existing renewal queue widget */}
+      <div className="mq-card" style={{ padding: 0 }}>
         <div className="mq-card-hd">
           <div>
-            <div className="t-eyebrow">Cola de renovaciones · 90 días</div>
-            <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+            <div className="mq-h-eyebrow">Cola de renovaciones · 90 días</div>
+            <div className="mq-h2" style={{ marginTop: 6 }}>
               Contratos por renovar
-            </h3>
+            </div>
           </div>
-          <span className="chip warn">
-            <span className="dot" />
+          <Pill tone={renewalQueue.length > 0 ? 'amber' : 'mint'}>
             {renewalQueue.length} contrato{renewalQueue.length === 1 ? '' : 's'}
-          </span>
+          </Pill>
         </div>
-        <div style={{ padding: '4px 6px' }}>
+        <div style={{ padding: '4px 6px 14px' }}>
           {renewalQueue.length === 0 ? (
-            <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
+            <div style={{ padding: 20, color: 'var(--ink-3)', fontSize: 12.5 }}>
               No hay contratos por vencer en los próximos 90 días.
             </div>
           ) : (
@@ -645,107 +380,122 @@ export function AdminDashboard() {
         </div>
       </div>
 
+      {/* hidden references to keep old derived state typed without unused-locals */}
+      <span hidden>{occupiedM2}/{vacantM2}/{renewalsSoon}/{expired}</span>
+
       <HealthLegendModal open={healthLegendOpen} onClose={() => setHealthLegendOpen(false)} />
     </div>
   );
 }
 
-function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  if (!open) return null;
-  const checks = [
-    { key: 'healthPagoAlDia', label: 'Paga al día', detail: 'El locatario está al día con la facturación de renta y gastos comunes.' },
-    { key: 'healthEntregaVentas', label: 'Entrega ventas al día', detail: 'Reporta ventas mensualmente sin atrasos vs. el corte del activo.' },
-    { key: 'healthNivelVenta', label: 'Nivel de venta aceptable', detail: 'Las ventas / m² están dentro del rango esperado para su rubro.' },
-    { key: 'healthNivelRenta', label: 'Nivel de renta aceptable', detail: 'El costo de ocupación se mantiene bajo el umbral acordado (típicamente <20%).' },
-    { key: 'healthPercepcionAdmin', label: 'Percepción del administrador', detail: 'Evaluación cualitativa: trato, cumplimiento operativo, presentación del local.' },
-  ];
-  const tiers = [
-    { score: 0, label: '0/100 — sin checks marcados' },
-    { score: 20, label: '20/100 — 1 de 5' },
-    { score: 40, label: '40/100 — 2 de 5' },
-    { score: 60, label: '60/100 — 3 de 5' },
-    { score: 80, label: '80/100 — 4 de 5' },
-    { score: 100, label: '100/100 — los 5 checks' },
-  ];
+function AssetRow({
+  asset,
+  active,
+  index,
+  trend,
+  onClick,
+}: {
+  asset: PortfolioAssetSummary;
+  active: boolean;
+  index: number;
+  trend: number[];
+  onClick: () => void;
+}) {
   return (
     <div
-      onClick={onClose}
+      onClick={onClick}
       style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',
+        padding: '12px 14px',
         display: 'grid',
-        placeItems: 'center',
-        zIndex: 100,
-        padding: 24,
+        gridTemplateColumns: '36px 1.5fr 1fr 1fr 80px 22px',
+        gap: 12,
+        alignItems: 'center',
+        cursor: 'pointer',
+        borderTop: index === 0 ? 0 : '1px solid var(--hairline)',
+        background: active ? 'var(--surface-2)' : 'transparent',
+        borderRadius: index === 0 ? 0 : 0,
       }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Cómo se calcula la salud del locatario"
-        onClick={(event) => event.stopPropagation()}
-        className="mq-card"
-        style={{ width: 520, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', padding: 24 }}
+      <span
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          display: 'grid',
+          placeItems: 'center',
+          fontFamily: 'var(--font-display)',
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--ink-1)',
+          background: active
+            ? 'conic-gradient(from 220deg at 50% 50%, var(--mint-soft), var(--violet-soft))'
+            : 'var(--surface-3)',
+        }}
       >
-        <div className="t-eyebrow">Salud del locatario</div>
-        <h2 style={{ margin: '6px 0 4px', fontFamily: 'var(--display)', fontSize: 18, fontWeight: 700 }}>
-          ¿Cómo se calcula?
-        </h2>
-        <p className="t-muted" style={{ fontSize: 13, marginBottom: 14 }}>
-          La salud es la cantidad de checks marcados (0 a 5) por contrato, normalizada a /100.
-          El score por contrato sale de los 5 ítems editables en el editor:
-        </p>
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {checks.map((check) => (
-            <li
-              key={check.key}
-              style={{
-                border: '1px solid var(--line)',
-                borderRadius: 10,
-                padding: '10px 12px',
-                background: 'var(--paper-2)',
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{check.label}</div>
-              <div className="t-muted" style={{ fontSize: 12, marginTop: 2 }}>{check.detail}</div>
-            </li>
-          ))}
-        </ul>
-        <div className="t-eyebrow" style={{ marginTop: 16 }}>Mapeo a /100</div>
-        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {tiers.map((tier) => (
-            <span
-              key={tier.score}
-              style={{
-                fontSize: 11,
-                padding: '4px 8px',
-                borderRadius: 999,
-                border: '1px solid var(--line)',
-                background: 'var(--card)',
-              }}
-            >
-              {tier.label}
-            </span>
-          ))}
+        {(asset.name || 'A').charAt(0).toUpperCase()}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
+          {asset.name}
         </div>
-        <div style={{ marginTop: 16, textAlign: 'right' }}>
-          <button type="button" className="mq-btn umber" onClick={onClose}>Entendido</button>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+          {asset.city ?? '—'} · {asset.totalUnits} locales
         </div>
       </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ height: 4, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${Math.min(100, asset.occupancyPct).toFixed(1)}%`,
+              background: 'var(--mint-deep)',
+            }}
+          />
+        </div>
+        <div className="mq-mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
+          {asset.occupancyPct.toFixed(1)}% ocupación
+        </div>
+      </div>
+      <Spark values={trend} color="var(--violet)" height={28} fill />
+      <div style={{ textAlign: 'right' }}>
+        <div className="mq-mono" style={{ fontSize: 12.5, color: 'var(--ink-1)', fontWeight: 600 }}>
+          {formatM(asset.monthlySales)}
+        </div>
+        <div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>ventas mes</div>
+      </div>
+      <ChevronRight size={16} style={{ color: 'var(--ink-3)' }} />
     </div>
   );
 }
 
-function MiniStat({ label, val, color }: { label: string; val: string; color: string }) {
+function AlertRow({ alert }: { alert: AlertItem }) {
+  const tone =
+    alert.type === 'critical' ? 'var(--coral)' : alert.type === 'warning' ? 'var(--amber)' : 'var(--sky)';
+  const soft =
+    alert.type === 'critical' ? 'var(--coral-soft)' : alert.type === 'warning' ? 'var(--amber-soft)' : 'var(--sky-soft)';
   return (
-    <div>
-      <div className="row" style={{ gap: 6, fontSize: 11, color: 'var(--ink-3)' }}>
-        <span style={{ width: 6, height: 6, borderRadius: 999, background: color }} />
-        {label}
-      </div>
-      <div className="t-num" style={{ fontSize: 14, marginTop: 4 }}>
-        {val}
+    <div style={{ padding: '10px 12px', display: 'flex', gap: 10, borderTop: '1px solid var(--hairline)' }}>
+      <span
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          display: 'grid',
+          placeItems: 'center',
+          background: soft,
+          color: tone,
+          flexShrink: 0,
+          fontSize: 12,
+          fontWeight: 700,
+        }}
+      >
+        {alert.type === 'critical' ? '!' : alert.type === 'warning' ? '⚠' : 'i'}
+      </span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-1)' }} className="truncate">
+          {alert.title}
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.4 }}>{alert.description}</div>
       </div>
     </div>
   );
@@ -754,16 +504,17 @@ function MiniStat({ label, val, color }: { label: string; val: string; color: st
 function TopRow({ tenant, index, onClick }: { tenant: TenantSummary; index: number; onClick: () => void }) {
   return (
     <div
-      className="row"
-      style={{
-        padding: '9px 12px',
-        gap: 10,
-        borderTop: index === 0 ? 0 : '1px solid var(--line)',
-        cursor: 'pointer',
-      }}
       onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 14px',
+        cursor: 'pointer',
+        borderTop: index === 0 ? 0 : '1px solid var(--hairline)',
+      }}
     >
-      <span className="t-mono t-dim" style={{ width: 16, fontSize: 11 }}>
+      <span className="mq-mono" style={{ width: 18, fontSize: 11, color: 'var(--ink-4)' }}>
         #{index + 1}
       </span>
       <TenantLogo name={tenant.storeName} seed={tenant.id} size="sm" />
@@ -771,24 +522,15 @@ function TopRow({ tenant, index, onClick }: { tenant: TenantSummary; index: numb
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
           {tenant.storeName}
         </div>
-        <div className="t-dim" style={{ fontSize: 11 }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
           {tenant.category} · {tenant.localCodes.join(', ') || '—'}
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
-        <div className="t-num" style={{ fontSize: 12.5 }}>
-          {shortMoney(tenant.salesPerM2)}
-          <span className="t-dim" style={{ fontWeight: 400 }}>
-            /m²
-          </span>
+        <div className="mq-mono" style={{ fontSize: 12.5, color: 'var(--ink-1)' }}>
+          {formatM(tenant.salesPerM2)}/m²
         </div>
-        {tenant.salesPrevious > 0 ? (
-          <Delta v={(tenant.salesCurrent - tenant.salesPrevious) / tenant.salesPrevious} />
-        ) : (
-          <span className="t-dim t-mono" style={{ fontSize: 11 }}>
-            —
-          </span>
-        )}
+        {tenant.salesPrevious > 0 ? <Delta v={(tenant.salesCurrent - tenant.salesPrevious) / tenant.salesPrevious} /> : null}
       </div>
     </div>
   );
@@ -797,21 +539,22 @@ function TopRow({ tenant, index, onClick }: { tenant: TenantSummary; index: numb
 function WatchRow({ tenant, index, onClick }: { tenant: TenantSummary; index: number; onClick: () => void }) {
   return (
     <div
-      className="row"
-      style={{
-        padding: '9px 12px',
-        gap: 10,
-        borderTop: index === 0 ? 0 : '1px solid var(--line)',
-        cursor: 'pointer',
-      }}
       onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 14px',
+        cursor: 'pointer',
+        borderTop: index === 0 ? 0 : '1px solid var(--hairline)',
+      }}
     >
-      <HealthRing value={tenant.healthScorePct} size={34} stroke={3} />
+      <HealthRing value={tenant.healthScorePct} size={36} stroke={3} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
           {tenant.storeName}
         </div>
-        <div className="t-dim" style={{ fontSize: 11 }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
           {tenant.category} · {tenant.localCodes.join(', ') || '—'}
         </div>
       </div>
@@ -831,150 +574,148 @@ function RenewalRow({
   index: number;
   onClick: () => void;
 }) {
-  const urgency: 'critical' | 'warn' | 'info' =
-    daysToEnd <= 30 ? 'critical' : daysToEnd <= 60 ? 'warn' : 'info';
-  const chipClass = urgency === 'critical' ? 'chip danger' : urgency === 'warn' ? 'chip warn' : 'chip info';
+  const tone: 'mint' | 'amber' | 'coral' = daysToEnd <= 30 ? 'coral' : daysToEnd <= 60 ? 'amber' : 'mint';
   return (
     <div
-      className="row"
-      style={{
-        padding: '9px 12px',
-        gap: 10,
-        borderTop: index === 0 ? 0 : '1px solid var(--line)',
-        cursor: 'pointer',
-      }}
       onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 14px',
+        cursor: 'pointer',
+        borderTop: index === 0 ? 0 : '1px solid var(--hairline)',
+      }}
     >
-      <Calendar size={18} style={{ color: 'var(--ink-3)' }} />
+      <span
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 999,
+          background: tone === 'coral' ? 'var(--coral-soft)' : tone === 'amber' ? 'var(--amber-soft)' : 'var(--mint-soft)',
+          color: tone === 'coral' ? 'var(--coral)' : tone === 'amber' ? 'var(--amber)' : 'var(--mint-deep)',
+          fontSize: 11,
+          display: 'grid',
+          placeItems: 'center',
+          fontWeight: 700,
+        }}
+      >
+        ◷
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
           {tenant.storeName}
         </div>
-        <div className="t-dim" style={{ fontSize: 11 }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
           {tenant.category} · termina {tenant.endDate}
         </div>
       </div>
-      <span className={chipClass}>
-        <span className="dot" />
-        {daysToEnd === 0 ? 'hoy' : `${daysToEnd} día${daysToEnd === 1 ? '' : 's'}`}
-      </span>
+      <Pill tone={tone}>{daysToEnd === 0 ? 'hoy' : `${daysToEnd} día${daysToEnd === 1 ? '' : 's'}`}</Pill>
     </div>
   );
 }
 
-const ALERT_ICON: Record<AlertItem['type'], { I: LucideIcon; bg: string; fg: string }> = {
-  critical: { I: TrendingDown, bg: 'var(--danger-soft)', fg: 'var(--danger)' },
-  warning: { I: AlertTriangle, bg: 'var(--warn-soft)', fg: 'var(--warn)' },
-  info: { I: Sparkles, bg: 'var(--info-soft)', fg: 'var(--info)' },
-};
-
-const ALERT_BY_HINT: { match: RegExp; I: LucideIcon }[] = [
-  { match: /vencim|renov|contrato/i, I: Calendar },
-  { match: /pos|sync|conector/i, I: Plug2 },
-  { match: /venta/i, I: Receipt },
-  { match: /ia|autofill|moonshot/i, I: Sparkles },
-];
-
-function AlertRow({ alert, index }: { alert: AlertItem; index: number }) {
-  const style = ALERT_ICON[alert.type] ?? ALERT_ICON.info;
-  const hinted = ALERT_BY_HINT.find((h) => h.match.test(`${alert.title} ${alert.description}`));
-  const IconCmp = hinted?.I ?? style.I;
+function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  const checks = [
+    { label: 'Paga al día', detail: 'El locatario está al día con renta y gastos comunes.' },
+    { label: 'Entrega ventas al día', detail: 'Reporta ventas mensualmente sin atrasos.' },
+    { label: 'Nivel de venta aceptable', detail: 'Las ventas / m² están dentro del rango esperado.' },
+    { label: 'Nivel de renta aceptable', detail: 'El costo de ocupación se mantiene bajo el umbral.' },
+    { label: 'Percepción del administrador', detail: 'Trato, cumplimiento operativo, presentación del local.' },
+  ];
+  const tiers = [
+    { score: 0, label: 'E · 0/100' },
+    { score: 20, label: 'D · 20/100' },
+    { score: 40, label: 'D · 40/100' },
+    { score: 60, label: 'C · 60/100' },
+    { score: 80, label: 'B · 80/100' },
+    { score: 100, label: 'A · 100/100' },
+  ];
+  const bucketLabels: Record<string, string> = { A: '≥ 88', B: '76–87', C: '60–75', D: '44–59', E: '< 44' };
+  void healthBucket;
   return (
     <div
-      className="row"
+      onClick={onClose}
       style={{
-        padding: '11px 12px',
-        gap: 10,
-        alignItems: 'flex-start',
-        borderTop: index === 0 ? 0 : '1px solid var(--line)',
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'grid',
+        placeItems: 'center',
+        zIndex: 100,
+        padding: 24,
       }}
     >
       <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          display: 'grid',
-          placeItems: 'center',
-          background: style.bg,
-          color: style.fg,
-          flex: 'none',
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cómo se calcula la salud del locatario"
+        onClick={(event) => event.stopPropagation()}
+        className="mq-card"
+        style={{ width: 540, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', padding: 24 }}
       >
-        <IconCmp size={14} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }}>{alert.title}</div>
-        <div className="t-dim" style={{ fontSize: 11.5, marginTop: 2 }}>
-          {alert.description}
+        <div className="mq-h-eyebrow">Salud del locatario</div>
+        <div className="mq-h2" style={{ marginTop: 8 }}>
+          ¿Cómo se calcula?
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 8 }}>
+          La salud es la cantidad de checks marcados (0 a 5) por contrato, normalizada a /100. Los buckets A–E
+          se mapean por umbrales:
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginTop: 12 }}>
+          {(['A', 'B', 'C', 'D', 'E'] as const).map((k) => (
+            <div
+              key={k}
+              style={{
+                padding: 10,
+                borderRadius: 10,
+                background: 'var(--surface-2)',
+                textAlign: 'center',
+                fontFamily: 'var(--font-display)',
+              }}
+            >
+              <div style={{ fontSize: 22, color: 'var(--ink-1)' }}>{k}</div>
+              <div className="mq-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                {bucketLabels[k]}
+              </div>
+            </div>
+          ))}
+        </div>
+        <ul style={{ margin: '14px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {checks.map((c) => (
+            <li key={c.label} style={{ border: '1px solid var(--hairline)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{c.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{c.detail}</div>
+            </li>
+          ))}
+        </ul>
+        <div className="mq-h-eyebrow" style={{ marginTop: 16 }}>
+          Mapeo a /100
+        </div>
+        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {tiers.map((tier) => (
+            <span
+              key={tier.score}
+              style={{
+                fontSize: 11,
+                padding: '4px 8px',
+                borderRadius: 999,
+                border: '1px solid var(--hairline)',
+                background: 'var(--surface)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {tier.label}
+            </span>
+          ))}
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'right' }}>
+          <button type="button" className="mq-btn mint" onClick={onClose}>
+            Entendido
+          </button>
         </div>
       </div>
-      <ArrowUpRight size={14} style={{ color: 'var(--ink-4)', flex: 'none' }} />
     </div>
   );
 }
-
-function AssetCompareCell({
-  asset,
-  active,
-  onClick,
-}: {
-  asset: PortfolioAssetSummary;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const ratio = asset.totalUnits > 0 ? asset.occupiedUnits / asset.totalUnits : 0;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: '14px 16px',
-        textAlign: 'left',
-        background: active ? 'var(--umber-wash)' : 'var(--card)',
-        border: 0,
-        borderLeft: active ? '2px solid var(--umber)' : '2px solid transparent',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      }}
-    >
-      <div className="row" style={{ gap: 10, justifyContent: 'space-between' }}>
-        <div style={{ minWidth: 0 }}>
-          <div
-            className="truncate"
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: active ? 'var(--umber-ink)' : 'var(--ink-1)',
-            }}
-          >
-            {asset.name}
-          </div>
-          <div className="t-dim truncate" style={{ fontSize: 11 }}>
-            {asset.city ?? '—'}
-          </div>
-        </div>
-        <Donut value={ratio} size={42} stroke={5} color={active ? 'var(--umber)' : 'var(--ink-2)'} />
-      </div>
-      <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-        <span className="t-mono" style={{ fontSize: 11.5, color: 'var(--ink-1)' }}>
-          {asset.occupancyPct.toFixed(1)}%
-          <span className="t-dim" style={{ fontWeight: 400 }}> ocup.</span>
-        </span>
-        <span className="t-mono" style={{ fontSize: 11.5, color: 'var(--ink-1)' }}>
-          {shortMoney(asset.monthlySales)}
-          <span className="t-dim" style={{ fontWeight: 400 }}> ventas</span>
-        </span>
-        {asset.alertCount > 0 ? (
-          <span className="chip warn" style={{ fontSize: 10.5, padding: '1px 8px' }}>
-            <span className="dot" />
-            {asset.alertCount}
-          </span>
-        ) : null}
-      </div>
-    </button>
-  );
-}
-

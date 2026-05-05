@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Bolt,
+  Bot,
   Calculator,
   ChevronDown,
   Database,
@@ -17,7 +18,6 @@ import {
   Sparkles,
   Store,
   Users,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -60,14 +60,14 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     () =>
       isAdmin
         ? [
-            { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-            { to: '/admin/activos', label: 'Portafolio activos', icon: Map, tag: assetSummaries.length || null },
+            { to: '/admin/dashboard', label: 'Cockpit', icon: LayoutDashboard },
+            { to: '/admin/activos', label: 'Portafolio', icon: Map, tag: assetSummaries.length || null },
             { to: '/admin/locatarios', label: 'Locatarios', icon: Users, tag: insights.tenantSummaries.length || null },
-            { to: '/admin/rentas', label: 'Rentas y contratos', icon: FileArchive },
-            { to: '/admin/cargas', label: 'Carga de datos', icon: ReceiptText },
+            { to: '/admin/rentas', label: 'Rentas', icon: FileArchive },
+            { to: '/admin/cargas', label: 'Cargas', icon: ReceiptText },
           ]
         : [
-            { to: '/locatario/dashboard', label: 'Mi dashboard', icon: LayoutDashboard },
+            { to: '/locatario/dashboard', label: 'Mi panel', icon: LayoutDashboard },
             { to: '/locatario/contrato', label: 'Mi contrato', icon: FileArchive },
             { to: '/locatario/ventas', label: 'Mis ventas', icon: ReceiptText },
           ],
@@ -79,9 +79,10 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       isAdmin
         ? [
             { to: '/admin/alertas', label: 'Alertas', icon: AlertTriangle, tag: insights.alerts.length || null },
-            { to: '/admin/planeacion', label: 'Presupuesto', icon: Database },
-            { to: '/admin/simulador', label: 'Simulador renta', icon: Calculator },
-            { to: '/admin/ecosistema', label: 'Prospectos', icon: Store },
+            { to: '/admin/planeacion', label: 'Planeación', icon: Database },
+            { to: '/admin/simulador', label: 'Simulador', icon: Calculator },
+            { to: '/admin/ecosistema', label: 'Ecosistema', icon: Store },
+            { to: '/admin/asistente', label: 'Asistente IA', icon: Bot },
             { to: '/admin/configuracion', label: 'Configuración', icon: Settings },
           ]
         : [],
@@ -108,15 +109,62 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       >
         {/* Brand */}
         <div className="mq-brand" style={{ padding: '24px 20px 20px' }}>
-          <div style={{ position: 'relative', width: 42, height: 42, flexShrink: 0 }}>
-            <div className="absolute inset-0 rounded-xl bg-orange-500/20 blur-md" />
-            <div className="relative flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg ring-1 ring-white/20">
-              <Zap size={22} fill="white" className="text-white" />
-            </div>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              flexShrink: 0,
+              borderRadius: 10,
+              background:
+                'conic-gradient(from 220deg at 50% 50%, var(--mint-deep), var(--violet-deep), var(--amber), var(--mint-deep))',
+              position: 'relative',
+              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                inset: 4,
+                borderRadius: 7,
+                background: 'var(--surface)',
+                display: 'grid',
+                placeItems: 'center',
+                fontFamily: 'var(--font-display)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--ink-1)',
+              }}
+            >
+              M
+            </span>
           </div>
           <div style={{ marginLeft: 12 }}>
-            <div className="title" style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1 }}>MallQ</div>
-            <div className="sub" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', opacity: 0.5, marginTop: 4 }}>Analytics</div>
+            <div
+              className="title"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 22,
+                fontWeight: 400,
+                letterSpacing: '-0.02em',
+                lineHeight: 1,
+                color: 'var(--ink-1)',
+              }}
+            >
+              Mall<i style={{ fontStyle: 'italic' }}>iq</i>
+            </div>
+            <div
+              className="sub"
+              style={{
+                fontSize: 9.5,
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.18em',
+                color: 'var(--ink-4)',
+                marginTop: 4,
+              }}
+            >
+              Operations OS · v3
+            </div>
           </div>
         </div>
 
@@ -162,7 +210,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                 title="Configurar el modo de IA y sincronización"
                 className={({ isActive }) => cn('mq-nav-item', isActive && 'active')}
               >
-                <Sparkles size={16} style={{ color: 'var(--umber)' }} />
+                <Sparkles size={16} style={{ color: 'var(--violet)' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
                   <span style={{ fontSize: 12.5 }}>Autofill Moonshot</span>
                   <span className="t-dim" style={{ fontSize: 10.5 }}>

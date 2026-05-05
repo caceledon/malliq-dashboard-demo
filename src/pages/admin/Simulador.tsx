@@ -82,23 +82,35 @@ export function Simulador() {
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const buildSnapshot = (s: Scenario) => {
+  const snapA = useMemo(() => {
     const fakeContract: ScenarioContract = {
       baseRentUF: 0,
       rentSteps: [],
-      fixedRent: s.fixedRent,
-      variableRentPct: s.variableRentPct,
-      commonExpenses: s.commonExpenses,
-      fondoPromocion: s.fondoPromocion,
-      fixedRentCurrency: s.fixedRentCurrency,
-      commonExpensesCurrency: s.commonExpensesCurrency,
-      fondoPromocionCurrency: s.fondoPromocionCurrency,
+      fixedRent: scenarioA.fixedRent,
+      variableRentPct: scenarioA.variableRentPct,
+      commonExpenses: scenarioA.commonExpenses,
+      fondoPromocion: scenarioA.fondoPromocion,
+      fixedRentCurrency: scenarioA.fixedRentCurrency,
+      commonExpensesCurrency: scenarioA.commonExpensesCurrency,
+      fondoPromocionCurrency: scenarioA.fondoPromocionCurrency,
     };
-    return buildContractCommercialSnapshot(fakeContract, s.areaM2, s.monthlySales, todayIso, getUfFor);
-  };
+    return buildContractCommercialSnapshot(fakeContract, scenarioA.areaM2, scenarioA.monthlySales, todayIso, getUfFor);
+  }, [scenarioA, getUfFor, todayIso]);
 
-  const snapA = useMemo(() => buildSnapshot(scenarioA), [scenarioA, getUfFor, todayIso]);
-  const snapB = useMemo(() => buildSnapshot(scenarioB), [scenarioB, getUfFor, todayIso]);
+  const snapB = useMemo(() => {
+    const fakeContract: ScenarioContract = {
+      baseRentUF: 0,
+      rentSteps: [],
+      fixedRent: scenarioB.fixedRent,
+      variableRentPct: scenarioB.variableRentPct,
+      commonExpenses: scenarioB.commonExpenses,
+      fondoPromocion: scenarioB.fondoPromocion,
+      fixedRentCurrency: scenarioB.fixedRentCurrency,
+      commonExpensesCurrency: scenarioB.commonExpensesCurrency,
+      fondoPromocionCurrency: scenarioB.fondoPromocionCurrency,
+    };
+    return buildContractCommercialSnapshot(fakeContract, scenarioB.areaM2, scenarioB.monthlySales, todayIso, getUfFor);
+  }, [scenarioB, getUfFor, todayIso]);
 
   return (
     <div className="page-enter space-y-6 p-4 md:p-6">

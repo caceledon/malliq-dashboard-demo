@@ -3,6 +3,8 @@
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
   --color-background: var(--bg);
   --color-foreground: var(--fg);
   --color-card: var(--card-bg);
@@ -18,46 +20,57 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ============================================================
-   MallQ — Retail-native light SaaS tokens
-   Paper + umber + ink, hairline borders, tactile warmth
+   MallIQ — Editorial cockpit tokens (light by default)
+   Cream + ink, mint primary, violet for AI, hairline borders
    ============================================================ */
 :root {
-  /* --- PAPER TONE BASE (warm off-white) --- */
-  --paper: oklch(0.992 0.004 85);
-  --paper-2: oklch(0.975 0.008 80);
-  --paper-3: oklch(0.955 0.010 75);
-  --card: #ffffff;
-  --sidebar: oklch(0.983 0.006 82);
-  --inline: oklch(0.94 0.010 75);
+  /* --- BASE SURFACES (cream tones) --- */
+  --bg-deep: oklch(0.985 0.006 85);
+  --bg: oklch(0.992 0.004 85);
+  --surface: #ffffff;
+  --surface-2: oklch(0.975 0.008 82);
+  --surface-3: oklch(0.955 0.010 78);
 
-  /* --- INK (warm slate) --- */
-  --ink-1: oklch(0.18 0.02 255);
-  --ink-2: oklch(0.32 0.02 255);
-  --ink-3: oklch(0.52 0.015 255);
-  --ink-4: oklch(0.68 0.012 255);
+  /* --- INK (charcoal warm-cool) --- */
+  --ink-1: oklch(0.20 0.012 270);
+  --ink-2: oklch(0.34 0.012 270);
+  --ink-3: oklch(0.54 0.012 270);
+  --ink-4: oklch(0.70 0.010 270);
 
   /* --- HAIRLINES --- */
-  --line: oklch(0.90 0.008 80);
-  --line-2: oklch(0.86 0.010 80);
-  --line-strong: oklch(0.78 0.012 80);
+  --hairline: oklch(0.92 0.005 270);
+  --hairline-strong: oklch(0.84 0.008 270);
 
-  /* --- ACCENT: umber (copper/terracotta, retail signal) --- */
-  --umber: oklch(0.58 0.14 48);
-  --umber-ink: oklch(0.38 0.12 45);
-  --umber-soft: oklch(0.93 0.045 65);
-  --umber-wash: oklch(0.97 0.018 70);
+  /* --- MINT (primary CTA + health-positive) --- */
+  --mint: oklch(0.72 0.13 165);
+  --mint-deep: oklch(0.55 0.14 165);
+  --mint-soft: oklch(0.95 0.045 165);
 
-  /* --- STATUS --- */
-  --ok: oklch(0.58 0.12 155);
-  --ok-soft: oklch(0.94 0.05 155);
-  --warn: oklch(0.70 0.14 75);
-  --warn-soft: oklch(0.95 0.06 85);
-  --danger: oklch(0.56 0.17 22);
-  --danger-soft: oklch(0.94 0.045 22);
-  --info: oklch(0.52 0.10 240);
-  --info-soft: oklch(0.94 0.03 240);
+  /* --- VIOLET (AI / data) --- */
+  --violet: oklch(0.58 0.18 290);
+  --violet-deep: oklch(0.42 0.18 290);
+  --violet-soft: oklch(0.95 0.04 290);
 
-  /* --- HEATMAP RAMP (sales/m²) --- */
+  /* --- AMBER (warning) --- */
+  --amber: oklch(0.78 0.14 75);
+  --amber-soft: oklch(0.96 0.06 80);
+
+  /* --- CORAL (critical) --- */
+  --coral: oklch(0.66 0.17 18);
+  --coral-soft: oklch(0.95 0.05 22);
+
+  /* --- SKY (info) --- */
+  --sky: oklch(0.66 0.10 240);
+  --sky-soft: oklch(0.95 0.04 240);
+
+  /* --- HEALTH RAMP (A best, E worst) --- */
+  --health-a: oklch(0.65 0.14 165);
+  --health-b: oklch(0.78 0.13 145);
+  --health-c: oklch(0.78 0.14 75);
+  --health-d: oklch(0.72 0.16 50);
+  --health-e: oklch(0.66 0.17 18);
+
+  /* --- HEATMAP RAMP (sales/m²) — keep retail metaphor --- */
   --heat-0: oklch(0.96 0.012 80);
   --heat-1: oklch(0.93 0.04 75);
   --heat-2: oklch(0.86 0.09 65);
@@ -68,61 +81,121 @@
 
   /* --- TYPE --- */
   --sans: 'Inter', system-ui, sans-serif;
-  --display: 'Inter', system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-display: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  --display: var(--font-display);
+  --mono: var(--font-mono);
 
-  /* --- SHADOWS (subtle, paper-like) --- */
-  --shadow-sm: 0 1px 0 rgba(30, 25, 20, 0.04);
-  --shadow-md: 0 1px 0 rgba(30, 25, 20, 0.04), 0 8px 24px -12px rgba(30, 25, 20, 0.12);
-  --shadow-lg: 0 1px 0 rgba(30, 25, 20, 0.04), 0 20px 50px -20px rgba(30, 25, 20, 0.18);
-  --shadow-pop: 0 1px 0 rgba(30, 25, 20, 0.04), 0 20px 60px -10px rgba(30, 25, 20, 0.28);
+  /* --- SHADOWS (paper-light) --- */
+  --shadow-sm: 0 1px 0 rgba(30, 25, 35, 0.04);
+  --shadow-md: 0 1px 0 rgba(30, 25, 35, 0.04), 0 8px 24px -12px rgba(30, 25, 35, 0.12);
+  --shadow-lg: 0 1px 0 rgba(30, 25, 35, 0.04), 0 20px 50px -20px rgba(30, 25, 35, 0.18);
+  --shadow-pop: 0 1px 0 rgba(30, 25, 35, 0.04), 0 20px 60px -10px rgba(30, 25, 35, 0.28);
 
-  /* --- Legacy MallIQ token aliases (kept so existing pages keep rendering) --- */
-  --bg: var(--paper);
+  /* --- Legacy aliases (existing code keeps rendering) --- */
+  --paper: var(--bg);
+  --paper-2: var(--surface-2);
+  --paper-3: var(--surface-3);
+  --card: var(--surface);
+  --sidebar: var(--bg-deep);
+  --inline: var(--surface-3);
+  --line: var(--hairline);
+  --line-2: var(--hairline);
+  --line-strong: var(--hairline-strong);
+  --umber: var(--mint-deep);
+  --umber-ink: var(--mint-deep);
+  --umber-soft: var(--mint-soft);
+  --umber-wash: var(--mint-soft);
+  --ok: var(--mint-deep);
+  --ok-soft: var(--mint-soft);
+  --warn: var(--amber);
+  --warn-soft: var(--amber-soft);
+  --danger: var(--coral);
+  --danger-soft: var(--coral-soft);
+  --info: var(--sky);
+  --info-soft: var(--sky-soft);
+  --bg: var(--bg);
   --fg: var(--ink-1);
-  --card-bg: var(--card);
-  --border-color: var(--line);
-  --sidebar-bg: var(--sidebar);
+  --card-bg: var(--surface);
+  --border-color: var(--hairline);
+  --sidebar-bg: var(--bg-deep);
   --sidebar-fg: var(--ink-3);
-  --nav-bg: color-mix(in oklab, var(--paper) 80%, transparent);
-  --hover-bg: var(--paper-3);
-  --input-bg: var(--card);
-  --skeleton-bg: var(--paper-3);
-  --skeleton-shine: var(--paper-2);
+  --nav-bg: color-mix(in oklab, var(--bg) 80%, transparent);
+  --hover-bg: var(--surface-3);
+  --input-bg: var(--surface);
+  --skeleton-bg: var(--surface-3);
+  --skeleton-shine: var(--surface-2);
   --shadow-card: var(--shadow-sm);
 }
 
 .dark {
-  --bg: #07111f;
-  --fg: #e5eef8;
-  --card-bg: #0f172a;
-  --border-color: #223148;
-  --sidebar-bg: #081220;
-  --sidebar-fg: #8aa0be;
-  --nav-bg: rgba(8, 18, 32, 0.9);
-  --hover-bg: #132033;
-  --input-bg: #132033;
-  --skeleton-bg: #132033;
-  --skeleton-shine: #1e293b;
-  --shadow-card: 0 10px 30px rgba(2, 8, 23, 0.35);
-  --shadow-lg: 0 26px 65px rgba(2, 8, 23, 0.5);
+  /* Inverted MallIQ palette — deep ink night */
+  --bg-deep: oklch(0.16 0.015 270);
+  --bg: oklch(0.20 0.015 270);
+  --surface: oklch(0.24 0.018 270);
+  --surface-2: oklch(0.27 0.018 270);
+  --surface-3: oklch(0.32 0.018 270);
 
-  /* Re-map MallQ tokens to dark surfaces so new utility classes render in dark mode too */
-  --paper: #07111f;
-  --paper-2: #0f1a2a;
-  --paper-3: #162234;
-  --card: #0f172a;
-  --sidebar: #081220;
-  --inline: #132033;
+  --ink-1: oklch(0.96 0.008 85);
+  --ink-2: oklch(0.86 0.010 85);
+  --ink-3: oklch(0.66 0.012 270);
+  --ink-4: oklch(0.50 0.014 270);
 
-  --ink-1: #e5eef8;
-  --ink-2: #c6d3e2;
-  --ink-3: #8aa0be;
-  --ink-4: #5c708c;
+  --hairline: oklch(0.32 0.018 270);
+  --hairline-strong: oklch(0.42 0.020 270);
 
-  --line: #223148;
-  --line-2: #2d3e57;
-  --line-strong: #3a4d68;
+  --mint: oklch(0.78 0.13 165);
+  --mint-deep: oklch(0.62 0.14 165);
+  --mint-soft: oklch(0.32 0.06 165);
+
+  --violet: oklch(0.70 0.18 290);
+  --violet-deep: oklch(0.55 0.18 290);
+  --violet-soft: oklch(0.32 0.06 290);
+
+  --amber: oklch(0.82 0.14 75);
+  --amber-soft: oklch(0.34 0.06 75);
+
+  --coral: oklch(0.74 0.16 18);
+  --coral-soft: oklch(0.34 0.07 18);
+
+  --sky: oklch(0.74 0.12 240);
+  --sky-soft: oklch(0.32 0.05 240);
+
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 1px 0 rgba(0, 0, 0, 0.18), 0 8px 24px -10px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 1px 0 rgba(0, 0, 0, 0.18), 0 26px 65px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  /* Refresh legacy aliases so older pages render correctly in dark too */
+  --paper: var(--bg);
+  --paper-2: var(--surface-2);
+  --paper-3: var(--surface-3);
+  --card: var(--surface);
+  --sidebar: var(--bg-deep);
+  --inline: var(--surface-3);
+  --line: var(--hairline);
+  --line-2: var(--hairline);
+  --line-strong: var(--hairline-strong);
+  --card-bg: var(--surface);
+  --border-color: var(--hairline);
+  --sidebar-bg: var(--bg-deep);
+  --sidebar-fg: var(--ink-3);
+  --nav-bg: color-mix(in oklab, var(--bg-deep) 92%, transparent);
+  --hover-bg: var(--surface-2);
+  --input-bg: var(--surface-2);
+  --skeleton-bg: var(--surface-2);
+  --skeleton-shine: var(--surface-3);
+  --umber: var(--mint);
+  --umber-ink: var(--mint-deep);
+  --umber-soft: var(--mint-soft);
+  --ok: var(--mint);
+  --ok-soft: var(--mint-soft);
+  --warn: var(--amber);
+  --warn-soft: var(--amber-soft);
+  --danger: var(--coral);
+  --danger-soft: var(--coral-soft);
+  --info: var(--sky);
+  --info-soft: var(--sky-soft);
 }
 
 * { box-sizing: border-box; }
@@ -157,12 +230,89 @@ button { cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 
 /* ---------- TYPE UTILITIES ---------- */
-.t-display { font-family: var(--display); font-weight: 700; letter-spacing: -0.025em; color: var(--ink-1); }
-.t-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.t-num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; font-weight: 500; color: var(--ink-1); }
-.t-eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-4); }
+.t-display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.015em; color: var(--ink-1); }
+.t-mono, .mq-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.t-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; font-weight: 500; color: var(--ink-1); }
+.t-eyebrow, .mq-eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4); }
 .t-muted { color: var(--ink-3); }
 .t-dim { color: var(--ink-4); }
+
+/* Editorial display rules */
+.mq-display { font-family: var(--font-display); font-weight: 400; color: var(--ink-1); letter-spacing: -0.015em; line-height: 1.05; }
+.mq-italic { font-family: var(--font-display); font-style: italic; }
+.mq-h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(36px, 4.4vw, 56px); line-height: 1.05; letter-spacing: -0.02em; color: var(--ink-1); }
+.mq-h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(24px, 2.6vw, 34px); line-height: 1.1; letter-spacing: -0.015em; color: var(--ink-1); }
+.mq-h-eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
+.mq-num-xl { font-family: var(--font-display); font-weight: 400; font-size: 44px; line-height: 1; letter-spacing: -0.02em; color: var(--ink-1); }
+.mq-num-l  { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1; letter-spacing: -0.02em; color: var(--ink-1); }
+.mq-num    { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 16px; color: var(--ink-1); }
+.mq-num-s  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 12.5px; color: var(--ink-1); }
+
+/* Editorial pill (small chip) */
+.mq-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.mq-pill .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ink-3); }
+.mq-pill.mint   { background: var(--mint-soft);   color: var(--mint-deep);   border-color: transparent; }
+.mq-pill.mint .dot { background: var(--mint-deep); }
+.mq-pill.violet { background: var(--violet-soft); color: var(--violet-deep); border-color: transparent; }
+.mq-pill.violet .dot { background: var(--violet-deep); }
+.mq-pill.amber  { background: var(--amber-soft);  color: oklch(0.42 0.11 60);  border-color: transparent; }
+.mq-pill.amber .dot  { background: var(--amber); }
+.mq-pill.coral  { background: var(--coral-soft);  color: oklch(0.40 0.13 22);  border-color: transparent; }
+.mq-pill.coral .dot  { background: var(--coral); }
+.mq-pill.sky    { background: var(--sky-soft);    color: oklch(0.38 0.10 240); border-color: transparent; }
+.mq-pill.sky .dot    { background: var(--sky); }
+.dark .mq-pill.amber { color: oklch(0.85 0.13 75); }
+.dark .mq-pill.coral { color: oklch(0.84 0.14 22); }
+.dark .mq-pill.sky   { color: oklch(0.82 0.12 240); }
+
+/* Bento grid (12 columns, gap 16) */
+.mq-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.mq-bento > .span-3 { grid-column: span 3; }
+.mq-bento > .span-4 { grid-column: span 4; }
+.mq-bento > .span-5 { grid-column: span 5; }
+.mq-bento > .span-6 { grid-column: span 6; }
+.mq-bento > .span-7 { grid-column: span 7; }
+.mq-bento > .span-8 { grid-column: span 8; }
+.mq-bento > .span-9 { grid-column: span 9; }
+.mq-bento > .span-12 { grid-column: span 12; }
+@media (max-width: 900px) {
+  .mq-bento > [class*='span-'] { grid-column: span 12; }
+}
+
+.mq-spark { width: 100%; height: 36px; }
+.mq-divider { height: 1px; background: var(--hairline); margin: 16px 0; }
+
+/* Card variants */
+.mq-card.elevated { box-shadow: var(--shadow-md); }
+.mq-card.outlined { border: 1px solid var(--hairline-strong); box-shadow: none; }
+.mq-card.glass {
+  background: color-mix(in oklab, var(--surface) 60%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+/* Density toggle */
+[data-density="compact"] .mq-card-bd { padding: 12px; }
+[data-density="compact"] .mq-card-hd { padding: 12px 14px 8px; }
+[data-density="cozy"] .mq-card-bd { padding: 22px; }
+[data-density="cozy"] .mq-card-hd { padding: 20px 22px 14px; }
 
 /* ---------- CARDS ---------- */
 .mq-card {
@@ -241,10 +391,15 @@ a { color: inherit; text-decoration: none; }
 .mq-btn:hover { background: var(--paper-3); border-color: var(--line-strong); }
 .mq-btn:active { transform: translateY(1px); }
 .mq-btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
-.mq-btn.primary { background: var(--ink-1); border-color: var(--ink-1); color: #fff; }
-.mq-btn.primary:hover { background: oklch(0.24 0.02 255); border-color: oklch(0.24 0.02 255); }
-.mq-btn.umber { background: var(--umber); border-color: var(--umber); color: #fff; }
-.mq-btn.umber:hover { background: var(--umber-ink); border-color: var(--umber-ink); }
+.mq-btn.primary { background: var(--ink-1); border-color: var(--ink-1); color: var(--surface); }
+.mq-btn.primary:hover { background: oklch(0.26 0.012 270); border-color: oklch(0.26 0.012 270); }
+.mq-btn.mint { background: var(--mint-deep); border-color: var(--mint-deep); color: #fff; }
+.mq-btn.mint:hover { background: oklch(0.48 0.13 165); border-color: oklch(0.48 0.13 165); }
+.mq-btn.violet { background: var(--violet-deep); border-color: var(--violet-deep); color: #fff; }
+.mq-btn.violet:hover { background: oklch(0.36 0.18 290); border-color: oklch(0.36 0.18 290); }
+/* Legacy alias — many existing buttons use .umber; map to mint */
+.mq-btn.umber { background: var(--mint-deep); border-color: var(--mint-deep); color: #fff; }
+.mq-btn.umber:hover { background: oklch(0.48 0.13 165); border-color: oklch(0.48 0.13 165); }
 .mq-btn.ghost { background: transparent; border-color: transparent; }
 .mq-btn.ghost:hover { background: var(--paper-3); }
 
@@ -489,7 +644,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink-1);
   transition: border-color .15s, box-shadow .15s;
 }
-.mq-input:focus { outline: 0; border-color: var(--umber); box-shadow: 0 0 0 3px oklch(0.58 0.14 48 / 0.16); }
+.mq-input:focus { outline: 0; border-color: var(--mint-deep); box-shadow: 0 0 0 3px oklch(0.55 0.14 165 / 0.18); }
 .mq-input.search {
   padding-left: 34px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>");
@@ -562,13 +717,13 @@ a { color: inherit; text-decoration: none; }
 .mq-dot.warn { background: var(--warn); }
 .mq-dot.danger { background: var(--danger); }
 
-/* ---------- AI PANEL ---------- */
+/* ---------- AI PANEL (violet halo) ---------- */
 .ai-halo {
   background:
-    radial-gradient(400px 200px at 10% -10%, oklch(0.96 0.06 55 / 0.8), transparent 60%),
-    radial-gradient(400px 250px at 110% 110%, oklch(0.95 0.04 35 / 0.65), transparent 60%),
-    var(--card);
-  border: 1px solid var(--umber-soft);
+    radial-gradient(420px 220px at 8% -10%, color-mix(in oklab, var(--violet-soft) 90%, transparent), transparent 60%),
+    radial-gradient(420px 260px at 110% 110%, color-mix(in oklab, var(--mint-soft) 80%, transparent), transparent 60%),
+    var(--surface);
+  border: 1px solid color-mix(in oklab, var(--violet) 35%, var(--hairline));
 }
 
 /* ---------- MISC MALLQ LAYOUT ---------- */
@@ -606,8 +761,8 @@ a { color: inherit; text-decoration: none; }
 }
 
 .input-field:focus {
-  border-color: var(--umber);
-  box-shadow: 0 0 0 3px oklch(0.58 0.14 48 / 0.16);
+  border-color: var(--mint-deep);
+  box-shadow: 0 0 0 3px oklch(0.55 0.14 165 / 0.18);
 }
 
 .glass-card {
@@ -723,7 +878,7 @@ tbody tr:hover,
 ::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
 
 /* focus */
-:focus-visible { outline: 2px solid var(--umber); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--mint-deep); outline-offset: 2px; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }

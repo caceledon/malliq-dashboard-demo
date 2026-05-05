@@ -20,6 +20,8 @@ import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
+import { ComponentBar, HealthRing, Pill, TopBar } from '@/components/mallq/ui';
+import { healthBucket, healthColor } from '@/components/mallq/helpers';
 
 export function LocatarioDetail() {
   const navigate = useNavigate();
@@ -63,52 +65,100 @@ export function LocatarioDetail() {
 
   const contractDocuments = state.documents.filter((document) => document.entityType === 'contract' && document.entityId === contract.id);
 
+  const healthBucketLabel = healthBucket(summary.healthScorePct);
+  const healthAccent = healthColor(healthBucketLabel);
+
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <nav className="flex items-center gap-1.5 text-sm">
-        <Link to="/admin/dashboard" className="text-[var(--sidebar-fg)] hover:text-[var(--fg)]">
-          Dashboard
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <nav style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--ink-3)', marginBottom: 4, paddingTop: 16 }}>
+        <Link to="/admin/dashboard" style={{ color: 'var(--ink-3)' }}>
+          Cockpit
         </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-[var(--sidebar-fg)]" />
-        <Link to="/admin/locatarios" className="text-[var(--sidebar-fg)] hover:text-[var(--fg)]">
+        <ChevronRight size={13} />
+        <Link to="/admin/locatarios" style={{ color: 'var(--ink-3)' }}>
           Locatarios
         </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-[var(--sidebar-fg)]" />
-        <span className="font-semibold">{contract.storeName}</span>
+        <ChevronRight size={13} />
+        <span style={{ color: 'var(--ink-1)', fontWeight: 500 }}>{contract.storeName}</span>
       </nav>
+
+      <TopBar
+        eyebrow={`${display.category || 'Locatario'} · ${summary.localCodes.join(', ')}`}
+        title={
+          <>
+            {display.storeName}{' '}
+            <span style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontSize: '0.75em' }}>{display.companyName}</span>
+          </>
+        }
+        sub={`${summary.areaM2} m² · contrato ${formatDate(contract.startDate)} → ${formatDate(contract.endDate)}`}
+        right={
+          <>
+            <Pill tone={contract.signatureStatus === 'firmado' ? 'mint' : contract.signatureStatus === 'pendiente' ? 'coral' : 'amber'}>
+              Firma {contract.signatureStatus.replace('_', ' ')}
+            </Pill>
+            <Pill tone={lifecycle === 'vigente' ? 'mint' : lifecycle === 'por_vencer' ? 'amber' : lifecycle === 'vencido' ? 'coral' : 'sky'}>
+              {lifecycle.replace('_', ' ')}
+            </Pill>
+          </>
+        }
+      />
+
+      {/* Health hero strip */}
+      <div className="mq-card" style={{ padding: 22, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <span
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 18,
+            background: healthAccent,
+            color: '#fff',
+            display: 'grid',
+            placeItems: 'center',
+            fontFamily: 'var(--font-display)',
+            fontSize: 34,
+            fontWeight: 500,
+            flexShrink: 0,
+          }}
+        >
+          {healthBucketLabel}
+        </span>
+        <div style={{ flex: 1 }}>
+          <div className="mq-h-eyebrow">Salud del locatario</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 6 }}>
+            <span className="mq-num-xl">{summary.healthScorePct}</span>
+            <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>/ 100</span>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <ComponentBar label="Paga al día" ok={contract.healthPagoAlDia} />
+            <ComponentBar label="Entrega ventas al día" ok={contract.healthEntregaVentas} />
+            <ComponentBar label="Nivel de venta aceptable" ok={contract.healthNivelVenta} />
+            <ComponentBar label="Nivel de renta aceptable" ok={contract.healthNivelRenta} />
+            <ComponentBar label="Percepción del administrador" ok={contract.healthPercepcionAdmin} />
+          </div>
+        </div>
+        <HealthRing value={summary.healthScorePct} size={120} stroke={10} />
+      </div>
 
       <div className="glass-card p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-xl font-bold text-white shadow-lg">
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                background: 'conic-gradient(from 220deg, var(--mint-deep), var(--violet-deep), var(--mint-deep))',
+                color: '#fff',
+                display: 'grid',
+                placeItems: 'center',
+                fontFamily: 'var(--font-display)',
+                fontSize: 24,
+                fontWeight: 500,
+              }}
+            >
               {contract.storeName.charAt(0)}
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-bold">{display.storeName}</h1>
-                <span
-                  className={cn(
-                    'rounded-full px-3 py-1 text-xs font-medium',
-                    contract.signatureStatus === 'firmado' && 'badge-success',
-                    contract.signatureStatus === 'pendiente' && 'badge-danger',
-                    contract.signatureStatus === 'en_revision' && 'badge-warning',
-                    contract.signatureStatus === 'parcial' && 'badge-info',
-                  )}
-                >
-                  Firma {contract.signatureStatus.replace('_', ' ')}
-                </span>
-                <span
-                  className={cn(
-                    'rounded-full px-3 py-1 text-xs font-medium',
-                    lifecycle === 'vigente' && 'badge-success',
-                    lifecycle === 'por_vencer' && 'badge-warning',
-                    lifecycle === 'vencido' && 'badge-danger',
-                    (lifecycle === 'borrador' || lifecycle === 'en_firma') && 'badge-info',
-                  )}
-                >
-                  {lifecycle.replace('_', ' ')}
-                </span>
-              </div>
               <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
                 {display.companyName} · {display.category} · {summary.localCodes.join(', ')} · {summary.areaM2} m2
               </p>

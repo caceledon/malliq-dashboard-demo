@@ -1,7 +1,9 @@
 import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Building2, CopyPlus, Layers3, MapPinned, Percent, Plus, Trash2, Wallet } from 'lucide-react';
+import { AlertTriangle, Building2, CopyPlus, Percent, Plus, Trash2, Wallet } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Bento, KpiTile, TopBar } from '@/components/mallq/ui';
+import { formatM } from '@/components/mallq/helpers';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 
@@ -68,36 +70,41 @@ export function Portafolio() {
   };
 
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-xl font-bold md:text-2xl">Portafolio de activos</h1>
-          <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-            Administra varias operaciones desde una sola instalación, cambia el activo activo y crea nuevas bases con o sin plantilla física.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => navigate('/admin/configuracion')}
-            className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-          >
-            Configurar activo activo
-          </button>
-          <button
-            onClick={() => navigate('/admin/dashboard')}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
-          >
-            Abrir dashboard activo
-          </button>
-        </div>
-      </div>
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <TopBar
+        eyebrow="Portafolio"
+        title={
+          <>
+            Activos del <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>portafolio</i>.
+          </>
+        }
+        sub={`${portfolioStats.assetCount} activo${portfolioStats.assetCount === 1 ? '' : 's'} · ${portfolioStats.totalUnits} locales · cambia el activo activo o crea bases nuevas con plantilla.`}
+        right={
+          <>
+            <button
+              type="button"
+              className="mq-btn sm"
+              onClick={() => navigate('/admin/configuracion')}
+            >
+              Configurar
+            </button>
+            <button
+              type="button"
+              className="mq-btn primary sm"
+              onClick={() => navigate('/admin/dashboard')}
+            >
+              Abrir cockpit
+            </button>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <PortfolioMetric title="Activos" value={String(portfolioStats.assetCount)} meta="Espacios operativos cargados" icon={<Building2 className="h-4 w-4 text-blue-600" />} />
-        <PortfolioMetric title="Locales" value={String(portfolioStats.totalUnits)} meta={`${portfolioStats.occupiedUnits} con contrato vigente`} icon={<Layers3 className="h-4 w-4 text-emerald-600" />} />
-        <PortfolioMetric title="Ventas del mes" value={formatCurrency(portfolioStats.monthlySales)} meta="Suma del portafolio activo" icon={<MapPinned className="h-4 w-4 text-amber-600" />} />
-        <PortfolioMetric title="Alertas" value={String(portfolioStats.alertCount)} meta="Pendientes operativos abiertos" icon={<ArrowRight className="h-4 w-4 text-rose-600" />} />
-      </div>
+      <Bento style={{ marginBottom: 20 }}>
+        <KpiTile span={3} eyebrow="Activos" value={portfolioStats.assetCount} foot="Espacios operativos cargados" color="var(--mint-deep)" />
+        <KpiTile span={3} eyebrow="Locales" value={portfolioStats.totalUnits} foot={`${portfolioStats.occupiedUnits} con contrato vigente`} color="var(--violet)" />
+        <KpiTile span={3} eyebrow="Ventas del mes" value={formatM(portfolioStats.monthlySales)} foot="Suma del portafolio" color="var(--sky)" />
+        <KpiTile span={3} eyebrow="Alertas" value={portfolioStats.alertCount} foot="Pendientes operativos" color="var(--coral)" />
+      </Bento>
 
       <div className="glass-card p-5">
         <div className="flex items-center justify-between gap-3">
@@ -181,7 +188,7 @@ export function Portafolio() {
                 </label>
               </div>
             </div>
-            <button onClick={createAsset} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
+            <button onClick={createAsset} className="mq-btn primary inline-flex items-center gap-2">
               {templateMode === 'copy_units' ? <CopyPlus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               Crear y activar activo
             </button>
@@ -204,9 +211,7 @@ export function Portafolio() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-base font-semibold">{summary.name}</p>
                         {summary.id === activeAssetId ? (
-                          <span className="rounded-full bg-blue-600/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                            Activo
-                          </span>
+                          <span className="mq-pill mint">Activo</span>
                         ) : null}
                         {summary.syncStatus ? (
                           <span className="rounded-full bg-[var(--hover-bg)] px-2.5 py-1 text-xs text-[var(--sidebar-fg)]">

@@ -25,6 +25,7 @@ import { formatDate, formatPercent } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { LocatarioPendingBinding } from '@/pages/locatario/PendingBinding';
+import { ComponentBar, HealthRing, InsightCard, TopBar } from '@/components/mallq/ui';
 
 export function LocatarioDashboard() {
   const { currentTenantId, insights, state, authUser } = useAppState();
@@ -71,12 +72,38 @@ export function LocatarioDashboard() {
     : undefined;
 
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-bold md:text-2xl">Mi dashboard</h1>
-        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-          {summary.storeName} · {summary.localCodes.join(', ')} · {summary.areaM2} m2
-        </p>
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <TopBar
+        eyebrow={`Hola, ${authUser?.displayName?.split(' ')[0] ?? 'Locatario'}`}
+        title={
+          <>
+            {summary.storeName}.{' '}
+            <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>Tu cockpit personal.</span>
+          </>
+        }
+        sub={`${summary.localCodes.join(', ')} · ${summary.areaM2} m² · contrato ${formatDate(contract.startDate)} → ${formatDate(contract.endDate)}`}
+      />
+
+      {/* Health + insight strip — always visible at top */}
+      <div className="mq-card" style={{ padding: 22, marginBottom: 18, display: 'flex', gap: 22, alignItems: 'center' }}>
+        <HealthRing value={summary.healthScorePct} size={96} stroke={9} />
+        <div style={{ flex: 1 }}>
+          <div className="mq-h-eyebrow">Tu salud como locatario</div>
+          <div className="mq-num-l" style={{ marginTop: 6 }}>
+            {summary.healthScorePct}/100
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <ComponentBar label="Paga al día" ok={contract.healthPagoAlDia} />
+            <ComponentBar label="Entrega ventas al día" ok={contract.healthEntregaVentas} />
+            <ComponentBar label="Nivel de venta aceptable" ok={contract.healthNivelVenta} />
+            <ComponentBar label="Nivel de renta aceptable" ok={contract.healthNivelRenta} />
+          </div>
+        </div>
+        <InsightCard
+          tone="violet"
+          title="Tip MallIQ"
+          body="Tu venta/m² está sobre el promedio del rubro este mes. Ajusta horarios pico para mantener el ritmo."
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">

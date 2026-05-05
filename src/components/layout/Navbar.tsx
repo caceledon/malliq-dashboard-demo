@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, LogOut, Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 import { useTheme } from '@/lib/theme';
 import { useCurrency } from '@/lib/currency';
@@ -13,27 +13,6 @@ const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/i.test(
 interface NavbarProps {
   onMenuClick: () => void;
   onOpenCommandPalette: () => void;
-}
-
-const ROUTE_TITLES: Record<string, string> = {
-  '/admin/dashboard': 'Dashboard operativo',
-  '/admin/activos': 'Portafolio activos',
-  '/admin/locatarios': 'Locatarios',
-  '/admin/rentas': 'Rentas y contratos',
-  '/admin/cargas': 'Carga de datos',
-  '/admin/planeacion': 'Presupuesto operativo',
-  '/admin/ecosistema': 'Prospectos y proveedores',
-  '/admin/alertas': 'Alertas',
-  '/admin/configuracion': 'Configuración',
-  '/locatario/dashboard': 'Mi dashboard',
-  '/locatario/contrato': 'Mi contrato',
-  '/locatario/ventas': 'Mis ventas',
-};
-
-function matchRouteTitle(pathname: string): string {
-  if (ROUTE_TITLES[pathname]) return ROUTE_TITLES[pathname];
-  const prefix = Object.keys(ROUTE_TITLES).find((k) => pathname.startsWith(k));
-  return prefix ? ROUTE_TITLES[prefix] : 'Panel';
 }
 
 export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
@@ -50,14 +29,11 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
   const [ufEditOpen, setUfEditOpen] = useState(false);
   const [ufDraft, setUfDraft] = useState(String(ufValue));
   const { state, actions } = useAppState();
-  const location = useLocation();
   const navigate = useNavigate();
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getAuthUser());
   useEffect(() => subscribeAuthUser(setAuthUser), []);
   const isLocatario = authUser?.role === 'locatario';
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
-  const assetName = state.asset?.name ?? 'Sin activo';
-  const pageTitle = matchRouteTitle(location.pathname);
 
   return (
     <nav className="mq-topbar">
@@ -70,14 +46,6 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
       >
         <Menu size={16} />
       </button>
-
-      <div className="breadcrumb" style={{ minWidth: 0 }}>
-        <span className="truncate">{assetName}</span>
-        <span className="sep">/</span>
-        <span style={{ color: 'var(--ink-1)', fontWeight: 500 }} className="truncate">
-          {pageTitle}
-        </span>
-      </div>
 
       <div style={{ flex: 1 }} />
 
@@ -210,10 +178,10 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
         <button
           type="button"
           className="mq-btn primary sm"
-          onClick={() => navigate('/admin/locatarios')}
-          title="Abre el asistente de contratos en la pantalla de Locatarios"
+          onClick={() => navigate('/admin/asistente')}
+          title="Abrir el asistente IA"
         >
-          <Sparkles size={14} /> Asistente de contratos
+          <Sparkles size={14} /> Asistente
         </button>
       ) : null}
 
@@ -291,7 +259,7 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
               </button>
               <button
                 type="button"
-                className="mq-btn umber sm"
+                className="mq-btn mint sm"
                 onClick={() => {
                   const next = Number(ufDraft);
                   if (Number.isFinite(next) && next > 0) {

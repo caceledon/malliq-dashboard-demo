@@ -13,6 +13,10 @@ export function UfOverrideModal({ open, defaultDate, onConfirm, onCancel }: UfOv
   const [valueRaw, setValueRaw] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Reset the form whenever the modal transitions to open. Synchronous
+  // setState in an effect is intentional here — the alternative (key-based
+  // remount) leaks reset complexity to every caller.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) {
       setDate(defaultDate ?? new Date().toISOString().slice(0, 10));
@@ -20,6 +24,7 @@ export function UfOverrideModal({ open, defaultDate, onConfirm, onCancel }: UfOv
       setError(null);
     }
   }, [open, defaultDate]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!open) {
     return null;

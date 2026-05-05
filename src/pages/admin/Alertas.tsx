@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, BellRing, Info } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { useAppState } from '@/store/appState';
 import { formatDate } from '@/lib/format';
 import { buildRenewalContractTemplate, getContractLifecycle } from '@/lib/domain';
+import { TopBar } from '@/components/mallq/ui';
 
 export function Alertas() {
   const navigate = useNavigate();
@@ -39,18 +39,21 @@ export function Alertas() {
   };
 
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-bold md:text-2xl">Alertas operativas</h1>
-        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-          Motor de alertas para firmas, vencimientos, vacancias y tiendas sin ventas cargadas.
-        </p>
-      </div>
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <TopBar
+        eyebrow="Alertas"
+        title={
+          <>
+            Motor <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>operativo</i>.
+          </>
+        }
+        sub="Firmas, vencimientos, vacancias y tiendas sin ventas cargadas — todo en un solo feed."
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <SummaryCard label="Críticas" count={critical.length} color="text-red-600" icon={<AlertCircle className="h-5 w-5" />} />
-        <SummaryCard label="Advertencias" count={warning.length} color="text-amber-600" icon={<AlertTriangle className="h-5 w-5" />} />
-        <SummaryCard label="Informativas" count={info.length} color="text-blue-600" icon={<Info className="h-5 w-5" />} />
+        <SeverityTile label="Críticas" count={critical.length} tone="coral" Icon={AlertCircle} />
+        <SeverityTile label="Advertencias" count={warning.length} tone="amber" Icon={AlertTriangle} />
+        <SeverityTile label="Informativas" count={info.length} tone="sky" Icon={Info} />
       </div>
 
       <div className="space-y-4">
@@ -62,24 +65,48 @@ export function Alertas() {
   );
 }
 
-function SummaryCard({
+function SeverityTile({
   label,
   count,
-  color,
-  icon,
+  tone,
+  Icon,
 }: {
   label: string;
   count: number;
-  color: string;
-  icon: ReactNode;
+  tone: 'coral' | 'amber' | 'sky';
+  Icon: typeof AlertCircle;
 }) {
+  const accent: Record<string, string> = {
+    coral: 'var(--coral)',
+    amber: 'var(--amber)',
+    sky: 'var(--sky)',
+  };
+  const soft: Record<string, string> = {
+    coral: 'var(--coral-soft)',
+    amber: 'var(--amber-soft)',
+    sky: 'var(--sky-soft)',
+  };
   return (
-    <div className="glass-card p-5">
-      <div className="flex items-center gap-4">
-        <div className={`rounded-2xl bg-[var(--hover-bg)] p-3 ${color}`}>{icon}</div>
+    <div className="mq-card" style={{ padding: 18, borderLeft: `3px solid ${accent[tone]}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: soft[tone],
+            color: accent[tone],
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          <Icon size={22} />
+        </span>
         <div>
-          <p className="text-sm font-semibold">{label}</p>
-          <p className="text-2xl font-bold">{count}</p>
+          <div className="mq-h-eyebrow">{label}</div>
+          <div className="mq-num-l" style={{ marginTop: 4 }}>
+            {count}
+          </div>
         </div>
       </div>
     </div>

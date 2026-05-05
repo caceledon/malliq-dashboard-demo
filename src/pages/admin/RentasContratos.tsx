@@ -22,6 +22,7 @@ import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
+import { ContractTimeline, TopBar } from '@/components/mallq/ui';
 
 export function RentasContratos() {
   const navigate = useNavigate();
@@ -97,13 +98,34 @@ export function RentasContratos() {
   }));
 
   return (
-    <div className="page-enter space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-bold md:text-2xl">Rentas, firmas y contratos</h1>
-        <p className="mt-1 text-sm text-[var(--sidebar-fg)]">
-          Seguimiento consolidado de vigencias, renta fija/variable y respaldo documental por contrato.
-        </p>
-      </div>
+    <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
+      <TopBar
+        eyebrow="Rentas y contratos"
+        title={
+          <>
+            Vigencias, firmas y <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>renta</i>.
+          </>
+        }
+        sub="Seguimiento consolidado de vigencias, renta fija/variable y respaldo documental por contrato."
+      />
+
+      {state.contracts.length > 0 ? (
+        <div style={{ marginBottom: 18 }}>
+          <ContractTimeline
+            today={new Date()}
+            contracts={state.contracts.map((c) => {
+              const summary = insights.tenantSummaries.find((t) => t.id === c.id);
+              return {
+                id: c.id,
+                storeName: c.storeName,
+                startDate: c.startDate,
+                endDate: c.endDate,
+                healthScore: summary?.healthScorePct ?? 50,
+              };
+            })}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Firmados" value={String(signed)} icon={<ShieldCheck className="h-4 w-4 text-emerald-600" />} />
