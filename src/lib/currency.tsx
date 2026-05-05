@@ -199,16 +199,12 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       const iso = isoFromInput(date);
       if (!iso || !Number.isFinite(value) || value <= 0) return;
       setUfRates((current) => ({ ...current, [iso]: value }));
-      // Treat any explicit override of "today" as a freshness signal.
-      const today = new Date().toISOString().slice(0, 10);
       if (iso >= (latestUfDate ?? '0000-00-00')) {
         setLatestUfDate(iso);
         const stamp = Date.now();
         setUfUpdatedAt(stamp);
         persistPrefs({ currency, latestUfDate: iso, ufUpdatedAt: stamp });
       }
-      // Avoid lint warning for unused symbol while keeping the docstring intent clear.
-      void today;
     },
     [currency, latestUfDate],
   );

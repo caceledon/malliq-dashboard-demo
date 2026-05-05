@@ -13,6 +13,7 @@ import {
   Plus,
   ReceiptText,
   Settings,
+  Sparkles,
   Store,
   Users,
   Zap,
