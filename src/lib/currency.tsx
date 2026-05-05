@@ -32,8 +32,6 @@ interface CurrencyContextValue {
     amountClp: number,
     options?: { decimals?: number; unit?: CurrencyCode; atDate?: string | Date },
   ) => string;
-  convertToDisplay: (amountClp: number, atDate?: string | Date) => number;
-  convertFromDisplay: (amount: number, atDate?: string | Date) => number;
 }
 
 const CurrencyContext = createContext<CurrencyContextValue | undefined>(undefined);
@@ -215,24 +213,6 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     [currency, latestUfDate],
   );
 
-  const convertToDisplay = useCallback(
-    (amountClp: number, atDate?: string | Date): number => {
-      if (currency !== 'UF') return amountClp;
-      const uf = atDate ? getUfFor(atDate) : ufValue;
-      return uf > 0 ? amountClp / uf : amountClp;
-    },
-    [currency, getUfFor, ufValue],
-  );
-
-  const convertFromDisplay = useCallback(
-    (amount: number, atDate?: string | Date): number => {
-      if (currency !== 'UF') return amount;
-      const uf = atDate ? getUfFor(atDate) : ufValue;
-      return uf > 0 ? amount * uf : amount;
-    },
-    [currency, getUfFor, ufValue],
-  );
-
   const formatCurrency = useCallback(
     (amountClp: number, options?: { decimals?: number; unit?: CurrencyCode; atDate?: string | Date }): string => {
       const unit = options?.unit ?? currency;
@@ -292,8 +272,6 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         refreshLatestUf,
         setUfOverride,
         formatCurrency,
-        convertToDisplay,
-        convertFromDisplay,
       }}
     >
       {children}

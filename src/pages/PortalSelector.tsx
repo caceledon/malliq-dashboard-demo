@@ -1,13 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, ArrowRight, Zap, ShieldCheck, Globe, Store } from 'lucide-react';
-import { useAppState } from '@/store/appState';
 
 export function PortalSelector() {
   const navigate = useNavigate();
-  const { actions } = useAppState();
 
   const handleSelect = (role: 'admin' | 'locatario') => {
-    actions.setRole(role);
     navigate(role === 'admin' ? '/admin/dashboard' : '/locatario/dashboard');
   };
 

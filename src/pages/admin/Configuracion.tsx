@@ -17,6 +17,7 @@ import {
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { TenantUsersSection } from '@/components/app/TenantUsersSection';
 import { ActivityLogSection } from '@/components/app/ActivityLogSection';
+import { UfOverrideModal } from '@/components/app/UfOverrideModal';
 
 export function Configuracion() {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ export function Configuracion() {
   const [backupMessage, setBackupMessage] = useState('');
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
   const [deleteUnitConfirm, setDeleteUnitConfirm] = useState<{ open: boolean; unitId: string }>({ open: false, unitId: '' });
+  const [ufOverrideOpen, setUfOverrideOpen] = useState(false);
 
   useEffect(() => {
     setAssetName(state.asset?.name ?? '');
@@ -385,13 +387,7 @@ export function Configuracion() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      const raw = window.prompt('Override UF para hoy (sólo cuando mindicador.cl falla)');
-                      const value = Number(raw);
-                      if (Number.isFinite(value) && value > 0) {
-                        setUfOverride(new Date().toISOString().slice(0, 10), value);
-                      }
-                    }}
+                    onClick={() => setUfOverrideOpen(true)}
                     className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold"
                   >
                     Override manual
@@ -670,6 +666,16 @@ export function Configuracion() {
           setDeleteUnitConfirm({ open: false, unitId: '' });
         }}
         onCancel={() => setDeleteUnitConfirm({ open: false, unitId: '' })}
+      />
+
+      <UfOverrideModal
+        open={ufOverrideOpen}
+        onConfirm={(date, value) => {
+          setUfOverride(date, value);
+          setUfOverrideOpen(false);
+          setBackupMessage(`UF override guardado: ${value.toLocaleString('es-CL', { maximumFractionDigits: 2 })} para ${date}.`);
+        }}
+        onCancel={() => setUfOverrideOpen(false)}
       />
     </div>
   );

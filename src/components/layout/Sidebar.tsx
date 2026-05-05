@@ -13,9 +13,9 @@ import {
   Plus,
   ReceiptText,
   Settings,
-  Sparkles,
   Store,
   Users,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
