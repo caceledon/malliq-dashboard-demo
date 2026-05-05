@@ -1425,8 +1425,12 @@ function createAppInstance() {
   });
   app.use('/api/health', healthLimiter);
 
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  // Modest defaults for the bulk of /api routes (login, doc metadata, UF
+  // queries, autofill prompts). Only PUT /api/archive needs the 50mb cap
+  // because it carries the full backup; that limit is mounted explicitly
+  // on the route below.
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   app.use((req, res, next) => {
     const start = Date.now();
@@ -1689,7 +1693,11 @@ function createAppInstance() {
     }
   });
 
-  app.put('/api/archive', writerRoles, archiveWriteLimiter, async (request, response) => {
+  // Archive PUT carries the entire backup payload, which can include large
+  // documents — mount its own 50mb json parser here, overriding the 1mb
+  // global limit applied at boot.
+  const archiveJson = express.json({ limit: '50mb' });
+  app.put('/api/archive', writerRoles, archiveWriteLimiter, archiveJson, async (request, response) => {
     try {
       const zodResult = ArchivePutSchema.safeParse(request.body || {});
       if (!zodResult.success) {
