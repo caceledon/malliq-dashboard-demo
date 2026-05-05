@@ -1,0 +1,1 @@
+function e(e){return e.toLocaleString(`es-CL`,{minimumFractionDigits:1,maximumFractionDigits:2})+` UF`}function t(e){let t=typeof e==`string`?new Date(e):e;return Number.isNaN(t.getTime())?`Sin fecha`:`${t.getDate().toString().padStart(2,`0`)}/${(t.getMonth()+1).toString().padStart(2,`0`)}/${t.getFullYear()}`}function n(e){return e.toFixed(1)+`%`}export{n,e as r,t};
