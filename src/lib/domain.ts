@@ -1,6 +1,6 @@
 import { anomaliesToAlerts, detectSalesAnomalies } from './anomalies';
 
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark' | 'auto';
 export type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline' | 'conflict';
 
 export type SaleSource = 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection';

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { InteractiveMap } from '@/components/InteractiveMap';
 import { AreaChart, Delta, Donut, HealthRing, Kpi, LifeChip, TenantLogo } from '@/components/mallq/ui';
-import { getContractLifecycle } from '@/lib/domain';
+import { diffInDays, getContractLifecycle } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
@@ -148,6 +148,16 @@ export function AdminDashboard() {
   const renewalsSoon = insights.tenantSummaries.filter((t) => t.lifecycle === 'por_vencer').length;
   const expired = insights.tenantSummaries.filter((t) => t.lifecycle === 'vencido').length;
   const activeCount = insights.tenantSummaries.filter((t) => t.lifecycle === 'vigente').length;
+
+  const renewalQueue = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return insights.tenantSummaries
+      .filter((t) => t.lifecycle !== 'vencido' && t.endDate)
+      .map((t) => ({ tenant: t, daysToEnd: diffInDays(today, new Date(t.endDate)) }))
+      .filter(({ daysToEnd }) => Number.isFinite(daysToEnd) && daysToEnd >= 0 && daysToEnd <= 90)
+      .sort((a, b) => a.daysToEnd - b.daysToEnd);
+  }, [insights.tenantSummaries]);
 
   const avgSalesPerM2 = insights.averageSalesPerM2;
 
@@ -602,6 +612,39 @@ export function AdminDashboard() {
         </div>
       </div>
 
+      {/* RENEWAL QUEUE — contracts ending within 90 days */}
+      <div className="glass-card" style={{ marginTop: 16 }}>
+        <div className="mq-card-hd">
+          <div>
+            <div className="t-eyebrow">Cola de renovaciones · 90 días</div>
+            <h3 style={{ margin: '4px 0 0', fontFamily: 'var(--display)', fontSize: 15, fontWeight: 600 }}>
+              Contratos por renovar
+            </h3>
+          </div>
+          <span className="chip warn">
+            <span className="dot" />
+            {renewalQueue.length} contrato{renewalQueue.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        <div style={{ padding: '4px 6px' }}>
+          {renewalQueue.length === 0 ? (
+            <div className="t-dim" style={{ padding: 20, fontSize: 12.5 }}>
+              No hay contratos por vencer en los próximos 90 días.
+            </div>
+          ) : (
+            renewalQueue.map(({ tenant, daysToEnd }, i) => (
+              <RenewalRow
+                key={tenant.id}
+                tenant={tenant}
+                daysToEnd={daysToEnd}
+                index={i}
+                onClick={() => navigate(`/admin/locatarios/${tenant.id}`)}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
       <HealthLegendModal open={healthLegendOpen} onClose={() => setHealthLegendOpen(false)} />
     </div>
   );
@@ -773,6 +816,48 @@ function WatchRow({ tenant, index, onClick }: { tenant: TenantSummary; index: nu
         </div>
       </div>
       <LifeChip status={tenant.lifecycle} />
+    </div>
+  );
+}
+
+function RenewalRow({
+  tenant,
+  daysToEnd,
+  index,
+  onClick,
+}: {
+  tenant: TenantSummary;
+  daysToEnd: number;
+  index: number;
+  onClick: () => void;
+}) {
+  const urgency: 'critical' | 'warn' | 'info' =
+    daysToEnd <= 30 ? 'critical' : daysToEnd <= 60 ? 'warn' : 'info';
+  const chipClass = urgency === 'critical' ? 'chip danger' : urgency === 'warn' ? 'chip warn' : 'chip info';
+  return (
+    <div
+      className="row"
+      style={{
+        padding: '9px 12px',
+        gap: 10,
+        borderTop: index === 0 ? 0 : '1px solid var(--line)',
+        cursor: 'pointer',
+      }}
+      onClick={onClick}
+    >
+      <Calendar size={18} style={{ color: 'var(--ink-3)' }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
+          {tenant.storeName}
+        </div>
+        <div className="t-dim" style={{ fontSize: 11 }}>
+          {tenant.category} · termina {tenant.endDate}
+        </div>
+      </div>
+      <span className={chipClass}>
+        <span className="dot" />
+        {daysToEnd === 0 ? 'hoy' : `${daysToEnd} día${daysToEnd === 1 ? '' : 's'}`}
+      </span>
     </div>
   );
 }

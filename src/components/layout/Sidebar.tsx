@@ -114,7 +114,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           </div>
           <div style={{ marginLeft: 12 }}>
             <div className="title" style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1 }}>MallQ</div>
-            <div className="sub" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', opacity: 0.5, marginTop: 4 }}>Nano Banana 2</div>
+            <div className="sub" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', opacity: 0.5, marginTop: 4 }}>Analytics</div>
           </div>
         </div>
 

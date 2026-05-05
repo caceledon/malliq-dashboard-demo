@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Download, MapPinned, MoonStar, Plus, SlidersHorizontal, SunMedium, Trash2, Upload, Wifi } from 'lucide-react';
+import { Building2, Download, MapPinned, MonitorSmartphone, MoonStar, Plus, SlidersHorizontal, SunMedium, Trash2, Upload, Wifi } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { useTheme } from '@/lib/theme';
 import { createId } from '@/lib/domain';
@@ -23,7 +23,7 @@ export function Configuracion() {
   const navigate = useNavigate();
   const { state, actions, assetSummaries, portfolioStats, activeAssetId } = useAppState();
   const { currency, setCurrency, ufValue, refreshLatestUf, setUfOverride, latestUfDate, ufUpdatedAt, formatCurrency } = useCurrency();
-  const { theme, setTheme } = useTheme();
+  const { mode: themeMode, setTheme } = useTheme();
   const [assetName, setAssetName] = useState(state.asset?.name ?? '');
   const [city, setCity] = useState(state.asset?.city ?? '');
   const [region, setRegion] = useState(state.asset?.region ?? '');
@@ -56,7 +56,7 @@ export function Configuracion() {
       city,
       region,
       notes,
-      themePreference: theme,
+      themePreference: themeMode,
       backendUrl,
       syncEnabled,
     });
@@ -335,19 +335,30 @@ export function Configuracion() {
             </div>
             <div className="rounded-2xl border border-[var(--border-color)] p-4">
               <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Tema</p>
-              <button
-                onClick={() => {
-                  const nextTheme = theme === 'dark' ? 'light' : 'dark';
-                  setTheme(nextTheme);
-                  actions.updateAssetSettings({ themePreference: nextTheme });
-                }}
-                className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm"
-              >
-                {theme === 'dark' ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
-                {theme === 'dark' ? 'Usar modo claro' : 'Usar modo oscuro'}
-              </button>
+              <div className="mt-3 inline-flex rounded-xl border border-[var(--border-color)] p-1">
+                {([
+                  { value: 'light' as const, label: 'Claro', Icon: SunMedium },
+                  { value: 'dark' as const, label: 'Oscuro', Icon: MoonStar },
+                  { value: 'auto' as const, label: 'Auto', Icon: MonitorSmartphone },
+                ]).map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setTheme(value);
+                      actions.updateAssetSettings({ themePreference: value });
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm ${themeMode === value ? 'bg-[var(--card-bg)] font-semibold' : 'text-[var(--sidebar-fg)]'}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
               <p className="mt-2 text-xs text-[var(--sidebar-fg)]">
-                La preferencia se guarda en el activo y se propaga en la sincronización.
+                {themeMode === 'auto'
+                  ? 'En modo automático seguimos el ajuste del sistema operativo (claro/oscuro) y reaccionamos a sus cambios.'
+                  : 'La preferencia se guarda en el activo y se propaga en la sincronización.'}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border-color)] p-4">
