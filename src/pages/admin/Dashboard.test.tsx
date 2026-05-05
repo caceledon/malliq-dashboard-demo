@@ -35,7 +35,7 @@ describe('AdminDashboard', () => {
 
   it('renders the hero strip and KPI grid with no data', () => {
     const { container } = renderDashboard();
-    expect(screen.getByText(/Hola/)).toBeInTheDocument();
+    expect(screen.getByText(/Panel de Control/)).toBeInTheDocument();
     // Several tokens repeat across hero/chip/legend — assert presence via getAllByText.
     expect(screen.getAllByText(/Ocupación/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Ventas \/ m²/).length).toBeGreaterThan(0);
