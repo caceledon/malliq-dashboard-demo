@@ -254,6 +254,20 @@ export async function fetchRecentActivities(apiBase: string): Promise<{ activiti
   return assertJson(response);
 }
 
+export interface DailyDigest {
+  generatedAt: string;
+  since: string;
+  counts: { anomalies: number; renewals: number; activities: number };
+  anomalies: unknown[];
+  renewals: unknown[];
+  activities: ActivityItem[];
+}
+
+export async function fetchDailyDigest(apiBase: string): Promise<DailyDigest> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/notifications/daily`);
+  return assertJson(response);
+}
+
 export interface UfRate {
   date: string; // YYYY-MM-DD
   value: number;

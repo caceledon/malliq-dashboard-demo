@@ -1352,6 +1352,90 @@ export function buildAutomaticForecast(state: AppState, horizonMonths = 6, refer
   return result;
 }
 
+export interface ForecastBands {
+  months: string[];           // YYYY-MM order, oldest → newest
+  past: number[];             // historical actuals aligned with past months
+  p50: number[];              // base forecast
+  p10: number[];              // 10th percentile
+  p90: number[];              // 90th percentile
+  pastMonths: string[];       // history-only labels
+  forecastMonths: string[];   // forecast-only labels
+}
+
+// Builds historical + per-percentile forecast bands so the UI can render a
+// shaded P10–P90 envelope around the P50 base. σ comes from the trailing
+// 6 months; bands widen with the square root of the horizon to reflect that
+// uncertainty grows further out.
+export function buildForecastBands(
+  state: AppState,
+  horizonMonths = 6,
+  referenceDate = new Date(),
+  historyWindow = 12,
+): ForecastBands {
+  const startDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+
+  const monthly = new Map<string, number>();
+  state.sales.forEach((entry) => {
+    const month = monthKey(entry.occurredAt);
+    monthly.set(month, (monthly.get(month) ?? 0) + entry.grossAmount);
+  });
+  const sortedHistory = Array.from(monthly.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-historyWindow);
+
+  const pastMonths = sortedHistory.map(([m]) => m);
+  const past = sortedHistory.map(([, v]) => v);
+
+  const trailing = past.slice(-6);
+  const trailingMean = trailing.length > 0 ? trailing.reduce((s, v) => s + v, 0) / trailing.length : 0;
+  const variance = trailing.length > 1
+    ? trailing.reduce((s, v) => s + (v - trailingMean) ** 2, 0) / (trailing.length - 1)
+    : 0;
+  // Floor σ at 5% of trailingMean so a stable history doesn't collapse the band
+  // to a line; cap at 35% so a very volatile tenant doesn't dominate the chart.
+  const sigma = Math.max(
+    Math.sqrt(variance),
+    trailingMean * 0.05,
+  );
+  const sigmaCapped = Math.min(sigma, trailingMean * 0.35);
+
+  const budgetIndex = new Map(
+    state.planning
+      .filter((entry) => entry.type === 'budget')
+      .map((entry) => [entry.month, entry.salesAmount]),
+  );
+
+  const forecastMonths: string[] = [];
+  const p50: number[] = [];
+  const p10: number[] = [];
+  const p90: number[] = [];
+  const Z_10_90 = 1.2816; // ±1.282σ ≈ 80% interval (10th–90th percentile, normal)
+
+  for (let offset = 0; offset < horizonMonths; offset += 1) {
+    const monthDate = addMonths(startDate, offset);
+    const month = monthKey(monthDate);
+    const budgetForMonth = budgetIndex.get(month) ?? 0;
+    const base = Math.round(budgetForMonth > 0 ? budgetForMonth * 0.97 : trailingMean * (1 + offset * 0.015));
+    const horizonScale = Math.sqrt(offset + 1); // band widens out
+    const halfWidth = sigmaCapped * Z_10_90 * horizonScale;
+
+    forecastMonths.push(month);
+    p50.push(base);
+    p10.push(Math.max(0, Math.round(base - halfWidth)));
+    p90.push(Math.round(base + halfWidth));
+  }
+
+  return {
+    months: [...pastMonths, ...forecastMonths],
+    past,
+    p50,
+    p10,
+    p90,
+    pastMonths,
+    forecastMonths,
+  };
+}
+
 export function buildContractOverlapConflicts(state: AppState): ContractOverlapConflict[] {
   return state.units
     .map((unit) => {

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, Bot, ChevronRight, FileText, Sparkles, Upload } from 'lucide-react';
+import { ArrowUpRight, Bot, ChevronRight, FileText, Sparkles, Upload, X } from 'lucide-react';
+import { fetchDailyDigest, resolveApiBase, type DailyDigest } from '@/lib/api';
 import {
   AiTask,
   Bento,
@@ -139,6 +140,8 @@ export function AdminDashboard() {
 
   return (
     <div style={{ padding: '8px 28px 56px' }}>
+      <DigestCard />
+
       <TopBar
         eyebrow={`Cockpit · ${todayLabel()}`}
         title={
@@ -719,3 +722,132 @@ function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => vo
     </div>
   );
 }
+
+const LAST_VISIT_KEY = 'malliq-last-visit';
+
+function readLastVisit(): number {
+  try {
+    const raw = localStorage.getItem(LAST_VISIT_KEY);
+    return raw ? Number(raw) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function DigestCard() {
+  const navigate = useNavigate();
+  const [digest, setDigest] = useState<DailyDigest | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [lastVisit] = useState<number>(() => readLastVisit());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDailyDigest(resolveApiBase())
+      .then((result) => {
+        if (cancelled) return;
+        setDigest(result);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDigest(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Filter activities to only those since the last visit, when available.
+  const sinceLast = useMemo(() => {
+    if (!digest) return null;
+    const cutoff = Math.max(lastVisit, new Date(digest.since).getTime());
+    const recent = (digest.activities ?? []).filter((a) => {
+      const ts = a?.created_at ? new Date(a.created_at).getTime() : 0;
+      return ts >= cutoff;
+    });
+    return {
+      activitiesSinceVisit: recent.length,
+      anomalies: digest.counts.anomalies,
+      renewals: digest.counts.renewals,
+    };
+  }, [digest, lastVisit]);
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(LAST_VISIT_KEY, String(Date.now()));
+    } catch {
+      // Storage may be disabled — silent fail is fine, the card just shows again next mount.
+    }
+  };
+
+  if (dismissed || !sinceLast) return null;
+  const total = sinceLast.activitiesSinceVisit + sinceLast.anomalies + sinceLast.renewals;
+  if (total === 0) return null;
+
+  return (
+    <div
+      className="mq-card"
+      style={{
+        marginBottom: 16,
+        padding: 14,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        borderColor: 'var(--violet-soft)',
+        background: 'color-mix(in oklab, var(--violet-soft) 35%, var(--surface))',
+      }}
+      role="region"
+      aria-label="Resumen desde tu última visita"
+    >
+      <Sparkles size={18} style={{ color: 'var(--violet-deep)', flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="mq-h-eyebrow" style={{ marginBottom: 2 }}>
+          Desde tu última visita
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--ink-2)', display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+          {sinceLast.anomalies > 0 ? (
+            <button
+              type="button"
+              onClick={() => navigate('/admin/alertas')}
+              className="mq-link"
+              style={{ background: 'none', border: 0, padding: 0, color: 'var(--coral)', cursor: 'pointer', fontWeight: 600 }}
+            >
+              {sinceLast.anomalies} anomalías nuevas
+            </button>
+          ) : null}
+          {sinceLast.renewals > 0 ? (
+            <button
+              type="button"
+              onClick={() => navigate('/admin/rentas')}
+              className="mq-link"
+              style={{ background: 'none', border: 0, padding: 0, color: 'var(--amber)', cursor: 'pointer', fontWeight: 600 }}
+            >
+              {sinceLast.renewals} contratos por vencer
+            </button>
+          ) : null}
+          {sinceLast.activitiesSinceVisit > 0 ? (
+            <span style={{ color: 'var(--ink-2)' }}>
+              {sinceLast.activitiesSinceVisit} actividades registradas
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleDismiss}
+        aria-label="Marcar como visto"
+        style={{
+          background: 'none',
+          border: 0,
+          padding: 6,
+          cursor: 'pointer',
+          color: 'var(--ink-3)',
+          display: 'inline-flex',
+        }}
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+

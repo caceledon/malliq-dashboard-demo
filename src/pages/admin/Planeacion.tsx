@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FileUp, Pencil, Trash2, WandSparkles } from 'lucide-react';
 import { DocumentManager } from '@/components/app/DocumentManager';
-import { createId, monthKey, type PlanningEntry, type PlanType } from '@/lib/domain';
+import { buildForecastBands, createId, monthKey, type PlanningEntry, type PlanType } from '@/lib/domain';
 import { formatPercent } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { TopBar } from '@/components/mallq/ui';
+import { ForecastChart, TopBar } from '@/components/mallq/ui';
 
 function parsePlanningRows(raw: string, type: PlanType): PlanningEntry[] {
   return raw
@@ -59,6 +59,12 @@ export function Planeacion() {
   const forecastGapPct = currentForecast?.salesAmount
     ? ((insights.monthlySales - currentForecast.salesAmount) / currentForecast.salesAmount) * 100
     : undefined;
+
+  const forecastBands = useMemo(
+    () => buildForecastBands(state, forecastMonths),
+    [state, forecastMonths],
+  );
+  const hasForecastData = forecastBands.past.length > 0 || forecastBands.p50.length > 0;
 
   const resetForm = () => {
     setEntryId('');
@@ -250,6 +256,29 @@ export function Planeacion() {
 
         <DocumentManager entityType="asset" entityId={state.asset?.id ?? 'asset'} title="Respaldos de presupuesto y forecast" />
       </div>
+
+      {hasForecastData ? (
+        <div className="glass-card p-5">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-semibold">Forecast con bandas P10 / P50 / P90</h3>
+            <p className="text-xs text-[var(--sidebar-fg)]">
+              Histórico (línea oscura) y proyección base (línea violeta). La banda violeta muestra el rango P10–P90
+              construido a partir de la volatilidad reciente — se ensancha con el horizonte porque la incertidumbre
+              crece.
+            </p>
+          </div>
+          <div className="mt-4">
+            <ForecastChart
+              past={forecastBands.past}
+              base={forecastBands.p50}
+              low={forecastBands.p10}
+              high={forecastBands.p90}
+              months={forecastBands.months}
+              ariaLabel={`Forecast con histórico de ${forecastBands.past.length} meses y proyección de ${forecastBands.p50.length}`}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <PlanningTable
