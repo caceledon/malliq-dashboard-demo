@@ -21,6 +21,7 @@ const Planeacion = lazy(() => import('@/pages/admin/Planeacion').then((module) =
 const Ecosistema = lazy(() => import('@/pages/admin/Ecosistema').then((module) => ({ default: module.Ecosistema })));
 const Alertas = lazy(() => import('@/pages/admin/Alertas').then((module) => ({ default: module.Alertas })));
 const Configuracion = lazy(() => import('@/pages/admin/Configuracion').then((module) => ({ default: module.Configuracion })));
+const Simulador = lazy(() => import('@/pages/admin/Simulador').then((module) => ({ default: module.Simulador })));
 const LocatarioDashboard = lazy(() => import('@/pages/locatario/Dashboard').then((module) => ({ default: module.LocatarioDashboard })));
 const LocatarioContrato = lazy(() => import('@/pages/locatario/Contrato').then((module) => ({ default: module.LocatarioContrato })));
 const LocatarioVentas = lazy(() => import('@/pages/locatario/Ventas').then((module) => ({ default: module.LocatarioVentas })));
@@ -41,13 +42,13 @@ function withSuspense(element: ReactNode) {
 
 function ActiveAssetThemeSync() {
   const { state } = useAppState();
-  const { theme, setTheme } = useTheme();
+  const { mode, setTheme } = useTheme();
 
   useEffect(() => {
-    if (state.asset?.themePreference && state.asset.themePreference !== theme) {
+    if (state.asset?.themePreference && state.asset.themePreference !== mode) {
       setTheme(state.asset.themePreference);
     }
-  }, [state.asset?.id, state.asset?.themePreference, theme, setTheme]);
+  }, [state.asset?.id, state.asset?.themePreference, mode, setTheme]);
 
   return null;
 }
@@ -75,6 +76,7 @@ function App() {
                   <Route path="/admin/ecosistema" element={<AdminOnly>{withSuspense(<Ecosistema />)}</AdminOnly>} />
                   <Route path="/admin/alertas" element={<AdminOnly>{withSuspense(<Alertas />)}</AdminOnly>} />
                   <Route path="/admin/configuracion" element={<AdminOnly>{withSuspense(<Configuracion />)}</AdminOnly>} />
+                  <Route path="/admin/simulador" element={<AdminOnly>{withSuspense(<Simulador />)}</AdminOnly>} />
 
                   <Route path="/locatario/dashboard" element={<LocatarioOnly>{withSuspense(<LocatarioDashboard />)}</LocatarioOnly>} />
                   <Route path="/locatario/contrato" element={<LocatarioOnly>{withSuspense(<LocatarioContrato />)}</LocatarioOnly>} />

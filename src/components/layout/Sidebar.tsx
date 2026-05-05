@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Bolt,
+  Calculator,
   ChevronDown,
   Database,
   FileArchive,
@@ -79,6 +80,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         ? [
             { to: '/admin/alertas', label: 'Alertas', icon: AlertTriangle, tag: insights.alerts.length || null },
             { to: '/admin/planeacion', label: 'Presupuesto', icon: Database },
+            { to: '/admin/simulador', label: 'Simulador renta', icon: Calculator },
             { to: '/admin/ecosistema', label: 'Prospectos', icon: Store },
             { to: '/admin/configuracion', label: 'Configuración', icon: Settings },
           ]

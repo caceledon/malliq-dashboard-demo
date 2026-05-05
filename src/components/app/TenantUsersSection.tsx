@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Upload, UserPlus } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { useToast } from '@/components/Toast';
 import { authFetch, register } from '@/lib/auth';
@@ -21,6 +21,62 @@ const ROLE_LABEL: Record<TenantUser['role'], string> = {
   locatario: 'Locatario',
 };
 
+// Minimal RFC-4180-ish CSV parser: handles quoted fields with commas and
+// embedded "" escapes. Returns rows of cells (no trimming).
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let i = 0;
+  let inQuotes = false;
+  const src = text.replace(/\r\n?/g, '\n');
+  while (i < src.length) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          cell += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      cell += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+    if (ch === ',') {
+      row.push(cell);
+      cell = '';
+      i += 1;
+      continue;
+    }
+    if (ch === '\n') {
+      row.push(cell);
+      // Skip blank lines.
+      if (row.some((c) => c.length > 0)) rows.push(row);
+      row = [];
+      cell = '';
+      i += 1;
+      continue;
+    }
+    cell += ch;
+    i += 1;
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    if (row.some((c) => c.length > 0)) rows.push(row);
+  }
+  return rows;
+}
+
 export function TenantUsersSection() {
   const { state, activeAssetId } = useAppState();
   const { toast } = useToast();
@@ -33,6 +89,10 @@ export function TenantUsersSection() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [contractId, setContractId] = useState('');
+
+  // bulk-import state
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [bulkSummary, setBulkSummary] = useState<{ created: number; skipped: { row: number; reason: string }[] } | null>(null);
 
   const apiBase = state.asset?.backendUrl ?? '/api';
 
@@ -86,6 +146,80 @@ export function TenantUsersSection() {
       await loadUsers();
     } catch (error) {
       toast('error', 'No se pudo crear', error instanceof Error ? error.message : 'desconocido');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setBusy(true);
+    setBulkSummary(null);
+    const skipped: { row: number; reason: string }[] = [];
+    let created = 0;
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (rows.length === 0) {
+        toast('warning', 'CSV vacío', 'No se encontraron filas.');
+        return;
+      }
+      // Header detection: if first row contains "email" or "correo", treat as headers.
+      const first = rows[0].map((c) => c.toLowerCase());
+      const hasHeader = first.some((c) => c === 'email' || c === 'correo');
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+      const headers = hasHeader ? first : ['email', 'password', 'displayname', 'contractid'];
+      const idx = (name: string) => headers.indexOf(name);
+      const emailIdx = Math.max(idx('email'), idx('correo'));
+      const passwordIdx = Math.max(idx('password'), idx('contraseña'), idx('contrasena'));
+      const nameIdx = Math.max(idx('displayname'), idx('nombre'));
+      const contractIdx = Math.max(idx('contractid'), idx('contrato'));
+
+      for (let i = 0; i < dataRows.length; i += 1) {
+        const row = dataRows[i];
+        const lineNumber = hasHeader ? i + 2 : i + 1;
+        const cells = row.map((c) => c.trim());
+        const rowEmail = emailIdx >= 0 ? cells[emailIdx] : cells[0];
+        const rowPassword = passwordIdx >= 0 ? cells[passwordIdx] : cells[1];
+        const rowName = nameIdx >= 0 ? cells[nameIdx] : cells[2];
+        const rowContract = contractIdx >= 0 ? cells[contractIdx] : cells[3];
+        if (!rowEmail || !rowPassword || !rowContract) {
+          skipped.push({ row: lineNumber, reason: 'email, password y contractId son obligatorios.' });
+          continue;
+        }
+        if (rowPassword.length < 8) {
+          skipped.push({ row: lineNumber, reason: 'password con menos de 8 caracteres.' });
+          continue;
+        }
+        if (!state.contracts.some((c) => c.id === rowContract)) {
+          skipped.push({ row: lineNumber, reason: `contrato "${rowContract}" no existe en el activo actual.` });
+          continue;
+        }
+        try {
+          await register(apiBase, {
+            email: rowEmail,
+            password: rowPassword,
+            displayName: rowName || undefined,
+            role: 'locatario',
+            tenantContractId: rowContract,
+            assetId: activeAssetId ?? null,
+          });
+          created += 1;
+        } catch (error) {
+          skipped.push({ row: lineNumber, reason: error instanceof Error ? error.message : 'error desconocido' });
+        }
+      }
+      setBulkSummary({ created, skipped });
+      const message = `Creados: ${created}. Omitidos: ${skipped.length}.`;
+      toast(skipped.length === 0 ? 'success' : 'warning', 'Importación CSV', message);
+      if (created > 0) {
+        await loadUsers();
+      }
+    } catch (error) {
+      toast('error', 'Importación falló', error instanceof Error ? error.message : 'desconocido');
     } finally {
       setBusy(false);
     }
@@ -167,14 +301,56 @@ export function TenantUsersSection() {
           </select>
         </label>
       </div>
-      <button
-        type="button"
-        onClick={createTenantUser}
-        disabled={busy}
-        className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-      >
-        {busy ? 'Creando…' : 'Crear locatario'}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={createTenantUser}
+          disabled={busy}
+          className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {busy ? 'Creando…' : 'Crear locatario'}
+        </button>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+          title="CSV con columnas: email, password, displayName, contractId"
+        >
+          <Upload className="h-4 w-4" />
+          Importar CSV
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={importCsv}
+        />
+        <span className="text-xs text-[var(--sidebar-fg)]">
+          Columnas: <code>email,password,displayName,contractId</code>
+        </span>
+      </div>
+
+      {bulkSummary ? (
+        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-3 text-xs">
+          <p className="font-semibold">
+            Creados: {bulkSummary.created} · Omitidos: {bulkSummary.skipped.length}
+          </p>
+          {bulkSummary.skipped.length > 0 ? (
+            <ul className="mt-2 space-y-1 text-[var(--sidebar-fg)]">
+              {bulkSummary.skipped.slice(0, 8).map((s) => (
+                <li key={s.row}>
+                  Fila {s.row}: {s.reason}
+                </li>
+              ))}
+              {bulkSummary.skipped.length > 8 ? (
+                <li>… {bulkSummary.skipped.length - 8} fila(s) más con error.</li>
+              ) : null}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Cuentas existentes</p>

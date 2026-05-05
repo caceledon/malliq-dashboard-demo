@@ -13,6 +13,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import './env.js';
 import { fetchFullState, getMeta, incrementRevision, replaceFullState, logActivity, getRecentActivities } from './db.js';
+import { detectSalesAnomalies, anomaliesToAlerts, buildRenewalAlerts } from './anomalies.js';
 import { buildRichExtractionMessages } from './autofill/richPrompt.js';
 import { applyPostDerivations } from './autofill/postDerivations.js';
 import {
@@ -1719,6 +1720,35 @@ function createAppInstance() {
       response.json({ activities });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
+    }
+  });
+
+  app.get('/api/notifications/daily', async (_request, response) => {
+    try {
+      const state = await loadState();
+      const reference = new Date();
+      const since = new Date(reference.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      const anomalyAlerts = anomaliesToAlerts(detectSalesAnomalies(state, reference), reference);
+      const renewalAlerts = buildRenewalAlerts(state, reference, 30);
+      const activities = await getRecentActivities(50);
+      const recentActivities = (activities || []).filter((a) => {
+        if (!a?.createdAt) return false;
+        return new Date(a.createdAt).toISOString() >= since;
+      });
+      response.json({
+        generatedAt: reference.toISOString(),
+        since,
+        counts: {
+          anomalies: anomalyAlerts.length,
+          renewals: renewalAlerts.length,
+          activities: recentActivities.length,
+        },
+        anomalies: anomalyAlerts,
+        renewals: renewalAlerts,
+        activities: recentActivities,
+      });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'No se pudo construir el resumen diario.' });
     }
   });
 
