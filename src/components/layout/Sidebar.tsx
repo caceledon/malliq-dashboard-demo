@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
 import { useAppState } from '@/store/appState';
 import { logout } from '@/lib/auth';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
-import logoNano from '@/assets/nano_banana/logo.png';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -105,13 +104,16 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         style={{ background: 'color-mix(in oklab, var(--sidebar) 75%, transparent)', borderColor: 'color-mix(in oklab, var(--line) 50%, transparent)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         {/* Brand */}
-        <div className="mq-brand">
-          <div className="logo" style={{ background: 'transparent', width: 40, height: 40, borderRadius: 8, overflow: 'hidden' }}>
-            <img src={logoNano} alt="MallQ Logo" className="w-full h-full object-cover" />
+        <div className="mq-brand" style={{ padding: '24px 20px 20px' }}>
+          <div style={{ position: 'relative', width: 42, height: 42, flexShrink: 0 }}>
+            <div className="absolute inset-0 rounded-xl bg-orange-500/20 blur-md" />
+            <div className="relative flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg ring-1 ring-white/20">
+              <Zap size={22} fill="white" className="text-white" />
+            </div>
           </div>
-          <div>
-            <div className="title">MallQ</div>
-            <div className="sub">Analytics</div>
+          <div style={{ marginLeft: 12 }}>
+            <div className="title" style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1 }}>MallQ</div>
+            <div className="sub" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', opacity: 0.5, marginTop: 4 }}>Nano Banana 2</div>
           </div>
         </div>
 

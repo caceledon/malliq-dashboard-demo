@@ -23,8 +23,6 @@ import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { useServerHealth } from '@/hooks/useServerHealth';
-import logoNano from '@/assets/nano_banana/logo.png';
-import photo1 from '@/assets/nano_banana/photo1.png';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -177,17 +175,6 @@ export function AdminDashboard() {
         <div
           style={{
             position: 'absolute',
-            inset: 0,
-            zIndex: 0,
-            opacity: 0.05,
-          }}
-        >
-          <img src={photo1} alt="" className="h-full w-full object-cover grayscale" />
-        </div>
-        
-        <div
-          style={{
-            position: 'absolute',
             right: -60,
             top: -60,
             width: 320,
@@ -200,7 +187,9 @@ export function AdminDashboard() {
         />
 
         <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-[24px] bg-white p-1.5 shadow-2xl ring-1 ring-black/5 z-10 transition-transform duration-500 hover:scale-105">
-          <img src={logoNano} alt="Logo" className="h-full w-full rounded-[18px] object-cover" />
+          <div className="h-full w-full rounded-[18px] bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-bold text-2xl">
+            MQ
+          </div>
         </div>
 
         <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>

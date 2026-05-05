@@ -137,29 +137,19 @@ html {
 }
 
 body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
   min-height: 100vh;
-  background-color: var(--paper);
-  background-image:
-    radial-gradient(1200px 600px at 85% -10%, oklch(0.96 0.028 55 / 0.5), transparent 60%),
-    radial-gradient(800px 500px at -10% 110%, oklch(0.96 0.022 160 / 0.35), transparent 55%),
-    url('./assets/nano_banana/bg.png');
-  background-position: center, center, center;
-  background-size: auto, auto, cover;
-  background-attachment: scroll, scroll, fixed;
-  background-blend-mode: overlay;
-  color: var(--ink-2);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .dark body {
   background-color: var(--paper);
-  background-image:
-    linear-gradient(to bottom, rgba(7, 17, 31, 0.85), rgba(7, 17, 31, 0.95)),
-    url('./assets/nano_banana/bg.png');
-  background-position: center, center;
-  background-size: auto, cover;
-  background-attachment: scroll, fixed;
-  background-blend-mode: overlay;
 }
 
 button, input, textarea, select { font: inherit; color: inherit; }
