@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Building2, FileSignature, Plus, Search } from 'lucide-react';
+import { Building2, Download, FileSignature, Plus, Search } from 'lucide-react';
 import { autofillContractFromPdf, resolveApiBase, type ContractAutofillResult } from '@/lib/api';
 import {
   contractDateRangesOverlap,
@@ -12,7 +12,9 @@ import {
 } from '@/lib/domain';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/format';
 import { ContractEditor } from '@/components/app/ContractEditor';
 import { AutofillChat } from '@/components/AutofillChat';
 
@@ -151,6 +153,7 @@ export function Locatarios() {
   const location = useLocation();
   const { state, insights, actions } = useAppState();
   const { formatCurrency } = useCurrency();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState<Contract>(createDraftContract());
   const [editorMessage, setEditorMessage] = useState('');
@@ -348,62 +351,122 @@ export function Locatarios() {
             />
           </div>
 
-          <div className="glass-card overflow-hidden">
-            <table className="w-full min-w-[840px]">
+          <div className="glass-card overflow-x-auto">
+            <table className="w-full min-w-[1400px]">
               <thead className="bg-[var(--hover-bg)]">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Tienda</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Locales</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">m2</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Ventas mes</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Renta</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Firma</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Activo</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">COD</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Tienda</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Rubro</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Inicio</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Término</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">GLA</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Fija UF/m²</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Variable %</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Gasto común</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Fondo promo</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Venta promedio</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Venta x m²</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Firma</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Contrato</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((tenant) => (
-                  <tr
-                    key={tenant.id}
-                    className="cursor-pointer border-t border-[var(--border-color)]"
-                    onClick={() => {
-                      const selectedContract = state.contracts.find((contract) => contract.id === tenant.id);
-                      if (selectedContract) {
-                        setDraft(selectedContract);
-                        setEditorMessage('');
-                        setAutofillPendingFields([]);
-                        setAutofillEvidence(emptyAutofillEvidence);
-                      }
-                    }}
-                    onDoubleClick={() => navigate(`/admin/locatarios/${tenant.id}`)}
-                  >
-                    <td className="px-4 py-3">
-                      <div>
+                {filtered.map((tenant) => {
+                  const contract = state.contracts.find((item) => item.id === tenant.id);
+                  const contractDoc = state.documents.find(
+                    (document) =>
+                      document.entityType === 'contract' && document.entityId === tenant.id && document.kind === 'contrato',
+                  );
+                  const fijaUfM2 = tenant.areaM2 > 0 && tenant.baseRentUF > 0 ? tenant.baseRentUF : 0;
+                  const downloadContract = () => {
+                    if (!contractDoc) {
+                      toast('warning', 'Sin PDF de contrato', 'Carga primero el archivo en "Documentación contractual".');
+                      return;
+                    }
+                    actions.downloadDocument(contractDoc.id).catch((error) => {
+                      toast('error', 'No se pudo descargar', error instanceof Error ? error.message : 'desconocido');
+                    });
+                  };
+                  return (
+                    <tr
+                      key={tenant.id}
+                      className="cursor-pointer border-t border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+                      onClick={() => {
+                        if (contract) {
+                          setDraft(contract);
+                          setEditorMessage('');
+                          setAutofillPendingFields([]);
+                          setAutofillEvidence(emptyAutofillEvidence);
+                        }
+                      }}
+                      onDoubleClick={() => navigate(`/admin/locatarios/${tenant.id}`)}
+                    >
+                      <td className="px-3 py-3 text-xs text-[var(--sidebar-fg)]">{state.asset?.name ?? '—'}</td>
+                      <td className="px-3 py-3 text-xs font-mono">{tenant.localCodes.join(', ') || '—'}</td>
+                      <td className="px-3 py-3">
                         <p className="text-sm font-semibold">{tenant.storeName}</p>
-                        <p className="text-xs text-[var(--sidebar-fg)]">{tenant.companyName}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">{tenant.localCodes.join(', ')}</td>
-                    <td className="px-4 py-3 text-sm">{tenant.areaM2} m2</td>
-                    <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(tenant.salesCurrent)}</td>
-                    <td className="px-4 py-3 text-sm">{formatCurrency(tenant.rentTotal)}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          'rounded-full px-2.5 py-1 text-xs font-medium',
-                          tenant.signatureStatus === 'firmado' && 'badge-success',
-                          tenant.signatureStatus === 'pendiente' && 'badge-danger',
-                          tenant.signatureStatus === 'en_revision' && 'badge-warning',
-                          tenant.signatureStatus === 'parcial' && 'badge-info',
-                        )}
-                      >
-                        {signatureLabels[tenant.signatureStatus]}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                        <p className="text-[11px] text-[var(--sidebar-fg)]">{tenant.companyName}</p>
+                      </td>
+                      <td className="px-3 py-3 text-xs">{tenant.category}</td>
+                      <td className="px-3 py-3 text-xs">{formatDate(tenant.startDate)}</td>
+                      <td className="px-3 py-3 text-xs">{formatDate(tenant.endDate)}</td>
+                      <td className="px-3 py-3 text-right text-xs">{tenant.areaM2}</td>
+                      <td className="px-3 py-3 text-right text-xs">
+                        {fijaUfM2 > 0 ? fijaUfM2.toFixed(2) : '—'}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs">
+                        {contract ? `${contract.variableRentPct}%` : '—'}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs">
+                        {tenant.commonExpensesClp > 0
+                          ? `${formatCurrency(tenant.commonExpensesClp)} ${contract?.commonExpensesCurrency ?? 'CLP'}`
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs">
+                        {tenant.fondoPromocionClp > 0
+                          ? `${formatCurrency(tenant.fondoPromocionClp)} ${contract?.fondoPromocionCurrency ?? 'CLP'}`
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs font-semibold">
+                        {formatCurrency(tenant.salesCurrent)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs">{formatCurrency(tenant.ventaPorM2)}</td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-1 text-[11px] font-medium',
+                            tenant.signatureStatus === 'firmado' && 'badge-success',
+                            tenant.signatureStatus === 'pendiente' && 'badge-danger',
+                            tenant.signatureStatus === 'en_revision' && 'badge-warning',
+                            tenant.signatureStatus === 'parcial' && 'badge-info',
+                          )}
+                        >
+                          {signatureLabels[tenant.signatureStatus]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            downloadContract();
+                          }}
+                          disabled={!contractDoc}
+                          title={contractDoc ? `Descargar ${contractDoc.name}` : 'Sin PDF de contrato'}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-color)] px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Download className="h-3 w-3" />
+                          PDF
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--sidebar-fg)]">
+                    <td colSpan={15} className="px-4 py-8 text-center text-sm text-[var(--sidebar-fg)]">
                       No hay contratos que coincidan con la búsqueda.
                     </td>
                   </tr>

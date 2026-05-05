@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent } from 'react';
 import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import { useAppState } from '@/store/appState';
+import { useToast } from '@/components/Toast';
 import { formatDate } from '@/lib/format';
 import type { DocumentKind, DocumentRecord } from '@/lib/domain';
 
@@ -26,6 +27,7 @@ interface DocumentManagerProps {
 
 export function DocumentManager({ entityType, entityId, title }: DocumentManagerProps) {
   const { state, actions } = useAppState();
+  const { toast } = useToast();
   const documents = state.documents.filter(
     (document) => document.entityType === entityType && document.entityId === entityId,
   );
@@ -41,19 +43,49 @@ export function DocumentManager({ entityType, entityId, title }: DocumentManager
 
     setBusy(true);
     try {
+      let success = 0;
       for (const file of files) {
-        await actions.uploadDocument({
-          entityType,
-          entityId,
-          kind,
-          note,
-          file,
-        });
+        try {
+          await actions.uploadDocument({
+            entityType,
+            entityId,
+            kind,
+            note,
+            file,
+          });
+          success += 1;
+        } catch (error) {
+          toast('error', 'Error al cargar documento', `${file.name}: ${error instanceof Error ? error.message : 'desconocido'}`);
+        }
+      }
+      if (success > 0) {
+        toast(
+          'success',
+          'Cargado exitosamente',
+          success === 1 ? `${files[0].name} cargado.` : `${success} documento(s) cargado(s).`,
+        );
       }
       setNote('');
       event.target.value = '';
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleDownload = async (documentId: string, name: string) => {
+    try {
+      await actions.downloadDocument(documentId);
+    } catch (error) {
+      toast('error', 'No se pudo descargar', `${name}: ${error instanceof Error ? error.message : 'desconocido'}`);
+    }
+  };
+
+  const handleDelete = async (documentId: string, name: string) => {
+    try {
+      await actions.deleteDocument(documentId);
+      toast('success', 'Documento eliminado', name);
+    } catch (error) {
+      toast('error', 'No se pudo eliminar', `${name}: ${error instanceof Error ? error.message : 'desconocido'}`);
     }
   };
 
@@ -120,14 +152,14 @@ export function DocumentManager({ entityType, entityId, title }: DocumentManager
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => actions.downloadDocument(document.id)}
+                  onClick={() => handleDownload(document.id, document.name)}
                   className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-color)] px-3 py-2 text-sm"
                 >
                   <Download className="h-4 w-4" />
                   Descargar
                 </button>
                 <button
-                  onClick={() => actions.deleteDocument(document.id)}
+                  onClick={() => handleDelete(document.id, document.name)}
                   className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />

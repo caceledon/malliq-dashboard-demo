@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { useUndoToast } from '@/components/UndoToast';
-import { createId, type PosConnectionProfile, type SaleRecord } from '@/lib/domain';
+import { useToast } from '@/components/Toast';
+import { createId, type CurrencyTag, type PosConnectionProfile, type SaleRecord } from '@/lib/domain';
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { materializeSales, parsePosPayload, parseReceiptText, type ParsedSaleDraft } from '@/lib/importers';
@@ -34,10 +35,13 @@ const emptyBucket: DraftBucket = {
 export function SalesIngestionCenter() {
   const { state, unitsByCode, actions } = useAppState();
   const { showUndo } = useUndoToast();
+  const { toast } = useToast();
+  const { ufValue } = useCurrency();
   const serverSyncEnabled = Boolean(state.asset?.syncEnabled && state.asset?.backendUrl);
   const [manualContractId, setManualContractId] = useState('');
   const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
   const [manualAmount, setManualAmount] = useState('');
+  const [manualAmountCurrency, setManualAmountCurrency] = useState<CurrencyTag>('CLP');
   const [manualTicket, setManualTicket] = useState('');
 
   const [ocrBucket, setOcrBucket] = useState<DraftBucket>(emptyBucket);
@@ -63,7 +67,8 @@ export function SalesIngestionCenter() {
   const [posPreviewPayload, setPosPreviewPayload] = useState('');
   const [posBucket, setPosBucket] = useState<DraftBucket>(emptyBucket);
   const [posBusy, setPosBusy] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
+  // statusMessage state removed — toasts cover all completion signals; the
+  // OCR spinner already indicates in-flight work.
   const [requestBody, setRequestBody] = useState('');
 
   const contracts = state.contracts;
@@ -72,7 +77,7 @@ export function SalesIngestionCenter() {
 
   const reparseOcrText = () => {
     if (!ocrText.trim()) {
-      setStatusMessage('No hay texto OCR para reprocesar.');
+      toast('warning', 'Sin texto OCR', 'No hay texto OCR para reprocesar.');
       return;
     }
 
@@ -80,7 +85,7 @@ export function SalesIngestionCenter() {
       ...current,
       drafts: parseReceiptText(ocrText, 'ocr'),
     }));
-    setStatusMessage('Texto OCR reprocesado. Revisa el preview antes de importar.');
+    toast('success', 'Texto OCR reprocesado', 'Revisa el preview antes de importar.');
   };
 
   const commitDrafts = (bucket: DraftBucket, source: DraftSource) => {
@@ -109,16 +114,21 @@ export function SalesIngestionCenter() {
       note: `Importación ${source} aplicada correctamente.`,
     });
 
-    setStatusMessage(
-      result.added > 0
-        ? `Importación ${source}: ${result.added} registro(s) agregado(s)${result.duplicates > 0 ? `, ${result.duplicates} duplicado(s) omitido(s)` : ''}.`
-        : `Importación ${source}: sin nuevos registros${result.duplicates > 0 ? `, ${result.duplicates} duplicado(s) detectado(s)` : ''}.`,
-    );
-
     if (result.added > 0) {
+      toast(
+        'success',
+        'Cargado exitosamente',
+        `${result.added} venta(s) importada(s) desde ${source}${result.duplicates > 0 ? ` · ${result.duplicates} duplicado(s) omitido(s)` : ''}.`,
+      );
       showUndo(
         `${result.added} ventas agregadas (${source})`,
         () => actions.undoImport({ addedIds: result.addedIds, importLogId: result.importLogId }),
+      );
+    } else {
+      toast(
+        'info',
+        'Sin nuevos registros',
+        result.duplicates > 0 ? `${result.duplicates} duplicado(s) detectado(s).` : 'No se encontraron registros nuevos.',
       );
     }
 
@@ -127,9 +137,17 @@ export function SalesIngestionCenter() {
 
   const handleManualCreate = () => {
     const selectedContract = contracts.find((contract) => contract.id === manualContractId);
-    if (!selectedContract || Number(manualAmount) <= 0) {
+    const rawAmount = Number(manualAmount);
+    if (!selectedContract || !Number.isFinite(rawAmount) || rawAmount <= 0) {
+      toast('warning', 'Datos incompletos', 'Selecciona un contrato y un monto mayor a cero.');
       return;
     }
+
+    // Always persist sales in CLP. If the operator declared the amount in UF,
+    // convert with the current ufValue from CurrencyContext.
+    const grossAmount = manualAmountCurrency === 'UF' && ufValue > 0
+      ? Math.round(rawAmount * ufValue)
+      : Math.round(rawAmount);
 
     const sale: SaleRecord = {
       id: createId('sale'),
@@ -138,7 +156,7 @@ export function SalesIngestionCenter() {
       storeLabel: selectedContract.storeName,
       source: 'manual',
       occurredAt: `${manualDate}T12:00:00`,
-      grossAmount: Number(manualAmount),
+      grossAmount,
       ticketNumber: manualTicket || undefined,
       importedAt: new Date().toISOString(),
     };
@@ -149,18 +167,17 @@ export function SalesIngestionCenter() {
       importedCount: 1,
       note: `Carga manual para ${selectedContract.storeName}.`,
     });
-    setStatusMessage(
-      result.added === 1
-        ? `Venta manual guardada para ${selectedContract.storeName}.`
-        : `La venta manual ya existía y se omitió como duplicada.`,
-    );
+    if (result.added === 1) {
+      toast('success', 'Cargado exitosamente', `Venta manual guardada para ${selectedContract.storeName}.`);
+    } else {
+      toast('info', 'Duplicado', 'La venta manual ya existía y se omitió.');
+    }
     setManualAmount('');
     setManualTicket('');
   };
 
   const runOcr = async (file: File) => {
     setOcrBusy(true);
-    setStatusMessage('Procesando imagen con OCR...');
     try {
       const Tesseract = await import('tesseract.js');
       const result = await Tesseract.recognize(file, 'spa+eng');
@@ -169,9 +186,10 @@ export function SalesIngestionCenter() {
         ...current,
         drafts: parseReceiptText(result.data.text, 'ocr'),
       }));
-      setStatusMessage('OCR completado. Revisa el preview antes de importar.');
+      toast('success', 'OCR completado', 'Revisa el preview antes de importar.');
     } catch (error) {
-      setStatusMessage(`OCR falló: ${error instanceof Error ? error.message : 'error desconocido'}`);
+      const message = error instanceof Error ? error.message : 'error desconocido';
+      toast('error', 'OCR falló', message);
     } finally {
       setOcrBusy(false);
     }
@@ -179,7 +197,7 @@ export function SalesIngestionCenter() {
 
   const parsePrinterText = async () => {
     if (!printerText.trim()) {
-      setStatusMessage('No hay texto fiscal para procesar.');
+      toast('warning', 'Sin texto', 'No hay texto fiscal para procesar.');
       return;
     }
     const raw =
@@ -191,14 +209,17 @@ export function SalesIngestionCenter() {
       ...current,
       drafts,
     }));
-    if (serverSyncEnabled) {
-      setStatusMessage('Texto fiscal procesado a través del backend.');
-    }
+    toast(
+      'success',
+      'Texto fiscal procesado',
+      `${drafts.length} registro(s) preparados${serverSyncEnabled ? ' vía backend' : ''}.`,
+    );
   };
 
   const saveConnection = () => {
     actions.upsertPosConnection(connectionDraft);
     setSelectedConnectionId(connectionDraft.id);
+    toast('success', 'Cargado exitosamente', `Conector "${connectionDraft.name}" guardado.`);
     setConnectionDraft({
       ...connectionDraft,
       id: createId('pos'),
@@ -251,11 +272,11 @@ export function SalesIngestionCenter() {
         drafts,
       }));
       actions.recordPosSync(profile.id, 'success', `${drafts.length} registros leídos`);
-      setStatusMessage(`POS sincronizado: ${drafts.length} registros preparados.`);
+      toast('success', 'POS sincronizado', `${drafts.length} registro(s) preparados.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo conectar al POS';
       actions.recordPosSync(profile.id, 'error', message);
-      setStatusMessage(message);
+      toast('error', 'Sincronización POS falló', message);
     } finally {
       setPosBusy(false);
     }
@@ -270,13 +291,13 @@ export function SalesIngestionCenter() {
       ...current,
       drafts: parseReceiptText(raw, 'fiscal_printer'),
     }));
-    setStatusMessage(`Archivo fiscal cargado: ${file.name}`);
+    toast('success', 'Cargado exitosamente', `Archivo fiscal "${file.name}" procesado.`);
   };
 
   const loadPosFile = async (file: File) => {
     const raw = await readFileText(file);
     setPosPreviewPayload(raw);
-    setStatusMessage(`Payload POS cargado desde ${file.name}.`);
+    toast('success', 'Cargado exitosamente', `Payload POS leído desde ${file.name}.`);
   };
 
   return (
@@ -314,13 +335,27 @@ export function SalesIngestionCenter() {
             </label>
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">Monto bruto</span>
-              <input
-                type="number"
-                min={0}
-                value={manualAmount}
-                onChange={(event) => setManualAmount(event.target.value)}
-                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm outline-none"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  value={manualAmount}
+                  onChange={(event) => setManualAmount(event.target.value)}
+                  className="flex-1 rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm outline-none"
+                />
+                <select
+                  value={manualAmountCurrency}
+                  onChange={(event) => setManualAmountCurrency(event.target.value as CurrencyTag)}
+                  className="w-[80px] shrink-0 rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-2 text-sm outline-none"
+                  aria-label="Moneda del monto"
+                >
+                  <option value="CLP">CLP</option>
+                  <option value="UF">UF</option>
+                </select>
+              </div>
+              <span className="mt-1 block text-[11px] text-[var(--sidebar-fg)]">
+                Las ventas se almacenan en CLP. Si seleccionas UF, se convierte con UF = {ufValue.toLocaleString('es-CL')}.
+              </span>
             </label>
             <label className="block md:col-span-2">
               <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">Ticket / referencia</span>
@@ -657,12 +692,6 @@ export function SalesIngestionCenter() {
       <div className="grid gap-6">
         <CsvBulkImporter />
       </div>
-
-      {statusMessage ? (
-        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-3 text-sm text-[var(--sidebar-fg)]">
-          {statusMessage}
-        </div>
-      ) : null}
     </div>
   );
 }

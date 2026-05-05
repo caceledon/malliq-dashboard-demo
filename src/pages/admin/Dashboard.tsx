@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -69,6 +69,7 @@ export function AdminDashboard() {
   const navigate = useNavigate();
   const { insights, state, assetSummaries, portfolioStats, activeAssetId, actions } = useAppState();
   const { formatCurrency } = useCurrency();
+  const [healthLegendOpen, setHealthLegendOpen] = useState(false);
   const serverHealth = useServerHealth(state.asset?.backendUrl ?? '/api');
   const aiMode = serverHealth?.aiMode ?? null;
   const aiChip = aiMode ? AI_MODE_LABEL[aiMode] : null;
@@ -81,7 +82,7 @@ export function AdminDashboard() {
   const watchlist = useMemo(
     () =>
       [...insights.tenantSummaries]
-        .filter((t) => t.healthScore <= 75 || t.lifecycle === 'por_vencer' || t.lifecycle === 'vencido')
+        .filter((t) => t.healthScorePct < 80 || t.lifecycle === 'por_vencer' || t.lifecycle === 'vencido')
         .slice(0, 5),
     [insights.tenantSummaries],
   );
@@ -118,11 +119,11 @@ export function AdminDashboard() {
   };
 
   const avgHealth = useMemo(() => {
-    const vals = insights.tenantSummaries.map((t) => t.healthScore);
+    const vals = insights.tenantSummaries.map((t) => t.healthScorePct);
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
   }, [insights.tenantSummaries]);
-  const healthBelow65 = insights.tenantSummaries.filter((t) => t.healthScore < 65).length;
-  const healthAbove90 = insights.tenantSummaries.filter((t) => t.healthScore >= 90).length;
+  const healthBelow65 = insights.tenantSummaries.filter((t) => t.healthScorePct < 65).length;
+  const healthAbove90 = insights.tenantSummaries.filter((t) => t.healthScorePct >= 90).length;
 
   const renewalsSoon = insights.tenantSummaries.filter((t) => t.lifecycle === 'por_vencer').length;
   const expired = insights.tenantSummaries.filter((t) => t.lifecycle === 'vencido').length;
@@ -244,14 +245,28 @@ export function AdminDashboard() {
           sparkData={salesTrend.length > 0 ? salesTrend : [0, 0]}
           sparkColor="var(--warn)"
         />
-        <Kpi
-          label="Salud promedio"
-          value={String(avgHealth)}
-          unit="/100"
-          trend={`${healthAbove90} ≥90 · ${healthBelow65} <65`}
-          sparkData={salesTrend.length > 0 ? salesTrend.map(() => avgHealth) : [0, 0]}
-          sparkColor="var(--ok)"
-        />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setHealthLegendOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setHealthLegendOpen(true);
+            }
+          }}
+          title="Cómo se calcula la salud promedio"
+          style={{ cursor: 'pointer' }}
+        >
+          <Kpi
+            label="Salud promedio"
+            value={String(avgHealth)}
+            unit="/100"
+            trend={`${healthAbove90} ≥90 · ${healthBelow65} <65 · click para detalle`}
+            sparkData={salesTrend.length > 0 ? salesTrend.map(() => avgHealth) : [0, 0]}
+            sparkColor="var(--ok)"
+          />
+        </div>
       </div>
 
       {/* PORTFOLIO COMPARISON STRIP — only when managing multiple assets */}
@@ -542,6 +557,95 @@ export function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      <HealthLegendModal open={healthLegendOpen} onClose={() => setHealthLegendOpen(false)} />
+    </div>
+  );
+}
+
+function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  const checks = [
+    { key: 'healthPagoAlDia', label: 'Paga al día', detail: 'El locatario está al día con la facturación de renta y gastos comunes.' },
+    { key: 'healthEntregaVentas', label: 'Entrega ventas al día', detail: 'Reporta ventas mensualmente sin atrasos vs. el corte del activo.' },
+    { key: 'healthNivelVenta', label: 'Nivel de venta aceptable', detail: 'Las ventas / m² están dentro del rango esperado para su rubro.' },
+    { key: 'healthNivelRenta', label: 'Nivel de renta aceptable', detail: 'El costo de ocupación se mantiene bajo el umbral acordado (típicamente <20%).' },
+    { key: 'healthPercepcionAdmin', label: 'Percepción del administrador', detail: 'Evaluación cualitativa: trato, cumplimiento operativo, presentación del local.' },
+  ];
+  const tiers = [
+    { score: 0, label: '0/100 — sin checks marcados' },
+    { score: 20, label: '20/100 — 1 de 5' },
+    { score: 40, label: '40/100 — 2 de 5' },
+    { score: 60, label: '60/100 — 3 de 5' },
+    { score: 80, label: '80/100 — 4 de 5' },
+    { score: 100, label: '100/100 — los 5 checks' },
+  ];
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'grid',
+        placeItems: 'center',
+        zIndex: 100,
+        padding: 24,
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cómo se calcula la salud del locatario"
+        onClick={(event) => event.stopPropagation()}
+        className="mq-card"
+        style={{ width: 520, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', padding: 24 }}
+      >
+        <div className="t-eyebrow">Salud del locatario</div>
+        <h2 style={{ margin: '6px 0 4px', fontFamily: 'var(--display)', fontSize: 18, fontWeight: 700 }}>
+          ¿Cómo se calcula?
+        </h2>
+        <p className="t-muted" style={{ fontSize: 13, marginBottom: 14 }}>
+          La salud es la cantidad de checks marcados (0 a 5) por contrato, normalizada a /100.
+          El score por contrato sale de los 5 ítems editables en el editor:
+        </p>
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {checks.map((check) => (
+            <li
+              key={check.key}
+              style={{
+                border: '1px solid var(--line)',
+                borderRadius: 10,
+                padding: '10px 12px',
+                background: 'var(--paper-2)',
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{check.label}</div>
+              <div className="t-muted" style={{ fontSize: 12, marginTop: 2 }}>{check.detail}</div>
+            </li>
+          ))}
+        </ul>
+        <div className="t-eyebrow" style={{ marginTop: 16 }}>Mapeo a /100</div>
+        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {tiers.map((tier) => (
+            <span
+              key={tier.score}
+              style={{
+                fontSize: 11,
+                padding: '4px 8px',
+                borderRadius: 999,
+                border: '1px solid var(--line)',
+                background: 'var(--card)',
+              }}
+            >
+              {tier.label}
+            </span>
+          ))}
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'right' }}>
+          <button type="button" className="mq-btn umber" onClick={onClose}>Entendido</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -615,7 +719,7 @@ function WatchRow({ tenant, index, onClick }: { tenant: TenantSummary; index: nu
       }}
       onClick={onClick}
     >
-      <HealthRing value={tenant.healthScore} size={34} stroke={3} />
+      <HealthRing value={tenant.healthScorePct} size={34} stroke={3} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
           {tenant.storeName}

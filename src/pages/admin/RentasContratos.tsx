@@ -7,7 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { AlertTriangle, FileText, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, Download, FileText, ShieldCheck, Wallet } from 'lucide-react';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -20,15 +20,58 @@ import {
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
 
 export function RentasContratos() {
   const navigate = useNavigate();
-  const { state, insights } = useAppState();
-  const { formatCurrency } = useCurrency();
+  const { state, insights, actions } = useAppState();
+  const { formatCurrency, ufValue } = useCurrency();
+  const { toast } = useToast();
   const signed = state.contracts.filter((contract) => contract.signatureStatus === 'firmado').length;
   const underReview = state.contracts.filter((contract) => contract.signatureStatus === 'en_revision').length;
   const pending = state.contracts.filter((contract) => contract.signatureStatus === 'pendiente').length;
+
+  const totals = useMemo(() => {
+    const tenants = insights.tenantSummaries;
+    const monthlySales = tenants.reduce((sum, t) => sum + t.salesCurrent, 0);
+    const rentFixed = tenants.reduce((sum, t) => sum + t.rentFixed, 0);
+    const rentTotal = tenants.reduce((sum, t) => sum + t.rentTotal, 0);
+    const totalCost = tenants.reduce(
+      (sum, t) => sum + t.rentTotal + t.commonExpensesClp + t.fondoPromocionClp,
+      0,
+    );
+    const costoOcupacionPct = monthlySales > 0 ? (totalCost / monthlySales) * 100 : 0;
+    const ufRate = ufValue > 0 ? ufValue : 1;
+    const today = new Date();
+    const expiringSoon = state.contracts.filter((c) => getContractLifecycle(c, today) === 'por_vencer').length;
+    const expired = state.contracts.filter((c) => getContractLifecycle(c, today) === 'vencido').length;
+    return {
+      monthlySales,
+      rentFixed,
+      rentTotal,
+      totalCost,
+      costoOcupacionPct,
+      rentFixedUF: rentFixed / ufRate,
+      rentTotalUF: rentTotal / ufRate,
+      salesUF: monthlySales / ufRate,
+      expiringSoon,
+      expired,
+    };
+  }, [insights.tenantSummaries, state.contracts, ufValue]);
+
+  const categoryBreakdown = useMemo(() => {
+    const map = new Map<string, { count: number; sales: number; rent: number }>();
+    for (const tenant of insights.tenantSummaries) {
+      const key = tenant.category || 'Sin categoría';
+      const entry = map.get(key) ?? { count: 0, sales: 0, rent: 0 };
+      entry.count += 1;
+      entry.sales += tenant.salesCurrent;
+      entry.rent += tenant.rentTotal;
+      map.set(key, entry);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b, 'es'));
+  }, [insights.tenantSummaries]);
 
   const conflictsByContract = useMemo(() => {
     const map = new Map<string, { units: string[]; otherStores: Set<string> }>();
@@ -68,10 +111,90 @@ export function RentasContratos() {
         <StatCard label="Pendientes" value={String(pending)} icon={<Wallet className="h-4 w-4 text-red-600" />} />
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="Costo de ocupación promedio"
+          value={`${totals.costoOcupacionPct.toFixed(1)}%`}
+          meta={formatCurrency(totals.totalCost)}
+          chip="CLP"
+        />
+        <KpiCard
+          label="Venta total mes"
+          value={formatCurrency(totals.monthlySales)}
+          meta={`${totals.salesUF.toLocaleString('es-CL', { maximumFractionDigits: 0 })} UF`}
+          chip="CLP"
+        />
+        <KpiCard
+          label="UF / Renta fija"
+          value={`${totals.rentFixedUF.toLocaleString('es-CL', { maximumFractionDigits: 0 })} UF`}
+          meta={formatCurrency(totals.rentFixed)}
+          chip="UF"
+        />
+        <KpiCard
+          label="UF / Renta total"
+          value={`${totals.rentTotalUF.toLocaleString('es-CL', { maximumFractionDigits: 0 })} UF`}
+          meta={formatCurrency(totals.rentTotal)}
+          chip="UF"
+        />
+        <KpiCard
+          label="UF / Venta"
+          value={`${totals.salesUF.toLocaleString('es-CL', { maximumFractionDigits: 0 })} UF`}
+          meta={formatCurrency(totals.monthlySales)}
+          chip="UF"
+        />
+        <KpiCard
+          label="Contratos por vencer"
+          value={String(totals.expiringSoon)}
+          meta="≤ 180 días"
+          chip="—"
+        />
+        <KpiCard
+          label="Contratos vencidos"
+          value={String(totals.expired)}
+          meta="Acción requerida"
+          chip="—"
+        />
+        <KpiCard
+          label="Categorías"
+          value={String(categoryBreakdown.length)}
+          meta={categoryBreakdown.slice(0, 3).map(([k]) => k).join(' · ') || '—'}
+          chip="—"
+        />
+      </div>
+
+      {categoryBreakdown.length > 0 ? (
+        <div className="glass-card overflow-hidden">
+          <div className="border-b border-[var(--border-color)] px-4 py-3">
+            <h3 className="text-sm font-semibold">Categorías</h3>
+            <p className="mt-1 text-xs text-[var(--sidebar-fg)]">Ventas y renta total por rubro del activo.</p>
+          </div>
+          <table className="w-full">
+            <thead className="bg-[var(--hover-bg)]">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Categoría</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Locatarios</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Ventas mes</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Renta total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categoryBreakdown.map(([category, data]) => (
+                <tr key={category} className="border-t border-[var(--border-color)]">
+                  <td className="px-4 py-2 text-sm">{category}</td>
+                  <td className="px-4 py-2 text-right text-sm">{data.count}</td>
+                  <td className="px-4 py-2 text-right text-sm">{formatCurrency(data.sales)}</td>
+                  <td className="px-4 py-2 text-right text-sm">{formatCurrency(data.rent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
       <div className="glass-card p-5">
         <h3 className="text-sm font-semibold">Composición de renta por contrato</h3>
         <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
-          La renta facturada toma el mayor entre mínimo garantizado y porcentaje sobre ventas, más los gastos comunes.
+          La renta facturada se calcula como <strong>monto fijo mensual + % sobre ventas</strong>, más los gastos comunes.
         </p>
         <div className="mt-4 h-[320px]">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
@@ -88,9 +211,9 @@ export function RentasContratos() {
                 contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 14, fontSize: 12 }}
                 formatter={(value, name) => [formatCurrency(Number(value ?? 0)), String(name)]}
               />
-              <Bar dataKey="fija" name="Mínimo garantizado" fill="#94A3B8" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="fija" name="Renta fija" fill="#94A3B8" radius={[6, 6, 0, 0]} />
               <Bar dataKey="variable" name="% sobre ventas" fill="#10B981" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="total" name="Renta facturada" fill="#2563EB" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="total" name="Renta total" fill="#2563EB" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -107,6 +230,7 @@ export function RentasContratos() {
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Anexos</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Renta total</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Condiciones</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Contrato</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--sidebar-fg)]">Acción</th>
             </tr>
           </thead>
@@ -119,6 +243,19 @@ export function RentasContratos() {
 
               const lifecycle = getContractLifecycle(contract);
               const conflict = conflictsByContract.get(contract.id);
+              const contractDoc = state.documents.find(
+                (document) =>
+                  document.entityType === 'contract' && document.entityId === contract.id && document.kind === 'contrato',
+              );
+              const downloadContract = () => {
+                if (!contractDoc) {
+                  toast('warning', 'Sin PDF de contrato', 'Carga primero el archivo en "Documentación contractual".');
+                  return;
+                }
+                actions.downloadDocument(contractDoc.id).catch((error) => {
+                  toast('error', 'No se pudo descargar', error instanceof Error ? error.message : 'desconocido');
+                });
+              };
               return (
                 <tr key={tenant.id} className="border-t border-[var(--border-color)]">
                   <td className="px-4 py-3">
@@ -168,6 +305,18 @@ export function RentasContratos() {
                   <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(tenant.rentTotal)}</td>
                   <td className="px-4 py-3 text-sm text-[var(--sidebar-fg)]">{contract.escalation}</td>
                   <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={downloadContract}
+                      disabled={!contractDoc}
+                      title={contractDoc ? `Descargar ${contractDoc.name}` : 'Sin PDF de contrato'}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-color)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Download className="h-3 w-3" />
+                      PDF
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
                     {lifecycle === 'por_vencer' || lifecycle === 'vencido' ? (
                       <button
                         onClick={() =>
@@ -197,6 +346,31 @@ export function RentasContratos() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  meta,
+  chip,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+  chip: 'UF' | 'CLP' | '—';
+}) {
+  return (
+    <div className="glass-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{label}</p>
+        <span className="rounded-full border border-[var(--border-color)] px-2 py-0.5 text-[10px] font-semibold text-[var(--sidebar-fg)]">
+          {chip}
+        </span>
+      </div>
+      <p className="mt-2 text-xl font-semibold">{value}</p>
+      <p className="mt-1 text-xs text-[var(--sidebar-fg)]">{meta}</p>
     </div>
   );
 }

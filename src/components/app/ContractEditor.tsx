@@ -5,12 +5,14 @@ import {
   createId,
   getContractDisplayValues,
   type Contract,
+  type CurrencyTag,
   type SignatureStatus,
   type AssetUnit,
 } from '@/lib/domain';
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { TenantHealthRating } from '@/components/app/TenantHealthRating';
+import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 
@@ -81,6 +83,7 @@ export function ContractEditor({
   currentMonthSales,
 }: ContractEditorProps) {
   const { formatCurrency } = useCurrency();
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const previewDraft = sanitizeDraftForPreview(draft);
@@ -137,6 +140,15 @@ export function ContractEditor({
         {editorMessage ? (
           <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-3 text-sm text-[var(--sidebar-fg)]">
             {editorMessage}
+          </div>
+        ) : null}
+        {(draft.baseRentUF || 0) > 0 && (draft.fixedRent || 0) === 0 ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="font-semibold">Revisa la renta fija mensual</p>
+            <p className="mt-1 text-xs opacity-80">
+              El modelo cambió: la renta fija ya no se calcula como UF/m² × superficie. Ingresa el monto pactado en
+              "Renta fija mensual" (UF o CLP) y deja UF/m² solo como referencia.
+            </p>
           </div>
         ) : null}
         {autofillPendingFields.length > 0 ? (
@@ -329,7 +341,7 @@ export function ContractEditor({
         </div>
 
         <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4 text-xs text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-100">
-          MallIQ usa UF/m² como estándar para la renta fija. Ingresa CLP solo si el contrato está pactado íntegramente en pesos.
+          La renta total se calcula como <strong>monto fijo mensual + % de ventas</strong>. La referencia UF/m² es un dato comercial informativo y no se multiplica por superficie. Cada monto puede expresarse en UF o CLP con el selector al costado.
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -349,7 +361,7 @@ export function ContractEditor({
               className="input-field"
             />
           </Field>
-          <Field label="Renta fija UF/m²">
+          <Field label="Referencia UF/m² (informativo)">
             <input
               type="number"
               value={formatNumericInputValue(draft.baseRentUF)}
@@ -357,14 +369,14 @@ export function ContractEditor({
               className="input-field"
             />
           </Field>
-          <Field label="Renta fija CLP (solo si aplica)">
-            <input
-              type="number"
-              value={formatNumericInputValue(draft.fixedRent)}
-              onChange={(event) => onChange({ ...draft, fixedRent: parseNumericInputValue(event.target.value) })}
-              className="input-field"
-            />
-          </Field>
+          <MoneyField
+            label="Renta fija mensual"
+            value={draft.fixedRent}
+            currency={draft.fixedRentCurrency ?? 'CLP'}
+            onChange={(value, currency) =>
+              onChange({ ...draft, fixedRent: value, fixedRentCurrency: currency })
+            }
+          />
           <Field label="% venta / renta variable">
             <input
               type="number"
@@ -373,35 +385,35 @@ export function ContractEditor({
               className="input-field"
             />
           </Field>
-          <Field label="Gastos comunes">
-            <input
-              type="number"
-              value={formatNumericInputValue(draft.commonExpenses)}
-              onChange={(event) => onChange({ ...draft, commonExpenses: parseNumericInputValue(event.target.value) })}
-              className="input-field"
-            />
-          </Field>
-          <Field label="Fondo de promoción">
-            <input
-              type="number"
-              value={formatNumericInputValue(draft.fondoPromocion)}
-              onChange={(event) => onChange({ ...draft, fondoPromocion: parseNumericInputValue(event.target.value) })}
-              className="input-field"
-            />
-          </Field>
+          <MoneyField
+            label="Gastos comunes"
+            value={draft.commonExpenses}
+            currency={draft.commonExpensesCurrency ?? 'CLP'}
+            onChange={(value, currency) =>
+              onChange({ ...draft, commonExpenses: value, commonExpensesCurrency: currency })
+            }
+          />
+          <MoneyField
+            label="Fondo de promoción"
+            value={draft.fondoPromocion}
+            currency={draft.fondoPromocionCurrency ?? 'CLP'}
+            onChange={(value, currency) =>
+              onChange({ ...draft, fondoPromocion: value, fondoPromocionCurrency: currency })
+            }
+          />
         </div>
 
         <div className="space-y-3">
           <p className="text-xs font-semibold text-[var(--sidebar-fg)]">Garantía y fee</p>
           <div className="grid gap-3 md:grid-cols-3">
-            <Field label="Garantía monto">
-              <input
-                type="number"
-                value={formatNumericInputValue(draft.garantiaMonto)}
-                onChange={(event) => onChange({ ...draft, garantiaMonto: parseNumericInputValue(event.target.value) })}
-                className="input-field"
-              />
-            </Field>
+            <MoneyField
+              label="Garantía monto"
+              value={draft.garantiaMonto}
+              currency={draft.garantiaMontoCurrency ?? 'CLP'}
+              onChange={(value, currency) =>
+                onChange({ ...draft, garantiaMonto: value, garantiaMontoCurrency: currency })
+              }
+            />
             <Field label="Garantía vencimiento">
               <input
                 type="date"
@@ -410,14 +422,14 @@ export function ContractEditor({
                 className="input-field"
               />
             </Field>
-            <Field label="Fee ingreso">
-              <input
-                type="number"
-                value={formatNumericInputValue(draft.feeIngreso)}
-                onChange={(event) => onChange({ ...draft, feeIngreso: parseNumericInputValue(event.target.value) })}
-                className="input-field"
-              />
-            </Field>
+            <MoneyField
+              label="Fee ingreso"
+              value={draft.feeIngreso}
+              currency={draft.feeIngresoCurrency ?? 'CLP'}
+              onChange={(value, currency) =>
+                onChange({ ...draft, feeIngreso: value, feeIngresoCurrency: currency })
+              }
+            />
           </div>
         </div>
 
@@ -649,7 +661,11 @@ export function ContractEditor({
 
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={onSave}
+            onClick={() => {
+              if (saveBlocked) return;
+              onSave();
+              toast('success', 'Contrato guardado exitosamente', draft.storeName || draft.companyName || undefined);
+            }}
             disabled={saveBlocked}
             className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -712,6 +728,41 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function MoneyField({
+  label,
+  value,
+  currency,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  currency: CurrencyTag;
+  onChange: (value: number, currency: CurrencyTag) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">{label}</span>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          value={formatNumericInputValue(value)}
+          onChange={(event) => onChange(parseNumericInputValue(event.target.value), currency)}
+          className="input-field flex-1"
+        />
+        <select
+          value={currency}
+          onChange={(event) => onChange(value, event.target.value as CurrencyTag)}
+          className="input-field w-[90px] shrink-0"
+          aria-label={`Moneda de ${label}`}
+        >
+          <option value="CLP">CLP</option>
+          <option value="UF">UF</option>
+        </select>
+      </div>
+    </label>
+  );
+}
+
 function EvidenceRow({ label, snippet }: { label: string; snippet: string }) {
   return (
     <div className="rounded-xl border border-sky-200/80 bg-white/75 p-3 dark:border-sky-900/60 dark:bg-slate-950/40">
@@ -744,6 +795,11 @@ function sanitizeDraftForPreview(draft: Contract): Contract {
     fondoPromocion: Number.isFinite(draft.fondoPromocion) ? draft.fondoPromocion : 0,
     garantiaMonto: Number.isFinite(draft.garantiaMonto) ? draft.garantiaMonto : 0,
     feeIngreso: Number.isFinite(draft.feeIngreso) ? draft.feeIngreso : 0,
+    fixedRentCurrency: draft.fixedRentCurrency ?? 'CLP',
+    commonExpensesCurrency: draft.commonExpensesCurrency ?? 'CLP',
+    fondoPromocionCurrency: draft.fondoPromocionCurrency ?? 'CLP',
+    garantiaMontoCurrency: draft.garantiaMontoCurrency ?? 'CLP',
+    feeIngresoCurrency: draft.feeIngresoCurrency ?? 'CLP',
     rentSteps: draft.rentSteps.map((step) => ({
       ...step,
       rentaFijaUfM2: Number.isFinite(step.rentaFijaUfM2) ? step.rentaFijaUfM2 : 0,

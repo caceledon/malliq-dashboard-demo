@@ -8,22 +8,26 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ChevronRight, FileBadge2, MapPinned, ReceiptText, Signature } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ChevronRight, Download, Eye, FileBadge2, MapPinned, ReceiptText, Signature } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { DocumentManager } from '@/components/app/DocumentManager';
+import { ContractPreviewModal } from '@/components/app/ContractPreviewModal';
 import { RentStepGantt } from '@/components/app/RentStepGantt';
 import { TenantHealthRating } from '@/components/app/TenantHealthRating';
 import { buildRenewalContractTemplate, getContractDisplayValues, getContractLifecycle, monthKey } from '@/lib/domain';
 import { formatDate, formatUF, formatPercent } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
 
 export function LocatarioDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { state, insights } = useAppState();
+  const { state, insights, actions } = useAppState();
   const { formatCurrency } = useCurrency();
+  const { toast } = useToast();
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const contract = state.contracts.find((item) => item.id === id);
   const summary = insights.tenantSummaries.find((item) => item.id === id);
 
@@ -112,6 +116,47 @@ export function LocatarioDetail() {
           </div>
 
           <div className="space-y-3 lg:min-w-[360px]">
+            {(() => {
+              const contractDoc = contractDocuments.find((document) => document.kind === 'contrato');
+              return (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!contractDoc) {
+                        toast('warning', 'Sin PDF de contrato', 'Carga primero el archivo en "Documentación contractual".');
+                        return;
+                      }
+                      setPreviewId(contractDoc.id);
+                    }}
+                    disabled={!contractDoc}
+                    title={contractDoc ? `Vista previa de ${contractDoc.name}` : 'Sin PDF de contrato'}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Vista previa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!contractDoc) {
+                        toast('warning', 'Sin PDF de contrato', 'Carga primero el archivo en "Documentación contractual".');
+                        return;
+                      }
+                      actions.downloadDocument(contractDoc.id).catch((error) => {
+                        toast('error', 'No se pudo descargar', error instanceof Error ? error.message : 'desconocido');
+                      });
+                    }}
+                    disabled={!contractDoc}
+                    title={contractDoc ? `Descargar ${contractDoc.name}` : 'Sin PDF de contrato cargado'}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Download className="h-4 w-4" />
+                    Descargar
+                  </button>
+                </div>
+              );
+            })()}
             {lifecycle === 'por_vencer' || lifecycle === 'vencido' ? (
               <button
                 onClick={() =>
@@ -296,6 +341,12 @@ export function LocatarioDetail() {
           />
         ))}
       </div>
+
+      <ContractPreviewModal
+        documentId={previewId}
+        fileName={contractDocuments.find((d) => d.id === previewId)?.name}
+        onClose={() => setPreviewId(null)}
+      />
     </div>
   );
 }
