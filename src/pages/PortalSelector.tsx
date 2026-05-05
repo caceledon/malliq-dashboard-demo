@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, ArrowRight, Zap, ShieldCheck, Globe, Store } from 'lucide-react';
+import { LayoutDashboard, ArrowRight, Zap, ShieldCheck, Globe, Store } from 'lucide-react';
 
 export function PortalSelector() {
   const navigate = useNavigate();
