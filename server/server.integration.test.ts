@@ -266,4 +266,54 @@ describe('MallIQ API integration', () => {
     expect(payload.variableRentPct).toBeNull();
     expect(payload.missingFields).toEqual(expect.arrayContaining(['storeName', 'startDate', 'variableRentPct']));
   });
+
+  // F2 regression: /api/notifications/daily must include activities since 24h
+  // ago — the prior bug filtered on `createdAt` (camelCase) but the SQL row
+  // returns `created_at`, so the activities array was always empty.
+  it('F2: daily digest reports recent activities (created_at, not createdAt)', async () => {
+    // Push an archive — the writer logs an `archive_push` activity with a fresh
+    // created_at. Then read /api/notifications/daily and expect to see it back.
+    await fetch(`${baseUrl}/api/archive?force=1`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: 1, state: emptyState(), documents: [] }),
+    });
+    const digest = await readJson(await fetch(`${baseUrl}/api/notifications/daily`));
+    expect(Array.isArray(digest.activities)).toBe(true);
+    expect(digest.counts.activities).toBeGreaterThan(0);
+    for (const a of digest.activities) {
+      expect(typeof a.created_at).toBe('string');
+    }
+  });
+
+  // F3 regression: /api/activities must require authentication. In single-user
+  // dev mode (no users registered, MALLIQ_REQUIRE_AUTH unset) the previous code
+  // returned 200 with the activity log, exposing actor identifiers.
+  it('F3: GET /api/activities returns 401 when unauthenticated', async () => {
+    const response = await fetch(`${baseUrl}/api/activities`);
+    expect(response.status).toBe(401);
+  });
+
+  // F1 regression: SPA fallback must be a plain middleware (Express 5's
+  // path-to-regexp v8 throws on `app.get('*', …)` and the throw was swallowed,
+  // unregistering the fallback). Without a built dist/ in tests the fallback
+  // is intentionally absent — assert that /api/* still works as a sanity
+  // check on the routing surface (the smoke test for the actual fallback runs
+  // against the production build separately).
+  it('F1: /api/* routes still resolve under the new fallback layout', async () => {
+    const response = await fetch(`${baseUrl}/api/health`);
+    expect(response.ok).toBe(true);
+  });
+
+  // C4 regression: locatario sales endpoint must reject unauthenticated and
+  // contract-mismatched payloads. We can only test the no-auth case here since
+  // the test harness runs without registered users.
+  it('C4: POST /api/locatario/sales returns 401 when unauthenticated', async () => {
+    const response = await fetch(`${baseUrl}/api/locatario/sales`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sales: [] }),
+    });
+    expect(response.status).toBe(401);
+  });
 });
