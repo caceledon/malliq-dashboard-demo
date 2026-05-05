@@ -49,7 +49,7 @@ npm start            # node server/index.js (sirve dist/)
 |----------|-------------|
 | `PORT` | Puerto del backend Express. Default `4000` |
 | `API_KEY` | Bearer token opcional global para `/api/*` |
-| `JWT_SECRET` | Secreto para firmar tokens de sesión. **Requerido** en producción |
+| `MALLIQ_JWT_SECRET` | Secreto para firmar tokens de sesión. **Requerido** en producción |
 | `MALLIQ_REQUIRE_AUTH` | Fuerza auth aunque no haya usuarios registrados (`'1'` para activar) |
 | `MALLIQ_HTTP_LOG` | Loguea cada request HTTP (`'1'` para activar; default silencioso) |
 | `VITE_API_BASE_URL` | Override del API base que usa el frontend (default `/api`) |
@@ -67,7 +67,7 @@ Configuración recomendada para Moonshot:
 MOONSHOT_API_KEY=tu_clave
 MOONSHOT_BASE_URL=https://api.moonshot.ai/v1
 CONTRACT_AUTOFILL_MODEL=kimi-k2.5
-JWT_SECRET=cambiame-en-produccion
+MALLIQ_JWT_SECRET=cambiame-en-produccion
 ```
 
 ## Rutas

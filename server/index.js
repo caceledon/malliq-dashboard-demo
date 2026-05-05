@@ -4,6 +4,7 @@ import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import multer from 'multer';
 import net from 'node:net';
 import path from 'node:path';
@@ -1498,6 +1499,11 @@ function createAppInstance() {
     if (!PROD_API_KEY) {
       return next();
     }
+    // AuthGate (and uptime probes) hit /api/health unauthenticated; the
+    // response is intentionally low-signal, so let it through.
+    if (req.path === '/health' || req.path === '/health/') {
+      return next();
+    }
 
     const authHeader = req.headers.authorization;
     if (!authHeader || authHeader !== `Bearer ${PROD_API_KEY}`) {
@@ -1709,7 +1715,13 @@ function createAppInstance() {
   });
 
   app.get('/api/activities', async (request, response) => {
-    if (request.user && request.user.role !== 'admin') {
+    // The activity log can include auth events and actor identifiers — never
+    // serve it anonymously. When auth is required, only admins may read it.
+    if (!request.user) {
+      response.status(401).json({ error: 'Autenticación requerida.' });
+      return;
+    }
+    if (request.user.role !== 'admin') {
       response.status(403).json({ error: 'Se requiere rol admin.' });
       return;
     }
@@ -1731,9 +1743,11 @@ function createAppInstance() {
       const anomalyAlerts = anomaliesToAlerts(detectSalesAnomalies(state, reference), reference);
       const renewalAlerts = buildRenewalAlerts(state, reference, 30);
       const activities = await getRecentActivities(50);
+      // SELECT * returns the snake_case column from `activities`, not camelCase.
       const recentActivities = (activities || []).filter((a) => {
-        if (!a?.createdAt) return false;
-        return new Date(a.createdAt).toISOString() >= since;
+        const ts = a?.created_at;
+        if (!ts) return false;
+        return new Date(ts).toISOString() >= since;
       });
       response.json({
         generatedAt: reference.toISOString(),
@@ -2153,16 +2167,24 @@ Los campos válidos para suggestedUpdates son: companyName, storeName, category,
 export function createApp() {
   const app = createAppInstance();
 
-  fs.access(path.join(DIST_DIR, 'index.html'))
-    .then(() => {
-      app.use(express.static(DIST_DIR));
-      app.get('*', (_request, response) => {
-        response.sendFile(path.join(DIST_DIR, 'index.html'));
-      });
-    })
-    .catch(() => {
-      // Frontend build may not exist in development or tests.
+  // Express 5's path-to-regexp v8 throws on the bare '*' route, so the SPA
+  // fallback uses a plain middleware that runs after /api/* handlers.
+  let distIndex = null;
+  try {
+    fsSync.accessSync(path.join(DIST_DIR, 'index.html'));
+    distIndex = path.join(DIST_DIR, 'index.html');
+  } catch {
+    // Frontend build may not exist in development or tests.
+  }
+
+  if (distIndex) {
+    app.use(express.static(DIST_DIR));
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+      if (req.path.startsWith('/api/')) return next();
+      res.sendFile(distIndex);
     });
+  }
 
   return app;
 }

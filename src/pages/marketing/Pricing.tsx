@@ -15,8 +15,8 @@ interface Plan {
 const PLANS: Plan[] = [
   {
     n: 'Plaza',
-    p: '$XXXX',
-    sub: '/ activo / mes',
+    p: 'A medida',
+    sub: 'desde · pricing transparente al cierre',
     desc: 'Para malls boutique y centros vecinales hasta 60 locales.',
     feat: [
       'Cockpit y mapa interactivo',
@@ -32,8 +32,8 @@ const PLANS: Plan[] = [
   },
   {
     n: 'Centro',
-    p: '$XXXX',
-    sub: '/ activo / mes',
+    p: 'A medida',
+    sub: 'el plan más elegido · pricing al cierre',
     desc: 'El plan más elegido por administradores de portafolio mediano.',
     feat: [
       'Todo en Plaza',
@@ -51,7 +51,7 @@ const PLANS: Plan[] = [
   {
     n: 'Portafolio',
     p: 'A medida',
-    sub: 'desde $XXXX / activo',
+    sub: 'multi-activo · pricing dedicado',
     desc: 'Para FIBRAs, fideicomisos y portafolios de 5+ centros.',
     feat: [
       'Todo en Centro',

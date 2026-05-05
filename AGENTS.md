@@ -351,7 +351,7 @@ npm run test        # 150 tests · 13 archivos
 ## Security
 
 - Helmet con CSP same-origin (sin Google Fonts CDN — fuentes auto-hospedadas vía `@fontsource`).
-- `JWT_SECRET` requerido en producción.
+- `MALLIQ_JWT_SECRET` requerido en producción.
 - `API_KEY` opcional como bearer global adicional.
 - POS proxy con SSRF allowlist.
 - Sin telemetría externa.
@@ -382,7 +382,7 @@ El backend sirve `dist/` si existe + `/api/*` con fallback al `index.html` para 
 |----------|---------|
 | `PORT` | API server port (default: 4000) |
 | `API_KEY` | Optional global bearer token |
-| `JWT_SECRET` | Required in production for session signing |
+| `MALLIQ_JWT_SECRET` | Required in production for session signing |
 | `MALLIQ_REQUIRE_AUTH` | `'1'` to force auth even without registered users |
 | `MALLIQ_HTTP_LOG` | `'1'` to enable per-request logger (silent by default) |
 | `VITE_API_BASE_URL` | Frontend API base override (default `/api`) |
