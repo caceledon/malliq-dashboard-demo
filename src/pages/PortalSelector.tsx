@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Store, ArrowRight, ShieldCheck, UserCircle, LayoutDashboard, Database, Sparkles } from 'lucide-react';
+import { Store, ArrowRight, ShieldCheck, LayoutDashboard, Database, Sparkles } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import logoNano from '@/assets/nano_banana/logo.png';
 import photo1 from '@/assets/nano_banana/photo1.png';
@@ -8,7 +8,7 @@ import photo2 from '@/assets/nano_banana/photo2.png';
 
 export function PortalSelector() {
   const navigate = useNavigate();
-  const { state, authUser } = useAppState();
+  const { authUser } = useAppState();
 
   useEffect(() => {
     if (authUser?.role === 'locatario') {
