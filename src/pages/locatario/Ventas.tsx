@@ -141,7 +141,7 @@ export function LocatarioVentas() {
                   <td className="px-4 py-3 text-sm">{sale.source}</td>
                   <td className="px-4 py-3 text-sm">{sale.ticketNumber ?? 'N/D'}</td>
                   <td className="px-4 py-3 text-sm">{sale.importReference ?? 'N/D'}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatCurrency(sale.grossAmount)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatCurrency(sale.grossAmount, { atDate: sale.occurredAt })}</td>
                 </tr>
               ))}
               {filteredSales.length === 0 ? (
@@ -161,7 +161,7 @@ export function LocatarioVentas() {
             <div key={sale.id} className="rounded-2xl border border-[var(--border-color)] p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold">{formatDate(sale.occurredAt)}</p>
-                <p className="text-sm font-semibold">{formatCurrency(sale.grossAmount)}</p>
+                <p className="text-sm font-semibold">{formatCurrency(sale.grossAmount, { atDate: sale.occurredAt })}</p>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--sidebar-fg)]">
                 <span className="rounded-full bg-[var(--hover-bg)] px-2 py-0.5">{sale.source}</span>

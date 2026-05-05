@@ -26,6 +26,12 @@ import {
   updateUserTenant,
   verifyPassword,
 } from './auth.js';
+import {
+  ensureUfRange,
+  resolveLatestUf,
+  resolveUfForDate,
+} from './uf.js';
+import { listUfRates } from './db.js';
 
 const require = createRequire(import.meta.url);
 const { PDFParse } = require('pdf-parse');
@@ -1600,6 +1606,60 @@ function createAppInstance() {
       });
     } catch (error) {
       response.status(500).json({ ok: false, error: error instanceof Error ? error.message : 'unknown' });
+    }
+  });
+
+  const UfDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha debe ser YYYY-MM-DD');
+  const UfRangeSchema = z
+    .object({
+      from: UfDateSchema,
+      to: UfDateSchema,
+    })
+    .refine((value) => value.from <= value.to, { message: 'from debe ser <= to' });
+
+  app.get('/api/uf/latest', async (_request, response) => {
+    try {
+      const result = await resolveLatestUf();
+      if (!result) {
+        response.status(503).json({ error: 'UF no disponible y sin caché previa.' });
+        return;
+      }
+      response.json(result);
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
+    }
+  });
+
+  app.get('/api/uf/range', async (request, response) => {
+    const parsed = UfRangeSchema.safeParse({ from: request.query.from, to: request.query.to });
+    if (!parsed.success) {
+      response.status(400).json({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+      return;
+    }
+    try {
+      await ensureUfRange(parsed.data.from, parsed.data.to);
+      const rows = await listUfRates({ from: parsed.data.from, to: parsed.data.to });
+      response.json({ from: parsed.data.from, to: parsed.data.to, rates: rows });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
+    }
+  });
+
+  app.get('/api/uf', async (request, response) => {
+    const parsed = UfDateSchema.safeParse(request.query.date);
+    if (!parsed.success) {
+      response.status(400).json({ error: 'date es requerido como YYYY-MM-DD.' });
+      return;
+    }
+    try {
+      const result = await resolveUfForDate(parsed.data);
+      if (!result) {
+        response.status(503).json({ error: 'UF no disponible y sin caché previa.', requestedDate: parsed.data });
+        return;
+      }
+      response.json({ requestedDate: parsed.data, ...result });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
     }
   });
 

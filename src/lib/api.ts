@@ -254,3 +254,40 @@ export async function fetchRecentActivities(apiBase: string): Promise<{ activiti
   return assertJson(response);
 }
 
+export interface UfRate {
+  date: string; // YYYY-MM-DD
+  value: number;
+  fetchedAt: string;
+}
+
+export interface UfLatest extends UfRate {
+  source: 'cache' | 'remote' | 'cache_latest';
+  stale?: boolean;
+}
+
+export interface UfForDate extends UfRate {
+  requestedDate: string;
+  source: 'cache' | 'remote' | 'cache_prior' | 'cache_latest';
+}
+
+export async function fetchUfLatest(apiBase: string): Promise<UfLatest> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/uf/latest`);
+  return assertJson(response);
+}
+
+export async function fetchUfForDate(apiBase: string, date: string): Promise<UfForDate> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/uf?date=${encodeURIComponent(date)}`);
+  return assertJson(response);
+}
+
+export async function fetchUfRange(
+  apiBase: string,
+  from: string,
+  to: string,
+): Promise<{ from: string; to: string; rates: UfRate[] }> {
+  const response = await authFetch(
+    `${resolveApiBase(apiBase)}/uf/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+  return assertJson(response);
+}
+

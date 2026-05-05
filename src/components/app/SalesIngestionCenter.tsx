@@ -36,7 +36,7 @@ export function SalesIngestionCenter() {
   const { state, unitsByCode, actions } = useAppState();
   const { showUndo } = useUndoToast();
   const { toast } = useToast();
-  const { ufValue } = useCurrency();
+  const { getUfFor, ensureUfFor } = useCurrency();
   const serverSyncEnabled = Boolean(state.asset?.syncEnabled && state.asset?.backendUrl);
   const [manualContractId, setManualContractId] = useState('');
   const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
@@ -135,7 +135,7 @@ export function SalesIngestionCenter() {
     return result;
   };
 
-  const handleManualCreate = () => {
+  const handleManualCreate = async () => {
     const selectedContract = contracts.find((contract) => contract.id === manualContractId);
     const rawAmount = Number(manualAmount);
     if (!selectedContract || !Number.isFinite(rawAmount) || rawAmount <= 0) {
@@ -144,10 +144,18 @@ export function SalesIngestionCenter() {
     }
 
     // Always persist sales in CLP. If the operator declared the amount in UF,
-    // convert with the current ufValue from CurrencyContext.
-    const grossAmount = manualAmountCurrency === 'UF' && ufValue > 0
-      ? Math.round(rawAmount * ufValue)
-      : Math.round(rawAmount);
+    // convert with the UF of the sale's date — not today's. If the rate is
+    // missing from the cache, fetch it once before saving.
+    let grossAmount = Math.round(rawAmount);
+    if (manualAmountCurrency === 'UF') {
+      const ufAtDate = await ensureUfFor(manualDate);
+      if (ufAtDate > 0) {
+        grossAmount = Math.round(rawAmount * ufAtDate);
+      } else {
+        toast('warning', 'UF no disponible', `No hay valor UF para ${manualDate}. Reintenta.`);
+        return;
+      }
+    }
 
     const sale: SaleRecord = {
       id: createId('sale'),
@@ -354,7 +362,8 @@ export function SalesIngestionCenter() {
                 </select>
               </div>
               <span className="mt-1 block text-[11px] text-[var(--sidebar-fg)]">
-                Las ventas se almacenan en CLP. Si seleccionas UF, se convierte con UF = {ufValue.toLocaleString('es-CL')}.
+                Las ventas se almacenan en CLP. Si seleccionas UF, se convierte con la UF de la fecha de la venta
+                {manualDate ? ` (${manualDate} → ${getUfFor(manualDate).toLocaleString('es-CL', { maximumFractionDigits: 2 })})` : ''}.
               </span>
             </label>
             <label className="block md:col-span-2">

@@ -39,7 +39,7 @@ function matchRouteTitle(pathname: string): string {
 export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
   const STALE_UF_MS = 24 * 60 * 60 * 1000;
   const { theme, setTheme } = useTheme();
-  const { currency, setCurrency, ufValue, setUfValue, ufUpdatedAt } = useCurrency();
+  const { currency, setCurrency, ufValue, setUfOverride, refreshLatestUf, ufUpdatedAt, latestUfDate } = useCurrency();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     // Re-evaluate "stale" once per hour while the tab is open.
@@ -158,14 +158,25 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
           </button>
         </div>
         {currency === 'UF' ? (
-          <input
-            type="number"
-            value={ufValue}
-            onChange={(e) => setUfValue(Number(e.target.value))}
-            className="mq-input"
-            style={{ width: 88, padding: '6px 8px', fontSize: 12 }}
-            title="Valor UF"
-          />
+          <span
+            className="t-mono"
+            title={
+              latestUfDate
+                ? `UF al ${latestUfDate} · click para refrescar / sobrescribir`
+                : 'UF sin fecha — click para refrescar'
+            }
+            style={{
+              fontSize: 12,
+              padding: '4px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--line)',
+              background: 'var(--card)',
+              color: 'var(--ink-2)',
+            }}
+          >
+            UF {ufValue.toLocaleString('es-CL', { maximumFractionDigits: 2 })}
+            {latestUfDate ? ` · ${latestUfDate}` : ''}
+          </span>
         ) : null}
       </div>
 
@@ -246,8 +257,10 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
               Actualizar valor UF
             </h2>
             <p className="t-muted" style={{ fontSize: 12, marginTop: 6 }}>
-              Última actualización: {ufUpdatedAt ? new Date(ufUpdatedAt).toLocaleString('es-CL') : 'nunca'}.
-              Ingresa el valor más reciente; los montos en UF se reconvierten automáticamente.
+              {latestUfDate ? `UF cacheada: ${latestUfDate}.` : 'Sin UF cacheada todavía.'}
+              {' '}Última sincronización con el servidor:{' '}
+              {ufUpdatedAt ? new Date(ufUpdatedAt).toLocaleString('es-CL') : 'nunca'}.
+              {' '}"Refrescar" pide el valor actual a mindicador.cl; "Sobrescribir" fuerza un valor para hoy.
             </p>
             <input
               type="number"
@@ -266,16 +279,26 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
               </button>
               <button
                 type="button"
+                className="mq-btn ghost sm"
+                onClick={async () => {
+                  await refreshLatestUf();
+                  setUfEditOpen(false);
+                }}
+              >
+                Refrescar
+              </button>
+              <button
+                type="button"
                 className="mq-btn umber sm"
                 onClick={() => {
                   const next = Number(ufDraft);
                   if (Number.isFinite(next) && next > 0) {
-                    setUfValue(next);
+                    setUfOverride(new Date().toISOString().slice(0, 10), next);
                     setUfEditOpen(false);
                   }
                 }}
               >
-                Guardar
+                Sobrescribir
               </button>
             </div>
           </div>

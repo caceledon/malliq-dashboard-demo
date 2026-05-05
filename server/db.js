@@ -91,6 +91,12 @@ export async function getDb() {
       details JSON,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS uf_rates (
+      date TEXT PRIMARY KEY,
+      value REAL NOT NULL,
+      fetched_at TEXT NOT NULL
+    );
   `);
 
   const meta = await dbInstance.get('SELECT * FROM meta WHERE id = 1');
@@ -205,6 +211,49 @@ export async function getRecentActivities(limit = 50) {
   return await db.all(
     'SELECT * FROM activities ORDER BY created_at DESC LIMIT ?',
     [limit],
+  );
+}
+
+export async function upsertUfRate(date, value) {
+  const db = await getDb();
+  const fetchedAt = new Date().toISOString();
+  await db.run(
+    'INSERT OR REPLACE INTO uf_rates (date, value, fetched_at) VALUES (?, ?, ?)',
+    [date, value, fetchedAt],
+  );
+  return { date, value, fetchedAt };
+}
+
+export async function getUfRate(date) {
+  const db = await getDb();
+  return db.get('SELECT date, value, fetched_at as fetchedAt FROM uf_rates WHERE date = ?', [date]);
+}
+
+export async function getLatestUfRate() {
+  const db = await getDb();
+  return db.get('SELECT date, value, fetched_at as fetchedAt FROM uf_rates ORDER BY date DESC LIMIT 1');
+}
+
+export async function listUfRates({ from, to } = {}) {
+  const db = await getDb();
+  if (from && to) {
+    return db.all(
+      'SELECT date, value, fetched_at as fetchedAt FROM uf_rates WHERE date BETWEEN ? AND ? ORDER BY date ASC',
+      [from, to],
+    );
+  }
+  return db.all('SELECT date, value, fetched_at as fetchedAt FROM uf_rates ORDER BY date ASC');
+}
+
+/**
+ * Returns the UF row for `date`, falling back to the most recent earlier row.
+ * UF only publishes on business days, so a Sunday lookup returns Friday's rate.
+ */
+export async function getUfRateOnOrBefore(date) {
+  const db = await getDb();
+  return db.get(
+    'SELECT date, value, fetched_at as fetchedAt FROM uf_rates WHERE date <= ? ORDER BY date DESC LIMIT 1',
+    [date],
   );
 }
 

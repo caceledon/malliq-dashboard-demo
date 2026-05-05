@@ -57,6 +57,7 @@ import {
   uploadRemoteDocument,
 } from '@/lib/api';
 import { getAuthUser, subscribeAuthUser, type AuthUser } from '@/lib/auth';
+import { useCurrency } from '@/lib/currency';
 import { deleteDocumentBlob, getDocumentBlob, resetDocumentStorage, saveDocumentBlob } from '@/lib/files';
 
 const AUTO_SYNC_DEBOUNCE_MS = 1500;
@@ -312,7 +313,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const state = useMemo(() => activeWorkspace ?? emptyAppState(), [activeWorkspace]);
   const activeAssetId = activeWorkspace?.asset.id ?? portfolio.activeAssetId ?? null;
   const syncHash = useMemo(() => (activeAssetId ? serializeStateForSync(state) : ''), [activeAssetId, state]);
-  const insights = useMemo(() => buildDashboardInsights(state), [state]);
+  // CurrencyProvider sits above AppStateProvider in App.tsx, so getUfFor is
+  // always available here. This is what makes per-fact-date UF conversion
+  // flow into rentTotal / costoOcupacion / chart series.
+  const { getUfFor } = useCurrency();
+  const insights = useMemo(() => buildDashboardInsights(state, new Date(), getUfFor), [state, getUfFor]);
   const unitsByCode = useMemo(
     () => new Map(state.units.map((unit) => [unit.code.toUpperCase(), unit.id])),
     [state.units],

@@ -22,6 +22,7 @@ const AMOUNT_KEYS = ['monto', 'amount', 'total', 'gross_amount', 'grossAmount', 
 const STORE_KEYS = ['tienda', 'store', 'storeLabel', 'store_name', 'storeName', 'nombre_tienda', 'localidad'];
 const LOCAL_KEYS = ['local', 'local_code', 'localCode', 'codigo_local', 'codigo', 'code', 'loc', 'unidad'];
 const TICKET_KEYS = ['ticket', 'ticketNumber', 'ticket_number', 'folio', 'boleta', 'referencia', 'ref', 'numero'];
+const CURRENCY_KEYS = ['moneda', 'currency', 'unidad', 'unit'];
 
 function inferMapping(headers: string[], keywords: string[]): string | undefined {
   const lowerHeaders = headers.map((h) => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
@@ -60,7 +61,7 @@ function parseDate(value: string): string | undefined {
 export function CsvBulkImporter() {
   const { state, unitsByCode, actions } = useAppState();
   const { showUndo } = useUndoToast();
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, getUfFor, ensureUfFor } = useCurrency();
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [rawCsv, setRawCsv] = useState('');
@@ -69,6 +70,7 @@ export function CsvBulkImporter() {
 
   const [dateCol, setDateCol] = useState<string>('');
   const [amountCol, setAmountCol] = useState<string>('');
+  const [currencyCol, setCurrencyCol] = useState<string>('');
   const [storeCol, setStoreCol] = useState<string>('');
   const [localCol, setLocalCol] = useState<string>('');
   const [ticketCol, setTicketCol] = useState<string>('');
@@ -89,11 +91,19 @@ export function CsvBulkImporter() {
       const storeLabel = storeCol ? String(row[storeCol] ?? '').trim() : undefined;
       const localCode = localCol ? String(row[localCol] ?? '').trim() : undefined;
       const ticketNumber = ticketCol ? String(row[ticketCol] ?? '').trim() : undefined;
+      // If a "moneda" column is mapped and the cell reads UF, convert with the
+      // UF of `occurredAt` (or today when the row has no date) — never with a
+      // single global rate.
+      const currencyRaw = currencyCol ? String(row[currencyCol] ?? '').trim().toUpperCase() : '';
+      const isUfRow = currencyRaw === 'UF';
+      const grossAmount = isUfRow
+        ? Math.round(amount * (getUfFor(occurredAt ?? new Date()) || 0))
+        : Math.round(amount);
       return {
         id: createId('sale'),
         source: 'manual' as const,
         importedAt: now,
-        grossAmount: Math.round(amount),
+        grossAmount,
         occurredAt,
         storeLabel,
         localCode,
@@ -130,7 +140,7 @@ export function CsvBulkImporter() {
         selected: !existingFingerprints.has(fingerprint),
       };
     });
-  }, [rows, amountCol, dateCol, storeCol, localCol, ticketCol, state.contracts, unitsByCode, existingFingerprints, fallbackContractId]);
+  }, [rows, amountCol, currencyCol, dateCol, storeCol, localCol, ticketCol, state.contracts, unitsByCode, existingFingerprints, fallbackContractId, getUfFor]);
 
   const duplicateCount = previews.filter((p) => p.isDuplicate).length;
   const attentionCount = previews.filter((p) => p.needsAttention).length;
@@ -164,6 +174,7 @@ export function CsvBulkImporter() {
     setStoreCol(inferMapping(detectedHeaders, STORE_KEYS) ?? '');
     setLocalCol(inferMapping(detectedHeaders, LOCAL_KEYS) ?? '');
     setTicketCol(inferMapping(detectedHeaders, TICKET_KEYS) ?? '');
+    setCurrencyCol(inferMapping(detectedHeaders, CURRENCY_KEYS) ?? '');
   };
 
   const toggleAll = (value: boolean) => {
@@ -178,7 +189,22 @@ export function CsvBulkImporter() {
     );
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
+    // If UF rows are present, ensure each distinct date is cached so the
+    // rendered grossAmount matches what we just persisted.
+    if (currencyCol) {
+      const ufDates = new Set<string>();
+      for (const preview of finalPreviews) {
+        if (!preview.selected) continue;
+        const row = rows.find((r) => preview.draft.rawText === JSON.stringify(r));
+        if (!row) continue;
+        const cur = String(row[currencyCol] ?? '').trim().toUpperCase();
+        if (cur === 'UF' && preview.draft.occurredAt) {
+          ufDates.add(preview.draft.occurredAt);
+        }
+      }
+      await Promise.all(Array.from(ufDates).map((d) => ensureUfFor(d)));
+    }
     const toImport = finalPreviews.filter((p) => p.selected).map((p) => p.record);
     if (toImport.length === 0) return;
     const result = actions.addSales(toImport, {
@@ -279,6 +305,15 @@ export function CsvBulkImporter() {
             <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">Columna ticket / referencia</span>
             <select value={ticketCol} onChange={(e) => setTicketCol(e.target.value)} className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm outline-none">
               <option value="">—</option>
+              {headers.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">Columna moneda (UF/CLP)</span>
+            <select value={currencyCol} onChange={(e) => setCurrencyCol(e.target.value)} className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm outline-none">
+              <option value="">— (asume CLP)</option>
               {headers.map((h) => (
                 <option key={h} value={h}>{h}</option>
               ))}

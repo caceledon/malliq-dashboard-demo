@@ -21,7 +21,7 @@ import { ActivityLogSection } from '@/components/app/ActivityLogSection';
 export function Configuracion() {
   const navigate = useNavigate();
   const { state, actions, assetSummaries, portfolioStats, activeAssetId } = useAppState();
-  const { currency, setCurrency, ufValue, setUfValue, formatCurrency } = useCurrency();
+  const { currency, setCurrency, ufValue, refreshLatestUf, setUfOverride, latestUfDate, ufUpdatedAt, formatCurrency } = useCurrency();
   const { theme, setTheme } = useTheme();
   const [assetName, setAssetName] = useState(state.asset?.name ?? '');
   const [city, setCity] = useState(state.asset?.city ?? '');
@@ -366,18 +366,38 @@ export function Configuracion() {
                   UF
                 </button>
               </div>
-              {currency === 'UF' ? (
-                <label className="mt-3 block">
-                  <span className="text-xs text-[var(--sidebar-fg)]">Valor UF (CLP)</span>
-                  <input
-                    type="number"
-                    value={ufValue}
-                    onChange={(e) => setUfValue(Number(e.target.value) || 0)}
-                    className="mt-1 w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2 text-sm"
-                    min={0}
-                  />
-                </label>
-              ) : null}
+              <div className="mt-3 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-3 text-xs text-[var(--sidebar-fg)]">
+                <p>
+                  <strong>UF actual:</strong> {ufValue.toLocaleString('es-CL', { maximumFractionDigits: 2 })}
+                  {latestUfDate ? ` (al ${latestUfDate})` : ''}.
+                </p>
+                <p className="mt-1">
+                  Última sincronización con mindicador.cl:{' '}
+                  {ufUpdatedAt ? new Date(ufUpdatedAt).toLocaleString('es-CL') : 'nunca'}.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void refreshLatestUf()}
+                    className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Actualizar UF ahora
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const raw = window.prompt('Override UF para hoy (sólo cuando mindicador.cl falla)');
+                      const value = Number(raw);
+                      if (Number.isFinite(value) && value > 0) {
+                        setUfOverride(new Date().toISOString().slice(0, 10), value);
+                      }
+                    }}
+                    className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Override manual
+                  </button>
+                </div>
+              </div>
               <p className="mt-2 text-xs text-[var(--sidebar-fg)]">
                 Referencia: {formatCurrency(1000000)} equivalen a {formatCurrency(1000000, { unit: currency === 'UF' ? 'CLP' : 'UF' })}.
               </p>

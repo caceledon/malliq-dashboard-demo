@@ -6,6 +6,7 @@ import {
   calculateVentaPorM2,
   contractDateRangesOverlap,
   convertAmountToClp,
+  convertAmountToClpAt,
   createId,
   emptyAppState,
   getContractHealthScorePct,
@@ -318,6 +319,89 @@ describe('buildTenantSummaries', () => {
     const [t] = buildTenantSummaries(state, new Date('2024-06-15'))
     // 60 UF * 39000 = 2_340_000 — must NOT be multiplied by area
     expect(t.rentFixed).toBe(60 * 39000)
+  })
+})
+
+describe('convertAmountToClpAt', () => {
+  // Each fact has its own UF; the lookup is the seam.
+  const ufByDate: Record<string, number> = {
+    '2024-02-15': 36800,
+    '2024-04-30': 37200,
+    '2026-04-15': 39000,
+  }
+  const lookup = (date: string | Date) => {
+    const iso = date instanceof Date ? date.toISOString().slice(0, 10) : String(date).slice(0, 10)
+    return ufByDate[iso] ?? 0
+  }
+
+  it('uses the UF of the requested date, not today', () => {
+    expect(convertAmountToClpAt(100, 'UF', '2024-02-15', lookup)).toBe(100 * 36800)
+    expect(convertAmountToClpAt(100, 'UF', '2024-04-30', lookup)).toBe(100 * 37200)
+  })
+
+  it('returns CLP unchanged regardless of date', () => {
+    expect(convertAmountToClpAt(2_500_000, 'CLP', '2024-02-15', lookup)).toBe(2_500_000)
+  })
+
+  it('falls back to "treat as CLP" when the lookup returns 0', () => {
+    expect(convertAmountToClpAt(60, 'UF', '1999-01-01', lookup)).toBe(60)
+  })
+
+  it('returns 0 for non-finite input', () => {
+    expect(convertAmountToClpAt(Number.NaN, 'UF', '2024-02-15', lookup)).toBe(0)
+  })
+})
+
+describe('buildTenantSummaries with dated UF lookup', () => {
+  it('uses the contract.startDate UF for garantía and the reference-month UF for renta fija', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-dated',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-15',
+      endDate: '2026-12-31',
+      // Renta y garantía pactadas en UF — el motor las convierte con su propia
+      // fecha. fixedRentCurrency=UF se valoriza con la UF de referenceDate;
+      // garantiaMontoCurrency=UF se valoriza con la UF de contract.startDate.
+      fixedRent: 60,
+      fixedRentCurrency: 'UF',
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 100,
+      garantiaMontoCurrency: 'UF',
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-15T00:00:00Z',
+    }
+    const state = { ...emptyAppState(), units: [unit], contracts: [contract] }
+    const lookup = (date: string | Date) => {
+      const iso = date instanceof Date ? date.toISOString().slice(0, 10) : String(date).slice(0, 10)
+      if (iso.startsWith('2024-01')) return 36800
+      if (iso.startsWith('2024-04')) return 37200
+      return 39000
+    }
+    const [t] = buildTenantSummaries(state, new Date('2024-04-15'), lookup)
+    // rentFixed con UF de abril 2024 → 60 * 37200
+    expect(t.rentFixed).toBe(60 * 37200)
+    // garantiaMontoClp con UF de la fecha de inicio (enero 2024) → 100 * 36800
+    expect(t.garantiaMontoClp).toBe(100 * 36800)
   })
 })
 

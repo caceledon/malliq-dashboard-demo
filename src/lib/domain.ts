@@ -372,6 +372,39 @@ export function convertClpToCurrency(amountClp: number, currency: CurrencyTag, u
   return amountClp;
 }
 
+/**
+ * Resolves the UF rate for a specific date. Returns 0 when the lookup has
+ * nothing yet (cold start) so call sites can fall back to "treat as CLP".
+ */
+export type UfLookup = (date: string | Date) => number;
+
+export function convertAmountToClpAt(
+  value: number,
+  currency: CurrencyTag | undefined,
+  date: string | Date,
+  getUfFor: UfLookup,
+): number {
+  if (!Number.isFinite(value)) return 0;
+  if (currency === 'UF') {
+    const uf = getUfFor(date);
+    if (uf > 0) return Math.round(value * uf);
+  }
+  return Math.round(value);
+}
+
+export function convertClpToCurrencyAt(
+  amountClp: number,
+  currency: CurrencyTag,
+  date: string | Date,
+  getUfFor: UfLookup,
+): number {
+  if (currency === 'UF') {
+    const uf = getUfFor(date);
+    if (uf > 0) return amountClp / uf;
+  }
+  return amountClp;
+}
+
 export function monthKey(dateLike: Date | string): string {
   const date = typeof dateLike === 'string' ? new Date(dateLike) : dateLike;
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -458,17 +491,38 @@ export function buildContractCommercialSnapshot(
   >,
   areaM2: number,
   salesAmount: number,
-  referenceDate = startOfToday(),
-  ufToClpRate = 39000,
+  referenceDate: Date | string = startOfToday(),
+  getUfForOrRate: UfLookup | number = 39000,
 ): ContractCommercialSnapshot {
   void areaM2;
-  const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, referenceDate);
-  // The contract pact is monthly fixed rent + % over sales. baseRentUF/m² is
-  // informative only and never auto-multiplied by area. The numeric `fixedRent`
-  // is interpreted in its `fixedRentCurrency` (default CLP).
-  const fixedRent = convertAmountToClp(contract.fixedRent, contract.fixedRentCurrency ?? 'CLP', ufToClpRate);
-  const commonExpensesClp = convertAmountToClp(contract.commonExpenses, contract.commonExpensesCurrency ?? 'CLP', ufToClpRate);
-  const fondoPromocionClp = convertAmountToClp(contract.fondoPromocion || 0, contract.fondoPromocionCurrency ?? 'CLP', ufToClpRate);
+  const effectiveBaseRentUF = getEffectiveBaseRentUF(
+    contract,
+    typeof referenceDate === 'string' ? new Date(referenceDate) : referenceDate,
+  );
+  // Allow callers to either pass a UfLookup (date-aware, preferred) or a
+  // bare number (legacy "today's UF" — kept for tests and one-shot tools).
+  const lookup: UfLookup =
+    typeof getUfForOrRate === 'function'
+      ? getUfForOrRate
+      : () => (Number.isFinite(getUfForOrRate) ? Number(getUfForOrRate) : 0);
+  const fixedRent = convertAmountToClpAt(
+    contract.fixedRent,
+    contract.fixedRentCurrency ?? 'CLP',
+    referenceDate,
+    lookup,
+  );
+  const commonExpensesClp = convertAmountToClpAt(
+    contract.commonExpenses,
+    contract.commonExpensesCurrency ?? 'CLP',
+    referenceDate,
+    lookup,
+  );
+  const fondoPromocionClp = convertAmountToClpAt(
+    contract.fondoPromocion || 0,
+    contract.fondoPromocionCurrency ?? 'CLP',
+    referenceDate,
+    lookup,
+  );
   const variableRent = calculateVariableRentAmount(salesAmount, contract.variableRentPct);
   const rentTotal = fixedRent + variableRent;
 
@@ -798,9 +852,18 @@ export function emptyAppState(): AppState {
   };
 }
 
-export function buildTenantSummaries(state: AppState, referenceDate = new Date(), ufToClpRate = 39000): TenantSummary[] {
-  const currentMonth = monthKey(referenceDate);
-  const previousMonth = monthKey(addMonths(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1), -1));
+export function buildTenantSummaries(
+  state: AppState,
+  referenceDate: Date | string = new Date(),
+  getUfForOrRate: UfLookup | number = 39000,
+): TenantSummary[] {
+  const refDate = typeof referenceDate === 'string' ? new Date(referenceDate) : referenceDate;
+  const currentMonth = monthKey(refDate);
+  const previousMonth = monthKey(addMonths(new Date(refDate.getFullYear(), refDate.getMonth(), 1), -1));
+  const lookup: UfLookup =
+    typeof getUfForOrRate === 'function'
+      ? getUfForOrRate
+      : () => (Number.isFinite(getUfForOrRate) ? Number(getUfForOrRate) : 0);
 
   return state.contracts
     .map((contract) => {
@@ -809,12 +872,40 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
       const salesCurrent = sumSalesByContract(contract.id, state.sales, currentMonth);
       const salesPrevious = sumSalesByContract(contract.id, state.sales, previousMonth);
 
-      const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, referenceDate);
-      const rentFixed = convertAmountToClp(contract.fixedRent, contract.fixedRentCurrency ?? 'CLP', ufToClpRate);
-      const commonExpensesClp = convertAmountToClp(contract.commonExpenses, contract.commonExpensesCurrency ?? 'CLP', ufToClpRate);
-      const fondoPromocionClp = convertAmountToClp(contract.fondoPromocion || 0, contract.fondoPromocionCurrency ?? 'CLP', ufToClpRate);
-      const garantiaMontoClp = convertAmountToClp(contract.garantiaMonto || 0, contract.garantiaMontoCurrency ?? 'CLP', ufToClpRate);
-      const feeIngresoClp = convertAmountToClp(contract.feeIngreso || 0, contract.feeIngresoCurrency ?? 'CLP', ufToClpRate);
+      const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, refDate);
+      // Renta y costos fijos: UF del mes en curso (referenceDate).
+      // Garantía y fee: UF de la fecha en que se pactaron (contract.startDate).
+      const rentFixed = convertAmountToClpAt(
+        contract.fixedRent,
+        contract.fixedRentCurrency ?? 'CLP',
+        refDate,
+        lookup,
+      );
+      const commonExpensesClp = convertAmountToClpAt(
+        contract.commonExpenses,
+        contract.commonExpensesCurrency ?? 'CLP',
+        refDate,
+        lookup,
+      );
+      const fondoPromocionClp = convertAmountToClpAt(
+        contract.fondoPromocion || 0,
+        contract.fondoPromocionCurrency ?? 'CLP',
+        refDate,
+        lookup,
+      );
+      const contractStart = contract.startDate || refDate;
+      const garantiaMontoClp = convertAmountToClpAt(
+        contract.garantiaMonto || 0,
+        contract.garantiaMontoCurrency ?? 'CLP',
+        contractStart,
+        lookup,
+      );
+      const feeIngresoClp = convertAmountToClpAt(
+        contract.feeIngreso || 0,
+        contract.feeIngresoCurrency ?? 'CLP',
+        contractStart,
+        lookup,
+      );
       const rentVariable = calculateVariableRentAmount(salesCurrent, contract.variableRentPct);
       const rentTotal = rentFixed + rentVariable;
       const costoOcupacionPct = calculateCostoOcupacion(rentTotal, commonExpensesClp, fondoPromocionClp, salesCurrent);
@@ -822,7 +913,7 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
       const healthScore = getContractHealthScore(contract);
       const healthScorePct = healthScore * 20;
       const needsFixedRentReview = (contract.baseRentUF || 0) > 0 && (contract.fixedRent || 0) === 0;
-      const ufRate = ufToClpRate > 0 ? ufToClpRate : 1;
+      const ufRate = lookup(refDate) || 1;
 
       return {
         id: contract.id,
@@ -844,7 +935,7 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
         startDate: contract.startDate,
         endDate: contract.endDate,
         baseRentUF: effectiveBaseRentUF,
-        lifecycle: getContractLifecycle(contract, referenceDate),
+        lifecycle: getContractLifecycle(contract, refDate),
         signatureStatus: contract.signatureStatus,
         localCount: contract.localIds.length,
         garantiaVencimiento: contract.garantiaVencimiento,
@@ -1030,11 +1121,16 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
   return alerts.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
-export function buildChartSeries(state: AppState, referenceDate = new Date()): ChartPoint[] {
+export function buildChartSeries(
+  state: AppState,
+  referenceDate: Date | string = new Date(),
+  getUfForOrRate: UfLookup | number = 39000,
+): ChartPoint[] {
+  const refDate = typeof referenceDate === 'string' ? new Date(referenceDate) : referenceDate;
   const series: ChartPoint[] = [];
 
   for (let offset = -5; offset <= 0; offset += 1) {
-    const date = addMonths(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1), offset);
+    const date = addMonths(new Date(refDate.getFullYear(), refDate.getMonth(), 1), offset);
     const month = monthKey(date);
     const monthSales = state.sales
       .filter((item) => monthKey(item.occurredAt) === month)
@@ -1045,7 +1141,12 @@ export function buildChartSeries(state: AppState, referenceDate = new Date()): C
     const monthlyForecast = state.planning
       .filter((item) => item.type === 'forecast' && item.month === month)
       .reduce((sum, item) => sum + item.salesAmount, 0);
-    const monthlyRent = buildTenantSummaries(state, date).reduce((sum, item) => sum + item.rentTotal, 0);
+    // Use the UF of the month bucket so a rent expressed in UF reflects that
+    // month's rate, not today's. The bucket date is the first day of the month.
+    const monthlyRent = buildTenantSummaries(state, date, getUfForOrRate).reduce(
+      (sum, item) => sum + item.rentTotal,
+      0,
+    );
 
     series.push({
       month: monthLabel(month),
@@ -1059,12 +1160,17 @@ export function buildChartSeries(state: AppState, referenceDate = new Date()): C
   return series;
 }
 
-export function buildDashboardInsights(state: AppState, referenceDate = new Date()): DashboardInsights {
-  const tenantSummaries = buildTenantSummaries(state, referenceDate);
-  const alerts = buildAlerts(state, referenceDate);
-  const currentMonth = monthKey(referenceDate);
+export function buildDashboardInsights(
+  state: AppState,
+  referenceDate: Date | string = new Date(),
+  getUfForOrRate: UfLookup | number = 39000,
+): DashboardInsights {
+  const refDate = typeof referenceDate === 'string' ? new Date(referenceDate) : referenceDate;
+  const tenantSummaries = buildTenantSummaries(state, refDate, getUfForOrRate);
+  const alerts = buildAlerts(state, refDate);
+  const currentMonth = monthKey(refDate);
   const activeTenantSummaries = tenantSummaries.filter((tenant) => tenant.lifecycle !== 'vencido');
-  const activeContracts = state.contracts.filter((contract) => getContractLifecycle(contract, referenceDate) !== 'vencido');
+  const activeContracts = state.contracts.filter((contract) => getContractLifecycle(contract, refDate) !== 'vencido');
   const occupiedUnitIds = new Set(activeContracts.flatMap((contract) => contract.localIds));
   const totalAreaM2 = state.units.reduce((sum, item) => sum + item.areaM2, 0);
   const monthlySales = state.sales
@@ -1083,7 +1189,7 @@ export function buildDashboardInsights(state: AppState, referenceDate = new Date
     isSetupComplete: state.asset !== null && state.units.length > 0,
     tenantSummaries,
     alerts,
-    chartSeries: buildChartSeries(state, referenceDate),
+    chartSeries: buildChartSeries(state, refDate, getUfForOrRate),
     occupancyPct: state.units.length > 0 ? Math.round((occupiedUnitIds.size / state.units.length) * 1000) / 10 : 0,
     occupiedUnits: occupiedUnitIds.size,
     vacantUnits: state.units.length - occupiedUnitIds.size,

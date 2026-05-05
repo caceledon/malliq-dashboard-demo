@@ -122,7 +122,7 @@ export function CargasDatos() {
                   <td className="px-4 py-3 text-sm">{sale.source}</td>
                   <td className="px-4 py-3 text-sm">{sale.ticketNumber ?? 'N/D'}</td>
                   <td className="px-4 py-3 text-sm">{sale.importReference ?? 'N/D'}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatCurrency(sale.grossAmount)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatCurrency(sale.grossAmount, { atDate: sale.occurredAt })}</td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => setDeleteTarget({ id: sale.id, label: sale.storeLabel })}
