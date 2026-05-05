@@ -56,6 +56,7 @@ import {
   type ServerHealth,
   uploadRemoteDocument,
 } from '@/lib/api';
+import { getAuthUser, subscribeAuthUser, type AuthUser } from '@/lib/auth';
 import { deleteDocumentBlob, getDocumentBlob, resetDocumentStorage, saveDocumentBlob } from '@/lib/files';
 
 const AUTO_SYNC_DEBOUNCE_MS = 1500;
@@ -94,6 +95,7 @@ interface AppContextValue {
   insights: ReturnType<typeof buildDashboardInsights>;
   unitsByCode: Map<string, string>;
   currentTenantId?: string;
+  authUser: AuthUser | null;
   actions: {
     initializeAsset: (payload: AssetSetupInput) => void;
     createAsset: (payload: CreateAssetInput) => string;
@@ -121,6 +123,7 @@ interface AppContextValue {
     uploadDocument: (payload: UploadDocumentInput) => Promise<void>;
     deleteDocument: (documentId: string) => Promise<void>;
     downloadDocument: (documentId: string) => Promise<void>;
+    getDocumentBlob: (documentId: string) => Promise<Blob | null>;
     exportBackup: () => Promise<BackupArchive>;
     importBackup: (archive: BackupArchive) => Promise<void>;
     exportPortfolioBackup: () => Promise<PortfolioBackupArchive>;
@@ -303,6 +306,8 @@ async function exportWorkspaceBackup(workspace: AppState): Promise<BackupArchive
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [portfolio, setPortfolio] = useState<PortfolioState>(loadPortfolioState);
+  const [authUser, setAuthUserState] = useState<AuthUser | null>(() => getAuthUser());
+  useEffect(() => subscribeAuthUser(setAuthUserState), []);
   const activeWorkspace = useMemo(() => getActiveWorkspace(portfolio), [portfolio]);
   const state = useMemo(() => activeWorkspace ?? emptyAppState(), [activeWorkspace]);
   const activeAssetId = activeWorkspace?.asset.id ?? portfolio.activeAssetId ?? null;
@@ -312,12 +317,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => new Map(state.units.map((unit) => [unit.code.toUpperCase(), unit.id])),
     [state.units],
   );
-  const currentTenantId = useMemo(
-    () =>
+  const currentTenantId = useMemo(() => {
+    if (authUser?.role === 'locatario') {
+      // Locatarios are strictly pinned to their bound contract. If the admin
+      // has not bound one yet, return undefined — never leak another store's data.
+      return authUser.tenantContractId ?? undefined;
+    }
+    return (
       insights.tenantSummaries.find((tenant) => tenant.lifecycle !== 'vencido')?.id ??
-      insights.tenantSummaries[0]?.id,
-    [insights.tenantSummaries],
-  );
+      insights.tenantSummaries[0]?.id
+    );
+  }, [authUser?.role, authUser?.tenantContractId, insights.tenantSummaries]);
   const assetSummaries = useMemo(
     () =>
       [...portfolio.workspaces]
@@ -943,6 +953,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         })),
       );
     },
+    async getDocumentBlob(documentId) {
+      const currentWorkspace = getActiveWorkspace(portfolioRef.current);
+      const record = currentWorkspace?.documents.find((document) => document.id === documentId);
+      if (!currentWorkspace || !record) {
+        return null;
+      }
+      const blob =
+        record.storage === 'remote'
+          ? await downloadRemoteDocument(resolveApiBase(currentWorkspace.asset.backendUrl), documentId)
+          : await getDocumentBlob(documentId);
+      return blob ?? null;
+    },
     async downloadDocument(documentId) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
       const record = currentWorkspace?.documents.find((document) => document.id === documentId);
@@ -1278,6 +1300,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         insights,
         unitsByCode,
         currentTenantId,
+        authUser,
         actions,
       }}
     >

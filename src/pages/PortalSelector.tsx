@@ -1,10 +1,21 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Store, ArrowRight, ShieldCheck, UserCircle } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 
 export function PortalSelector() {
   const navigate = useNavigate();
-  const { state } = useAppState();
+  const { state, authUser } = useAppState();
+
+  useEffect(() => {
+    if (authUser?.role === 'locatario') {
+      navigate('/locatario/dashboard', { replace: true });
+    }
+  }, [authUser?.role, navigate]);
+
+  if (authUser?.role === 'locatario') {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center page-enter sm:bg-[var(--main-bg)]">

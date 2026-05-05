@@ -21,7 +21,9 @@ import {
   findUserById,
   hasAnyUser,
   issueToken,
+  listUsers,
   publicUser,
+  updateUserTenant,
   verifyPassword,
 } from './auth.js';
 
@@ -1483,10 +1485,19 @@ function createAppInstance() {
           return;
         }
       }
-      const role = bootstrapOpen ? 'admin' : (request.body?.role ?? 'member');
-      const user = await createUser({ email, password, displayName, role });
+      const requestedRole = bootstrapOpen ? 'admin' : (request.body?.role ?? 'member');
+      const tenantContractId = bootstrapOpen ? null : (request.body?.tenantContractId ?? null);
+      const assetId = bootstrapOpen ? null : (request.body?.assetId ?? null);
+      const user = await createUser({
+        email,
+        password,
+        displayName,
+        role: requestedRole,
+        tenantContractId,
+        assetId,
+      });
       const token = await issueToken(user);
-      void logActivity('auth_register', 'user', user.id, user.email, { bootstrap: bootstrapOpen });
+      void logActivity('auth_register', 'user', user.id, user.email, { bootstrap: bootstrapOpen, role: user.role });
       response.status(201).json({ token, user });
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : 'Error registrando usuario.' });
@@ -1517,12 +1528,59 @@ function createAppInstance() {
   // are registered, but before resource routes — so mount here.
   app.use('/api', buildAuthMiddleware());
 
+  // Locatarios are read-only. They can fetch their archive/documents and
+  // see auth/me, but must not push state, mutate documents, or hit the
+  // POS/fiscal/autofill connectors. When auth is not required (zero-user
+  // dev mode) `request.user` is undefined and the writer routes pass
+  // through unchanged for backwards compatibility with offline setups.
+  const requireRole = (allowed) => (request, response, next) => {
+    if (!request.user) return next();
+    if (!allowed.includes(request.user.role)) {
+      response.status(403).json({ error: 'No autorizado para esta operación.' });
+      return;
+    }
+    next();
+  };
+  const writerRoles = requireRole(['admin', 'member']);
+
   app.get('/api/auth/me', async (request, response) => {
     if (!request.user) {
       response.status(401).json({ error: 'No autenticado.' });
       return;
     }
     response.json({ user: request.user });
+  });
+
+  app.get('/api/auth/users', async (request, response) => {
+    if (!request.user || request.user.role !== 'admin') {
+      response.status(403).json({ error: 'Se requiere rol admin.' });
+      return;
+    }
+    try {
+      const users = await listUsers();
+      response.json({ users });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
+    }
+  });
+
+  app.patch('/api/auth/users/:id/tenant', async (request, response) => {
+    if (!request.user || request.user.role !== 'admin') {
+      response.status(403).json({ error: 'Se requiere rol admin.' });
+      return;
+    }
+    try {
+      const { tenantContractId = null, assetId = null } = request.body || {};
+      const updated = await updateUserTenant(request.params.id, { tenantContractId, assetId });
+      if (!updated) {
+        response.status(404).json({ error: 'Usuario no encontrado.' });
+        return;
+      }
+      void logActivity('auth_user_tenant_updated', 'user', updated.id, request.user.email, { tenantContractId, assetId });
+      response.json({ user: publicUser(updated) });
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : 'Error actualizando vínculo.' });
+    }
   });
 
   app.get('/api/health', async (_request, response) => {
@@ -1545,9 +1603,15 @@ function createAppInstance() {
     }
   });
 
-  app.get('/api/activities', async (_request, response) => {
+  app.get('/api/activities', async (request, response) => {
+    if (request.user && request.user.role !== 'admin') {
+      response.status(403).json({ error: 'Se requiere rol admin.' });
+      return;
+    }
     try {
-      const activities = await getRecentActivities(50);
+      const rawLimit = Number(request.query.limit ?? 50);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.round(rawLimit), 1), 200) : 50;
+      const activities = await getRecentActivities(limit);
       response.json({ activities });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
@@ -1562,7 +1626,7 @@ function createAppInstance() {
     }
   });
 
-  app.put('/api/archive', archiveWriteLimiter, async (request, response) => {
+  app.put('/api/archive', writerRoles, archiveWriteLimiter, async (request, response) => {
     try {
       const zodResult = ArchivePutSchema.safeParse(request.body || {});
       if (!zodResult.success) {
@@ -1584,7 +1648,7 @@ function createAppInstance() {
     }
   });
 
-  app.post('/api/documents', upload.single('file'), async (request, response) => {
+  app.post('/api/documents', writerRoles, upload.single('file'), async (request, response) => {
     const tempFilePath = request.file?.path;
 
     try {
@@ -1637,7 +1701,7 @@ function createAppInstance() {
     }
   });
 
-  app.delete('/api/documents/:id', async (request, response) => {
+  app.delete('/api/documents/:id', writerRoles, async (request, response) => {
     try {
       const state = await loadState();
       const record = state.documents.find((item) => item.id === request.params.id);
@@ -1686,7 +1750,7 @@ function createAppInstance() {
     }
   });
 
-  app.post('/api/connectors/pos/proxy', async (request, response) => {
+  app.post('/api/connectors/pos/proxy', writerRoles, async (request, response) => {
     try {
       const zodResult = ProxyPayloadSchema.safeParse(request.body || {});
       if (!zodResult.success) {
@@ -1729,7 +1793,7 @@ function createAppInstance() {
     }
   });
 
-  app.post('/api/connectors/fiscal/ingest', upload.single('file'), async (request, response) => {
+  app.post('/api/connectors/fiscal/ingest', writerRoles, upload.single('file'), async (request, response) => {
     const tempFilePath = request.file?.path;
 
     try {
@@ -1759,7 +1823,7 @@ function createAppInstance() {
     }
   });
 
-  app.post('/api/contracts/autofill', autofillLimiter, upload.single('file'), async (request, response) => {
+  app.post('/api/contracts/autofill', writerRoles, autofillLimiter, upload.single('file'), async (request, response) => {
     const tempFilePath = request.file?.path;
 
     try {
@@ -1829,7 +1893,7 @@ function createAppInstance() {
     }
   });
 
-  app.post('/api/contracts/autofill/ask', autofillLimiter, async (request, response) => {
+  app.post('/api/contracts/autofill/ask', writerRoles, autofillLimiter, async (request, response) => {
     try {
       const body = request.body || {};
       const question = String(body.question || '').trim();

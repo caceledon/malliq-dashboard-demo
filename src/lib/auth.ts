@@ -1,13 +1,17 @@
 const TOKEN_STORAGE_KEY = 'malliq-auth-token';
 const USER_STORAGE_KEY = 'malliq-auth-user';
 
+export type AuthRole = 'admin' | 'member' | 'locatario';
+
 export interface AuthUser {
   id: string;
   email: string;
   displayName: string | null;
-  role: 'admin' | 'member';
+  role: AuthRole;
   createdAt: string;
   lastLoginAt?: string | null;
+  tenantContractId?: string | null;
+  assetId?: string | null;
 }
 
 type AuthListener = (user: AuthUser | null) => void;
@@ -101,7 +105,14 @@ export async function login(apiBase: string, email: string, password: string): P
 
 export async function register(
   apiBase: string,
-  payload: { email: string; password: string; displayName?: string; role?: 'admin' | 'member' },
+  payload: {
+    email: string;
+    password: string;
+    displayName?: string;
+    role?: AuthRole;
+    tenantContractId?: string | null;
+    assetId?: string | null;
+  },
 ): Promise<LoginResponse> {
   const token = getAuthToken();
   const response = await fetch(`${normalizeApiBase(apiBase)}/auth/register`, {

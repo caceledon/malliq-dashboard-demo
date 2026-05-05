@@ -194,4 +194,132 @@ describe('Auth + AI ask integration', () => {
     expect(payload.suggestedUpdates).toBeNull();
     expect(payload.answer).toContain('modo local');
   });
+
+  it('blocks creating a locatario user without a tenantContractId', async () => {
+    const response = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        email: 'orphan@test.cl',
+        password: 'orphan-pw-123',
+        role: 'locatario',
+      }),
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(String(body.error)).toMatch(/contrato/i);
+  });
+
+  it('admin can create a bound locatario user and read it via /api/auth/users', async () => {
+    const created = await readJson(
+      await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          email: 'tenant-a@test.cl',
+          password: 'tenant-pw-123',
+          role: 'locatario',
+          tenantContractId: 'contract-1',
+          assetId: 'asset-1',
+        }),
+      }),
+    );
+    expect(created.user.role).toBe('locatario');
+    expect(created.user.tenantContractId).toBe('contract-1');
+
+    const list = await readJson(
+      await fetch(`${baseUrl}/api/auth/users`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }),
+    );
+    const found = list.users.find((u: { email: string }) => u.email === 'tenant-a@test.cl');
+    expect(found?.tenantContractId).toBe('contract-1');
+    expect(found?.assetId).toBe('asset-1');
+  });
+
+  it('non-admin tokens get 403 from /api/auth/users', async () => {
+    const memberLogin = await readJson(
+      await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'member@test.cl', password: 'member-pw-123' }),
+      }),
+    );
+    const memberToken = memberLogin.token as string;
+
+    const response = await fetch(`${baseUrl}/api/auth/users`, {
+      headers: { Authorization: `Bearer ${memberToken}` },
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('locatario tokens get 403 on writer endpoints', async () => {
+    const tenantLogin = await readJson(
+      await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'tenant-a@test.cl', password: 'tenant-pw-123' }),
+      }),
+    );
+    const tenantToken = tenantLogin.token as string;
+
+    const archivePut = await fetch(`${baseUrl}/api/archive?force=1`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tenantToken}`,
+      },
+      body: JSON.stringify({ version: 1, state: {}, documents: [] }),
+    });
+    expect(archivePut.status).toBe(403);
+
+    const proxy = await fetch(`${baseUrl}/api/connectors/pos/proxy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tenantToken}`,
+      },
+      body: JSON.stringify({ endpoint: 'https://example.com/api', method: 'GET' }),
+    });
+    expect(proxy.status).toBe(403);
+  });
+
+  it('PATCH /api/auth/users/:id/tenant updates the binding', async () => {
+    const list = await readJson(
+      await fetch(`${baseUrl}/api/auth/users`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }),
+    );
+    const tenantUser = list.users.find((u: { email: string }) => u.email === 'tenant-a@test.cl');
+    expect(tenantUser).toBeTruthy();
+
+    const patched = await readJson(
+      await fetch(`${baseUrl}/api/auth/users/${tenantUser.id}/tenant`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ tenantContractId: 'contract-2', assetId: 'asset-1' }),
+      }),
+    );
+    expect(patched.user.tenantContractId).toBe('contract-2');
+    expect(patched.user.assetId).toBe('asset-1');
+  });
+
+  it('ensureAuthSchema is idempotent across reruns', async () => {
+    const authModule = await import(
+      pathToFileURL(path.join(process.cwd(), 'server', 'auth.js')).href
+    );
+    // The migration block adds tenant_contract_id / asset_id once. Calling it
+    // again must not throw on the duplicate-column error.
+    await expect(authModule.ensureAuthSchema()).resolves.toBeUndefined();
+    await expect(authModule.ensureAuthSchema()).resolves.toBeUndefined();
+  });
 });

@@ -54,6 +54,17 @@ export async function ensureAuthSchema() {
       value TEXT NOT NULL
     );
   `);
+  // Idempotent migration: tenant binding for the 'locatario' role.
+  // sqlite has no IF NOT EXISTS for ADD COLUMN — wrap in try/catch so reruns are safe.
+  for (const column of ['tenant_contract_id TEXT', 'asset_id TEXT']) {
+    try {
+      await db.exec(`ALTER TABLE users ADD COLUMN ${column}`);
+    } catch (err) {
+      if (!/duplicate column/i.test(String(err?.message ?? err))) {
+        throw err;
+      }
+    }
+  }
 }
 
 export async function hasAnyUser() {
@@ -72,9 +83,16 @@ export async function findUserById(id) {
   return db.get('SELECT * FROM users WHERE id = ?', [id]);
 }
 
-export async function createUser({ email, password, displayName, role = 'member' }) {
+const ALLOWED_ROLES = new Set(['admin', 'member', 'locatario']);
+
+export async function createUser({ email, password, displayName, role = 'member', tenantContractId = null, assetId = null }) {
   if (!email || !password) throw new Error('email and password are required');
   if (password.length < 8) throw new Error('Contraseña debe tener al menos 8 caracteres.');
+
+  const safeRole = ALLOWED_ROLES.has(role) ? role : 'member';
+  if (safeRole === 'locatario' && !tenantContractId) {
+    throw new Error('Un usuario locatario debe estar vinculado a un contrato.');
+  }
 
   const existing = await findUserByEmail(email);
   if (existing) throw new Error('Ya existe un usuario con ese correo.');
@@ -85,11 +103,28 @@ export async function createUser({ email, password, displayName, role = 'member'
 
   const db = await getDb();
   await db.run(
-    'INSERT INTO users (id, email, password_hash, display_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, email.trim().toLowerCase(), hash, displayName ?? null, role, now],
+    'INSERT INTO users (id, email, password_hash, display_name, role, created_at, tenant_contract_id, asset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, email.trim().toLowerCase(), hash, displayName ?? null, safeRole, now, tenantContractId, assetId],
   );
 
-  return { id, email: email.trim().toLowerCase(), displayName: displayName ?? null, role, createdAt: now };
+  return {
+    id,
+    email: email.trim().toLowerCase(),
+    displayName: displayName ?? null,
+    role: safeRole,
+    createdAt: now,
+    tenantContractId,
+    assetId,
+  };
+}
+
+export async function updateUserTenant(userId, { tenantContractId = null, assetId = null }) {
+  const db = await getDb();
+  await db.run(
+    'UPDATE users SET tenant_contract_id = ?, asset_id = ? WHERE id = ?',
+    [tenantContractId, assetId, userId],
+  );
+  return findUserById(userId);
 }
 
 export async function verifyPassword(email, password) {
@@ -131,7 +166,15 @@ export function publicUser(row) {
     role: row.role,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at ?? null,
+    tenantContractId: row.tenant_contract_id ?? null,
+    assetId: row.asset_id ?? null,
   };
+}
+
+export async function listUsers() {
+  const db = await getDb();
+  const rows = await db.all('SELECT * FROM users ORDER BY created_at ASC');
+  return rows.map(publicUser);
 }
 
 /**

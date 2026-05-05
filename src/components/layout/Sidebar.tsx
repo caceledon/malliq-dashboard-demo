@@ -36,8 +36,8 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const location = useLocation();
-  const isAdmin = location.pathname.startsWith('/admin');
-  const { state, insights, assetSummaries, activeAssetId, actions } = useAppState();
+  const { state, insights, assetSummaries, activeAssetId, actions, authUser } = useAppState();
+  const isAdmin = location.pathname.startsWith('/admin') && authUser?.role !== 'locatario';
 
   const operationNav: NavDef[] = useMemo(
     () =>

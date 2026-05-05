@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ToastProvider } from '@/components/Toast';
 import { UndoToastProvider } from '@/components/UndoToast';
 import { AuthGate } from '@/components/AuthGate';
+import { AdminOnly, LocatarioOnly } from '@/components/RoleGuards';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { CurrencyProvider } from '@/lib/currency';
 import { AppStateProvider, useAppState } from '@/store/appState';
@@ -64,20 +65,20 @@ function App() {
               <ActiveAssetThemeSync />
               <Routes>
                 <Route element={<AppLayout />}>
-                  <Route path="/admin/dashboard" element={withSuspense(<AdminDashboard />)} />
-                  <Route path="/admin/activos" element={withSuspense(<Portafolio />)} />
-                  <Route path="/admin/locatarios" element={withSuspense(<Locatarios />)} />
-                  <Route path="/admin/locatarios/:id" element={withSuspense(<LocatarioDetail />)} />
-                  <Route path="/admin/rentas" element={withSuspense(<RentasContratos />)} />
-                  <Route path="/admin/cargas" element={withSuspense(<CargasDatos />)} />
-                  <Route path="/admin/planeacion" element={withSuspense(<Planeacion />)} />
-                  <Route path="/admin/ecosistema" element={withSuspense(<Ecosistema />)} />
-                  <Route path="/admin/alertas" element={withSuspense(<Alertas />)} />
-                  <Route path="/admin/configuracion" element={withSuspense(<Configuracion />)} />
+                  <Route path="/admin/dashboard" element={<AdminOnly>{withSuspense(<AdminDashboard />)}</AdminOnly>} />
+                  <Route path="/admin/activos" element={<AdminOnly>{withSuspense(<Portafolio />)}</AdminOnly>} />
+                  <Route path="/admin/locatarios" element={<AdminOnly>{withSuspense(<Locatarios />)}</AdminOnly>} />
+                  <Route path="/admin/locatarios/:id" element={<AdminOnly>{withSuspense(<LocatarioDetail />)}</AdminOnly>} />
+                  <Route path="/admin/rentas" element={<AdminOnly>{withSuspense(<RentasContratos />)}</AdminOnly>} />
+                  <Route path="/admin/cargas" element={<AdminOnly>{withSuspense(<CargasDatos />)}</AdminOnly>} />
+                  <Route path="/admin/planeacion" element={<AdminOnly>{withSuspense(<Planeacion />)}</AdminOnly>} />
+                  <Route path="/admin/ecosistema" element={<AdminOnly>{withSuspense(<Ecosistema />)}</AdminOnly>} />
+                  <Route path="/admin/alertas" element={<AdminOnly>{withSuspense(<Alertas />)}</AdminOnly>} />
+                  <Route path="/admin/configuracion" element={<AdminOnly>{withSuspense(<Configuracion />)}</AdminOnly>} />
 
-                  <Route path="/locatario/dashboard" element={withSuspense(<LocatarioDashboard />)} />
-                  <Route path="/locatario/contrato" element={withSuspense(<LocatarioContrato />)} />
-                  <Route path="/locatario/ventas" element={withSuspense(<LocatarioVentas />)} />
+                  <Route path="/locatario/dashboard" element={<LocatarioOnly>{withSuspense(<LocatarioDashboard />)}</LocatarioOnly>} />
+                  <Route path="/locatario/contrato" element={<LocatarioOnly>{withSuspense(<LocatarioContrato />)}</LocatarioOnly>} />
+                  <Route path="/locatario/ventas" element={<LocatarioOnly>{withSuspense(<LocatarioVentas />)}</LocatarioOnly>} />
                 </Route>
 
                 {/* Standalone Views without Sidebar */}

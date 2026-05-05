@@ -5,6 +5,7 @@ export type CurrencyCode = 'UF' | 'CLP';
 interface CurrencyContextValue {
   currency: CurrencyCode;
   ufValue: number;
+  ufUpdatedAt: number; // epoch ms; tracks the last operator edit of ufValue
   setCurrency: (code: CurrencyCode) => void;
   setUfValue: (value: number) => void;
   formatCurrency: (amountClp: number, options?: { decimals?: number; unit?: CurrencyCode }) => string;
@@ -16,7 +17,7 @@ const CurrencyContext = createContext<CurrencyContextValue | undefined>(undefine
 
 const STORAGE_KEY = 'malliq-currency-prefs';
 
-function loadPrefs(): { currency: CurrencyCode; ufValue: number } {
+function loadPrefs(): { currency: CurrencyCode; ufValue: number; ufUpdatedAt: number } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -24,12 +25,13 @@ function loadPrefs(): { currency: CurrencyCode; ufValue: number } {
       return {
         currency: parsed.currency === 'UF' ? 'UF' : 'CLP',
         ufValue: typeof parsed.ufValue === 'number' ? parsed.ufValue : 39000,
+        ufUpdatedAt: typeof parsed.ufUpdatedAt === 'number' ? parsed.ufUpdatedAt : 0,
       };
     }
   } catch {
     // ignore parse errors
   }
-  return { currency: 'CLP', ufValue: 39000 };
+  return { currency: 'CLP', ufValue: 39000, ufUpdatedAt: 0 };
 }
 
 /* eslint-disable react-refresh/only-export-components */
@@ -37,19 +39,25 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const prefs = loadPrefs();
   const [currency, setCurrencyState] = useState<CurrencyCode>(prefs.currency);
   const [ufValue, setUfValueState] = useState<number>(prefs.ufValue);
+  const [ufUpdatedAt, setUfUpdatedAt] = useState<number>(prefs.ufUpdatedAt);
 
-  const persist = (nextCurrency: CurrencyCode, nextUf: number) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currency: nextCurrency, ufValue: nextUf }));
+  const persist = (nextCurrency: CurrencyCode, nextUf: number, nextUpdatedAt: number) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ currency: nextCurrency, ufValue: nextUf, ufUpdatedAt: nextUpdatedAt }),
+    );
   };
 
   const setCurrency = (code: CurrencyCode) => {
     setCurrencyState(code);
-    persist(code, ufValue);
+    persist(code, ufValue, ufUpdatedAt);
   };
 
   const setUfValue = (value: number) => {
+    const stamp = Date.now();
     setUfValueState(value);
-    persist(currency, value);
+    setUfUpdatedAt(stamp);
+    persist(currency, value, stamp);
   };
 
   const convertToDisplay = (amountClp: number): number => {
@@ -88,6 +96,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       value={{
         currency,
         ufValue,
+        ufUpdatedAt,
         setCurrency,
         setUfValue,
         formatCurrency,

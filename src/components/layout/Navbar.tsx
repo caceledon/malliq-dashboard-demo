@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LogOut, Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
+import { AlertCircle, LogOut, Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 import { useTheme } from '@/lib/theme';
@@ -37,17 +37,27 @@ function matchRouteTitle(pathname: string): string {
 }
 
 export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
+  const STALE_UF_MS = 24 * 60 * 60 * 1000;
   const { theme, setTheme } = useTheme();
-  const { currency, setCurrency, ufValue, setUfValue } = useCurrency();
+  const { currency, setCurrency, ufValue, setUfValue, ufUpdatedAt } = useCurrency();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    // Re-evaluate "stale" once per hour while the tab is open.
+    const tick = window.setInterval(() => setNow(Date.now()), 60 * 60 * 1000);
+    return () => window.clearInterval(tick);
+  }, []);
+  const ufStale = !ufUpdatedAt || now - ufUpdatedAt > STALE_UF_MS;
+  const [ufEditOpen, setUfEditOpen] = useState(false);
+  const [ufDraft, setUfDraft] = useState(String(ufValue));
   const { state, actions } = useAppState();
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdmin = location.pathname.startsWith('/admin');
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getAuthUser());
+  useEffect(() => subscribeAuthUser(setAuthUser), []);
+  const isLocatario = authUser?.role === 'locatario';
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
   const assetName = state.asset?.name ?? 'Sin activo';
   const pageTitle = matchRouteTitle(location.pathname);
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getAuthUser());
-  useEffect(() => subscribeAuthUser(setAuthUser), []);
 
   return (
     <nav className="mq-topbar">
@@ -111,27 +121,23 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
         </span>
       </button>
 
-      {/* Portal switcher */}
-      <div
-        className="seg hidden lg:inline-flex"
-        role="tablist"
-        aria-label="Portal"
-      >
+      {/* Portal switcher removed — roles now enforce which portal a user sees. */}
+
+      {/* Stale UF chip (only when older than 24h or never set, and not for locatarios) */}
+      {ufStale && !isLocatario ? (
         <button
           type="button"
-          className={cn(isAdmin && 'on')}
-          onClick={() => navigate('/admin/dashboard')}
+          onClick={() => {
+            setUfDraft(String(ufValue));
+            setUfEditOpen(true);
+          }}
+          title="Verifica el valor UF — puede estar desactualizado"
+          className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
         >
-          Admin
+          <AlertCircle className="h-3 w-3" />
+          UF puede estar desactualizada
         </button>
-        <button
-          type="button"
-          className={cn(!isAdmin && 'on')}
-          onClick={() => navigate('/locatario/dashboard')}
-        >
-          Locatario
-        </button>
-      </div>
+      ) : null}
 
       {/* Currency */}
       <div className="hidden md:flex items-center gap-2">
@@ -188,13 +194,15 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
       >
         <Printer size={14} /> PDF ejecutivo
       </button>
-      <button
-        type="button"
-        className="mq-btn primary sm"
-        onClick={() => navigate('/admin/rentas')}
-      >
-        <Sparkles size={14} /> Asistente MallQ
-      </button>
+      {!isLocatario ? (
+        <button
+          type="button"
+          className="mq-btn primary sm"
+          onClick={() => navigate('/admin/rentas')}
+        >
+          <Sparkles size={14} /> Asistente MallQ
+        </button>
+      ) : null}
 
       {authUser ? (
         <div className="row hidden lg:flex" style={{ gap: 6 }}>
@@ -212,6 +220,65 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
           >
             <LogOut size={14} />
           </button>
+        </div>
+      ) : null}
+
+      {ufEditOpen ? (
+        <div
+          onClick={() => setUfEditOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 100,
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="mq-card"
+            style={{ width: 360, maxWidth: '100%', padding: 20 }}
+          >
+            <div className="t-eyebrow" style={{ marginBottom: 4 }}>UF actual</div>
+            <h2 style={{ margin: 0, fontFamily: 'var(--display)', fontSize: 16, fontWeight: 700 }}>
+              Actualizar valor UF
+            </h2>
+            <p className="t-muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Última actualización: {ufUpdatedAt ? new Date(ufUpdatedAt).toLocaleString('es-CL') : 'nunca'}.
+              Ingresa el valor más reciente; los montos en UF se reconvierten automáticamente.
+            </p>
+            <input
+              type="number"
+              value={ufDraft}
+              onChange={(e) => setUfDraft(e.target.value)}
+              className="mq-input"
+              style={{ marginTop: 12, width: '100%' }}
+            />
+            <div className="row" style={{ gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button
+                type="button"
+                className="mq-btn ghost sm"
+                onClick={() => setUfEditOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="mq-btn umber sm"
+                onClick={() => {
+                  const next = Number(ufDraft);
+                  if (Number.isFinite(next) && next > 0) {
+                    setUfValue(next);
+                    setUfEditOpen(false);
+                  }
+                }}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </nav>

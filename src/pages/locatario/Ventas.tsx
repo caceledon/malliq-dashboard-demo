@@ -14,15 +14,20 @@ import { downloadTextFile, exportFilteredSalesCsv } from '@/lib/exporters';
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { LocatarioPendingBinding } from '@/pages/locatario/PendingBinding';
 
 export function LocatarioVentas() {
-  const { currentTenantId, state, insights } = useAppState();
+  const { currentTenantId, state, insights, authUser } = useAppState();
   const { formatCurrency } = useCurrency();
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection'>('all');
   const deferredSearch = useDeferredValue(search);
   const summary = insights.tenantSummaries.find((item) => item.id === currentTenantId);
   const contract = state.contracts.find((item) => item.id === currentTenantId);
+
+  if (authUser?.role === 'locatario' && !authUser.tenantContractId) {
+    return <LocatarioPendingBinding />;
+  }
 
   if (!summary || !contract) {
     return (

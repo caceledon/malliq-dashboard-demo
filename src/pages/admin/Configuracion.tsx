@@ -15,6 +15,8 @@ import {
   exportSuppliersCsv,
 } from '@/lib/exporters';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { TenantUsersSection } from '@/components/app/TenantUsersSection';
+import { ActivityLogSection } from '@/components/app/ActivityLogSection';
 
 export function Configuracion() {
   const navigate = useNavigate();
@@ -204,6 +206,10 @@ export function Configuracion() {
           Ajustes del activo, estructura física, personalización visual e integraciones configuradas.
         </p>
       </div>
+
+      <TenantUsersSection />
+
+      <ActivityLogSection />
 
       <div className="glass-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

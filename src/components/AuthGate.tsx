@@ -174,7 +174,7 @@ function AuthForm({ info }: { info: ServerAuthInfo }) {
             {mode === 'login'
               ? 'Usa tu correo corporativo para continuar.'
               : info.authBootstrapped
-                ? 'Un admin existente debe autorizar este registro.'
+                ? 'Un admin existente debe autorizar este registro. Los usuarios locatario se crean desde Configuración → Usuarios.'
                 : 'El primer usuario queda como administrador y es el único que puede crear nuevos usuarios.'}
           </p>
         </div>
