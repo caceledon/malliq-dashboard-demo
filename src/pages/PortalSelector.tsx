@@ -2,10 +2,16 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ShieldCheck, Sparkles, Store, Truck } from 'lucide-react';
 import { useAppState } from '@/store/appState';
+import { useTheme } from '@/lib/theme';
+import miniLogoUrl from '@/assets/mini logo.png';
+import wordmarkLightUrl from '@/assets/logo white.png';
+import wordmarkDarkUrl from '@/assets/logo black.png';
 
 export function PortalSelector() {
   const navigate = useNavigate();
   const { authUser } = useAppState();
+  const { theme } = useTheme();
+  const wordmarkUrl = theme === 'dark' ? wordmarkDarkUrl : wordmarkLightUrl;
 
   useEffect(() => {
     if (authUser?.role === 'locatario') {
@@ -43,38 +49,9 @@ export function PortalSelector() {
         }}
       >
         {/* brand mark */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 11,
-              background:
-                'conic-gradient(from 220deg at 50% 50%, var(--mint-deep), var(--violet-deep), var(--amber), var(--mint-deep))',
-              position: 'relative',
-              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-            }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                inset: 5,
-                borderRadius: 8,
-                background: 'var(--surface)',
-                display: 'grid',
-                placeItems: 'center',
-                fontFamily: 'var(--font-display)',
-                fontSize: 16,
-                fontWeight: 600,
-                color: 'var(--ink-1)',
-              }}
-            >
-              M
-            </span>
-          </div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--ink-1)' }}>
-            Mall<i style={{ fontStyle: 'italic' }}>iq</i>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src={miniLogoUrl} alt="" style={{ height: 44, width: 'auto', display: 'block' }} />
+          <img src={wordmarkUrl} alt="MallIQ" style={{ height: 30, width: 'auto', display: 'block' }} />
         </div>
 
         {/* headline */}

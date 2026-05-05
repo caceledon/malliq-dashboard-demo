@@ -1,5 +1,6 @@
 /* Self-hosted fonts — see @fontsource imports in src/main.tsx. */
 @import "tailwindcss";
+@import "./styles/marketing.css";
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;

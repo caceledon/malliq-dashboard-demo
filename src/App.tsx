@@ -10,6 +10,7 @@ import { CurrencyProvider } from '@/lib/currency';
 import { AppStateProvider, useAppState } from '@/store/appState';
 import { NotFound } from '@/pages/NotFound';
 import { PortalSelector } from '@/pages/PortalSelector';
+import { Landing } from '@/pages/marketing/Landing';
 
 const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard').then((module) => ({ default: module.AdminDashboard })));
 const Portafolio = lazy(() => import('@/pages/admin/Portafolio').then((module) => ({ default: module.Portafolio })));
@@ -27,12 +28,34 @@ const LocatarioDashboard = lazy(() => import('@/pages/locatario/Dashboard').then
 const LocatarioContrato = lazy(() => import('@/pages/locatario/Contrato').then((module) => ({ default: module.LocatarioContrato })));
 const LocatarioVentas = lazy(() => import('@/pages/locatario/Ventas').then((module) => ({ default: module.LocatarioVentas })));
 
+// Marketing pages — public, no auth, no providers needed.
+const Producto = lazy(() => import('@/pages/marketing/Producto').then((module) => ({ default: module.Producto })));
+const Operadores = lazy(() => import('@/pages/marketing/Operadores').then((module) => ({ default: module.Operadores })));
+const LocatariosInfo = lazy(() => import('@/pages/marketing/Locatarios').then((module) => ({ default: module.LocatariosInfo })));
+const Pricing = lazy(() => import('@/pages/marketing/Pricing').then((module) => ({ default: module.Pricing })));
+const Manifiesto = lazy(() => import('@/pages/marketing/Manifiesto').then((module) => ({ default: module.Manifiesto })));
+const Demo = lazy(() => import('@/pages/marketing/Demo').then((module) => ({ default: module.Demo })));
+
 function withSuspense(element: ReactNode) {
   return (
     <Suspense
       fallback={
         <div className="p-6">
           <div className="glass-card p-6 text-sm text-[var(--sidebar-fg)]">Cargando módulo…</div>
+        </div>
+      }
+    >
+      {element}
+    </Suspense>
+  );
+}
+
+function withMarketingSuspense(element: ReactNode) {
+  return (
+    <Suspense
+      fallback={
+        <div className="mk mk-page cream" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+          <div className="mk-eyebrow">Cargando…</div>
         </div>
       }
     >
@@ -54,8 +77,8 @@ function ActiveAssetThemeSync() {
   return null;
 }
 
-function App() {
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
+/** Wraps the authed app routes in providers + AuthGate. */
+function AppShell({ apiBase, children }: { apiBase: string; children: ReactNode }) {
   return (
     <AuthGate apiBase={apiBase}>
       <ThemeProvider>
@@ -63,39 +86,85 @@ function App() {
           <ToastProvider>
             <AppStateProvider>
               <UndoToastProvider>
-                <HashRouter>
-              <ActiveAssetThemeSync />
-              <Routes>
-                <Route element={<AppLayout />}>
-                  <Route path="/admin/dashboard" element={<AdminOnly>{withSuspense(<AdminDashboard />)}</AdminOnly>} />
-                  <Route path="/admin/activos" element={<AdminOnly>{withSuspense(<Portafolio />)}</AdminOnly>} />
-                  <Route path="/admin/locatarios" element={<AdminOnly>{withSuspense(<Locatarios />)}</AdminOnly>} />
-                  <Route path="/admin/locatarios/:id" element={<AdminOnly>{withSuspense(<LocatarioDetail />)}</AdminOnly>} />
-                  <Route path="/admin/rentas" element={<AdminOnly>{withSuspense(<RentasContratos />)}</AdminOnly>} />
-                  <Route path="/admin/cargas" element={<AdminOnly>{withSuspense(<CargasDatos />)}</AdminOnly>} />
-                  <Route path="/admin/planeacion" element={<AdminOnly>{withSuspense(<Planeacion />)}</AdminOnly>} />
-                  <Route path="/admin/ecosistema" element={<AdminOnly>{withSuspense(<Ecosistema />)}</AdminOnly>} />
-                  <Route path="/admin/alertas" element={<AdminOnly>{withSuspense(<Alertas />)}</AdminOnly>} />
-                  <Route path="/admin/configuracion" element={<AdminOnly>{withSuspense(<Configuracion />)}</AdminOnly>} />
-                  <Route path="/admin/simulador" element={<AdminOnly>{withSuspense(<Simulador />)}</AdminOnly>} />
-                  <Route path="/admin/asistente" element={<AdminOnly>{withSuspense(<Asistente />)}</AdminOnly>} />
-
-                  <Route path="/locatario/dashboard" element={<LocatarioOnly>{withSuspense(<LocatarioDashboard />)}</LocatarioOnly>} />
-                  <Route path="/locatario/contrato" element={<LocatarioOnly>{withSuspense(<LocatarioContrato />)}</LocatarioOnly>} />
-                  <Route path="/locatario/ventas" element={<LocatarioOnly>{withSuspense(<LocatarioVentas />)}</LocatarioOnly>} />
-                </Route>
-
-                {/* Standalone Views without Sidebar */}
-                <Route path="/" element={<PortalSelector />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-                </HashRouter>
+                <ActiveAssetThemeSync />
+                {children}
               </UndoToastProvider>
             </AppStateProvider>
           </ToastProvider>
         </CurrencyProvider>
       </ThemeProvider>
     </AuthGate>
+  );
+}
+
+function App() {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
+  return (
+    <HashRouter>
+      <Routes>
+        {/* Public marketing site — no auth, no providers */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/producto" element={withMarketingSuspense(<Producto />)} />
+        <Route path="/operadores" element={withMarketingSuspense(<Operadores />)} />
+        <Route path="/locatarios-info" element={withMarketingSuspense(<LocatariosInfo />)} />
+        <Route path="/pricing" element={withMarketingSuspense(<Pricing />)} />
+        <Route path="/manifiesto" element={withMarketingSuspense(<Manifiesto />)} />
+        <Route path="/demo" element={withMarketingSuspense(<Demo />)} />
+
+        {/* Login — needs the auth provider stack so getAuthUser() works */}
+        <Route
+          path="/login"
+          element={
+            <AppShell apiBase={apiBase}>
+              <PortalSelector />
+            </AppShell>
+          }
+        />
+
+        {/* Admin app */}
+        <Route
+          path="/admin/*"
+          element={
+            <AppShell apiBase={apiBase}>
+              <Routes>
+                <Route element={<AppLayout />}>
+                  <Route path="dashboard" element={<AdminOnly>{withSuspense(<AdminDashboard />)}</AdminOnly>} />
+                  <Route path="activos" element={<AdminOnly>{withSuspense(<Portafolio />)}</AdminOnly>} />
+                  <Route path="locatarios" element={<AdminOnly>{withSuspense(<Locatarios />)}</AdminOnly>} />
+                  <Route path="locatarios/:id" element={<AdminOnly>{withSuspense(<LocatarioDetail />)}</AdminOnly>} />
+                  <Route path="rentas" element={<AdminOnly>{withSuspense(<RentasContratos />)}</AdminOnly>} />
+                  <Route path="cargas" element={<AdminOnly>{withSuspense(<CargasDatos />)}</AdminOnly>} />
+                  <Route path="planeacion" element={<AdminOnly>{withSuspense(<Planeacion />)}</AdminOnly>} />
+                  <Route path="ecosistema" element={<AdminOnly>{withSuspense(<Ecosistema />)}</AdminOnly>} />
+                  <Route path="alertas" element={<AdminOnly>{withSuspense(<Alertas />)}</AdminOnly>} />
+                  <Route path="configuracion" element={<AdminOnly>{withSuspense(<Configuracion />)}</AdminOnly>} />
+                  <Route path="simulador" element={<AdminOnly>{withSuspense(<Simulador />)}</AdminOnly>} />
+                  <Route path="asistente" element={<AdminOnly>{withSuspense(<Asistente />)}</AdminOnly>} />
+                </Route>
+              </Routes>
+            </AppShell>
+          }
+        />
+
+        {/* Locatario app */}
+        <Route
+          path="/locatario/*"
+          element={
+            <AppShell apiBase={apiBase}>
+              <Routes>
+                <Route element={<AppLayout />}>
+                  <Route path="dashboard" element={<LocatarioOnly>{withSuspense(<LocatarioDashboard />)}</LocatarioOnly>} />
+                  <Route path="contrato" element={<LocatarioOnly>{withSuspense(<LocatarioContrato />)}</LocatarioOnly>} />
+                  <Route path="ventas" element={<LocatarioOnly>{withSuspense(<LocatarioVentas />)}</LocatarioOnly>} />
+                </Route>
+              </Routes>
+            </AppShell>
+          }
+        />
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </HashRouter>
   );
 }
 

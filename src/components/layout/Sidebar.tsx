@@ -23,7 +23,11 @@ import {
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/store/appState';
 import { logout } from '@/lib/auth';
+import { useTheme } from '@/lib/theme';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
+import miniLogoUrl from '@/assets/mini logo.png';
+import wordmarkLightUrl from '@/assets/logo white.png';
+import wordmarkDarkUrl from '@/assets/logo black.png';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -54,7 +58,9 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const location = useLocation();
   const { state, insights, assetSummaries, activeAssetId, actions, authUser } = useAppState();
+  const { theme } = useTheme();
   const isAdmin = location.pathname.startsWith('/admin') && authUser?.role !== 'locatario';
+  const wordmarkUrl = theme === 'dark' ? wordmarkDarkUrl : wordmarkLightUrl;
 
   const operationNav: NavDef[] = useMemo(
     () =>
@@ -108,63 +114,29 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         style={{ background: 'color-mix(in oklab, var(--sidebar) 75%, transparent)', borderColor: 'color-mix(in oklab, var(--line) 50%, transparent)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         {/* Brand */}
-        <div className="mq-brand" style={{ padding: '24px 20px 20px' }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              flexShrink: 0,
-              borderRadius: 10,
-              background:
-                'conic-gradient(from 220deg at 50% 50%, var(--mint-deep), var(--violet-deep), var(--amber), var(--mint-deep))',
-              position: 'relative',
-              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-            }}
-          >
+        <div className="mq-brand" style={{ padding: '24px 20px 20px', alignItems: 'center', gap: 10 }}>
+          <img
+            src={miniLogoUrl}
+            alt=""
+            style={{ height: 36, width: 'auto', display: 'block', flexShrink: 0 }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+            <img
+              src={wordmarkUrl}
+              alt="MallIQ"
+              style={{ height: 22, width: 'auto', display: 'block' }}
+            />
             <span
-              style={{
-                position: 'absolute',
-                inset: 4,
-                borderRadius: 7,
-                background: 'var(--surface)',
-                display: 'grid',
-                placeItems: 'center',
-                fontFamily: 'var(--font-display)',
-                fontSize: 14,
-                fontWeight: 600,
-                color: 'var(--ink-1)',
-              }}
-            >
-              M
-            </span>
-          </div>
-          <div style={{ marginLeft: 12 }}>
-            <div
-              className="title"
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 22,
-                fontWeight: 400,
-                letterSpacing: '-0.02em',
-                lineHeight: 1,
-                color: 'var(--ink-1)',
-              }}
-            >
-              Mall<i style={{ fontStyle: 'italic' }}>iq</i>
-            </div>
-            <div
-              className="sub"
               style={{
                 fontSize: 9.5,
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: '0.18em',
                 color: 'var(--ink-4)',
-                marginTop: 4,
               }}
             >
               Operations OS · v3
-            </div>
+            </span>
           </div>
         </div>
 
