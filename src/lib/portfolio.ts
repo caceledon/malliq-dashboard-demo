@@ -41,6 +41,10 @@ export interface PortfolioAssetSummary {
   alertCount: number;
   activeContracts: number;
   prospectCount: number;
+  monthlyRent: number;
+  totalCost: number;
+  expiringSoon: number;
+  expired: number;
 }
 
 export interface PortfolioStats {
@@ -50,6 +54,11 @@ export interface PortfolioStats {
   occupancyPct: number;
   monthlySales: number;
   alertCount: number;
+  monthlyRent: number;
+  totalCost: number;
+  costoOcupacionPct: number;
+  expiringSoon: number;
+  expired: number;
 }
 
 export const STORAGE_KEY = 'malliq-functional-state';
@@ -159,6 +168,14 @@ export function getWorkspaceById(portfolio: PortfolioState, assetId: string): As
 
 export function buildPortfolioAssetSummary(workspace: AssetWorkspace): PortfolioAssetSummary {
   const insights = buildDashboardInsights(workspace);
+  const tenants = insights.tenantSummaries;
+  const monthlyRent = tenants.reduce((sum, t) => sum + t.rentTotal, 0);
+  const totalCost = tenants.reduce(
+    (sum, t) => sum + t.rentTotal + t.commonExpensesClp + t.fondoPromocionClp,
+    0,
+  );
+  const expiringSoon = tenants.filter((t) => t.lifecycle === 'por_vencer').length;
+  const expired = tenants.filter((t) => t.lifecycle === 'vencido').length;
 
   return {
     id: workspace.asset.id,
@@ -172,10 +189,14 @@ export function buildPortfolioAssetSummary(workspace: AssetWorkspace): Portfolio
     occupancyPct: insights.occupancyPct,
     monthlySales: insights.monthlySales,
     alertCount: insights.alerts.length,
-    activeContracts: insights.tenantSummaries.length,
+    activeContracts: tenants.length,
     prospectCount: workspace.prospects.filter(
       (prospect) => prospect.stage !== 'cerrado' && prospect.stage !== 'descartado',
     ).length,
+    monthlyRent,
+    totalCost,
+    expiringSoon,
+    expired,
   };
 }
 
@@ -185,6 +206,10 @@ export function buildPortfolioStats(summaries: PortfolioAssetSummary[]): Portfol
   const occupiedUnits = summaries.reduce((sum, item) => sum + item.occupiedUnits, 0);
   const monthlySales = summaries.reduce((sum, item) => sum + item.monthlySales, 0);
   const alertCount = summaries.reduce((sum, item) => sum + item.alertCount, 0);
+  const monthlyRent = summaries.reduce((sum, item) => sum + item.monthlyRent, 0);
+  const totalCost = summaries.reduce((sum, item) => sum + item.totalCost, 0);
+  const expiringSoon = summaries.reduce((sum, item) => sum + item.expiringSoon, 0);
+  const expired = summaries.reduce((sum, item) => sum + item.expired, 0);
 
   return {
     assetCount,
@@ -193,5 +218,10 @@ export function buildPortfolioStats(summaries: PortfolioAssetSummary[]): Portfol
     occupancyPct: totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 1000) / 10 : 0,
     monthlySales,
     alertCount,
+    monthlyRent,
+    totalCost,
+    costoOcupacionPct: monthlySales > 0 ? (totalCost / monthlySales) * 100 : 0,
+    expiringSoon,
+    expired,
   };
 }

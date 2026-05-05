@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Building2, CopyPlus, Layers3, MapPinned, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Building2, CopyPlus, Layers3, MapPinned, Percent, Plus, Trash2, Wallet } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
@@ -97,6 +97,43 @@ export function Portafolio() {
         <PortfolioMetric title="Locales" value={String(portfolioStats.totalUnits)} meta={`${portfolioStats.occupiedUnits} con contrato vigente`} icon={<Layers3 className="h-4 w-4 text-emerald-600" />} />
         <PortfolioMetric title="Ventas del mes" value={formatCurrency(portfolioStats.monthlySales)} meta="Suma del portafolio activo" icon={<MapPinned className="h-4 w-4 text-amber-600" />} />
         <PortfolioMetric title="Alertas" value={String(portfolioStats.alertCount)} meta="Pendientes operativos abiertos" icon={<ArrowRight className="h-4 w-4 text-rose-600" />} />
+      </div>
+
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Totales cruzados del portafolio</h3>
+            <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+              Suma a través de todos los activos cargados en esta instalación.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <PortfolioMetric
+            title="Renta total mes"
+            value={formatCurrency(portfolioStats.monthlyRent)}
+            meta="Fija + variable, todos los activos"
+            icon={<Wallet className="h-4 w-4 text-blue-600" />}
+          />
+          <PortfolioMetric
+            title="Costo de ocupación"
+            value={portfolioStats.costoOcupacionPct > 0 ? `${portfolioStats.costoOcupacionPct.toFixed(1)}%` : '—'}
+            meta={`${formatCurrency(portfolioStats.totalCost)} de costo total`}
+            icon={<Percent className="h-4 w-4 text-amber-600" />}
+          />
+          <PortfolioMetric
+            title="Contratos por vencer"
+            value={String(portfolioStats.expiringSoon)}
+            meta="≤ 180 días en algún activo"
+            icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}
+          />
+          <PortfolioMetric
+            title="Contratos vencidos"
+            value={String(portfolioStats.expired)}
+            meta="Acción requerida"
+            icon={<AlertTriangle className="h-4 w-4 text-red-600" />}
+          />
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.25fr]">
