@@ -10,9 +10,10 @@ interface SparklineProps {
   stroke?: string;
   fill?: string | null;
   strokeWidth?: number;
+  ariaLabel?: string;
 }
 
-export function Sparkline({ data, w = 96, h = 24, stroke = 'var(--ink-1)', fill = null, strokeWidth = 1.4 }: SparklineProps) {
+export function Sparkline({ data, w = 96, h = 24, stroke = 'var(--ink-1)', fill = null, strokeWidth = 1.4, ariaLabel }: SparklineProps) {
   if (!data || data.length === 0) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -22,8 +23,10 @@ export function Sparkline({ data, w = 96, h = 24, stroke = 'var(--ink-1)', fill 
   const d = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
   const area = d + ` L ${w},${h} L 0,${h} Z`;
   const last = pts[pts.length - 1];
+  const label = ariaLabel ?? `Sparkline de ${data.length} puntos`;
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }} role="img" aria-label={label}>
+      <title>{label}</title>
       {fill ? <path d={area} fill={fill} opacity={0.18} /> : null}
       <path d={d} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={last[0]} cy={last[1]} r={2} fill={stroke} />
@@ -120,8 +123,10 @@ export function HealthRing({
   const off = c * (1 - clamped / 100);
   const bucket = healthBucket(clamped);
   const color = healthColor(bucket);
+  const label = `Salud ${Math.round(clamped)}/100 (categoría ${bucket})`;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label}>
+      <title>{label}</title>
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
       <circle
         cx={size / 2}
@@ -317,11 +322,13 @@ export function Spark({
   color = 'var(--mint-deep)',
   height = 36,
   fill = true,
+  ariaLabel,
 }: {
   values: number[];
   color?: string;
   height?: number;
   fill?: boolean;
+  ariaLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [w, setW] = useState(160);
@@ -336,9 +343,19 @@ export function Spark({
   }, []);
   const { line, area } = useMemo(() => sparkPath(values, w, height, 3), [values, w, height]);
   const gradId = useId();
+  const titleId = useId();
+  const label = ariaLabel ?? 'Tendencia mensual';
   return (
     <div ref={ref} className="mq-spark" style={{ height, position: 'relative' }}>
-      <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} style={{ display: 'block' }}>
+      <svg
+        width={w}
+        height={height}
+        viewBox={`0 0 ${w} ${height}`}
+        style={{ display: 'block' }}
+        role="img"
+        aria-labelledby={titleId}
+      >
+        <title id={titleId}>{label}</title>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity={0.32} />
@@ -743,10 +760,12 @@ export function ContractTimeline({
   contracts,
   today,
   height = 320,
+  ariaLabel,
 }: {
   contracts: { id: string; storeName: string; startDate: string; endDate: string; healthScore: number }[];
   today: Date;
   height?: number;
+  ariaLabel?: string;
 }) {
   if (contracts.length === 0) {
     return (
@@ -763,7 +782,12 @@ export function ContractTimeline({
   const rowH = Math.max(16, Math.floor((height - 56) / Math.max(visible.length, 1)));
   const todayPct = ((today.getTime() - min) / span) * 100;
   return (
-    <div className="mq-card" style={{ padding: 16, position: 'relative' }}>
+    <div
+      className="mq-card"
+      style={{ padding: 16, position: 'relative' }}
+      role="img"
+      aria-label={ariaLabel ?? `Línea de tiempo de ${contracts.length} contratos`}
+    >
       <div className="mq-h-eyebrow" style={{ marginBottom: 12 }}>
         Línea de contratos
       </div>
@@ -825,6 +849,7 @@ export function ForecastChart({
   high,
   months,
   height = 240,
+  ariaLabel,
 }: {
   past: number[];
   base: number[];
@@ -832,6 +857,7 @@ export function ForecastChart({
   high: number[];
   months: string[];
   height?: number;
+  ariaLabel?: string;
 }) {
   const w = 720;
   const pad = { t: 12, r: 12, b: 28, l: 50 };
@@ -849,8 +875,15 @@ export function ForecastChart({
   const bandTop = high.map((v, i) => xy(v, past.length + i));
   const bandBot = low.map((v, i) => xy(v, past.length + i));
   const bandPath = bandTop.length > 0 ? `M ${bandTop.map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' L ')} L ${[...bandBot].reverse().map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' L ')} Z` : '';
+  const label = ariaLabel ?? `Forecast con histórico de ${past.length} meses y proyección de ${base.length}`;
   return (
-    <svg viewBox={`0 0 ${w} ${height}`} style={{ width: '100%', height }}>
+    <svg
+      viewBox={`0 0 ${w} ${height}`}
+      style={{ width: '100%', height }}
+      role="img"
+      aria-label={label}
+    >
+      <title>{label}</title>
       <line x1={pad.l + (past.length - 1) * step} y1={pad.t} x2={pad.l + (past.length - 1) * step} y2={height - pad.b} stroke="var(--hairline-strong)" strokeDasharray="3 3" />
       {bandPath ? <path d={bandPath} fill="var(--violet-soft)" opacity={0.6} /> : null}
       <path d={pastPath} fill="none" stroke="var(--ink-1)" strokeWidth={1.6} strokeLinejoin="round" />
@@ -870,7 +903,15 @@ export function FootfallChart({ data, height = 160 }: { data: number[]; height?:
 }
 
 /* ---------- CategoryDonut (simple pie/donut for category mix) ---------- */
-export function CategoryDonut({ slices, size = 160 }: { slices: { name: string; value: number; color?: string }[]; size?: number }) {
+export function CategoryDonut({
+  slices,
+  size = 160,
+  ariaLabel,
+}: {
+  slices: { name: string; value: number; color?: string }[];
+  size?: number;
+  ariaLabel?: string;
+}) {
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
   const r = size / 2 - 12;
   const c = 2 * Math.PI * r;
@@ -880,9 +921,17 @@ export function CategoryDonut({ slices, size = 160 }: { slices: { name: string; 
     const last = i === 0 ? 0 : offsets[i - 1] + (slices[i - 1].value / total) * c;
     offsets.push(last);
   }
+  const label = ariaLabel ?? `Composición por categoría con ${slices.length} segmentos`;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={label}
+      >
+        <title>{label}</title>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={14} />
         {slices.map((s, i) => {
           const len = (s.value / total) * c;
@@ -931,15 +980,22 @@ export function MallPlan({
   metric = 'sales',
   selectedId,
   onSelect,
+  ariaLabel,
 }: {
   stores: PlanStore[];
   metric?: 'sales' | 'health';
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  ariaLabel?: string;
 }) {
   const max = Math.max(...stores.map((s) => s.value), 1);
   return (
-    <div className="mallmap" style={{ padding: 14 }}>
+    <div
+      className="mallmap"
+      style={{ padding: 14 }}
+      role="img"
+      aria-label={ariaLabel ?? `Plano del mall con ${stores.length} locales (métrica: ${metric === 'health' ? 'salud' : 'ventas'})`}
+    >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(78px, 1fr))', gap: 8 }}>
         {stores.map((s) => {
           const bg = s.vacant
