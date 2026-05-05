@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { useAppState } from '@/store/appState';
 import { logout } from '@/lib/auth';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
+import logoNano from '@/assets/nano_banana/logo.png';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -105,12 +106,12 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       >
         {/* Brand */}
         <div className="mq-brand">
-          <div className="logo" style={{ background: 'transparent', width: 36, height: 36 }}>
-            <img src="https://img.logoipsum.com/296.svg" alt="MallQ Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          <div className="logo" style={{ background: 'transparent', width: 40, height: 40, borderRadius: 8, overflow: 'hidden' }}>
+            <img src={logoNano} alt="MallQ Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="title">MallQ</div>
-            <div className="sub">Retail Operations</div>
+            <div className="sub">Analytics</div>
           </div>
         </div>
 

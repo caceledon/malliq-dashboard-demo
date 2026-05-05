@@ -1,5 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { fetchUfForDate, fetchUfLatest, fetchUfRange, type UfRate } from '@/lib/api';
+import { fetchUfForDate, fetchUfLatest, fetchUfRange, resolveApiBase, type UfRate } from '@/lib/api';
+
+// CurrencyProvider sits above AppStateProvider in the tree, so it can't read
+// state.asset.backendUrl directly. resolveApiBase() with no arg honors the
+// VITE_API_BASE_URL env var and falls back to '/api' — that matches every
+// other call site in src/lib/api.ts.
+const API_BASE = resolveApiBase();
 
 export type CurrencyCode = 'UF' | 'CLP';
 
@@ -154,7 +160,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
   const refreshLatestUf = useCallback(async () => {
     try {
-      const result = await fetchUfLatest('/api');
+      const result = await fetchUfLatest(API_BASE);
       setUfRates((current) => ({ ...current, [result.date]: result.value }));
       setLatestUfDate(result.date);
       const stamp = Date.now();
@@ -175,7 +181,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       if (existing) return existing;
       const promise = (async () => {
         try {
-          const result = await fetchUfForDate('/api', target);
+          const result = await fetchUfForDate(API_BASE, target);
           setUfRates((current) => ({ ...current, [result.date]: result.value }));
           return result.value;
         } catch {
@@ -256,7 +262,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     const year = today.getFullYear();
     const from = `${year - 1}-01-01`;
     const to = today.toISOString().slice(0, 10);
-    fetchUfRange('/api', from, to)
+    fetchUfRange(API_BASE, from, to)
       .then(({ rates }) => {
         if (rates.length === 0) return;
         setUfRates((current) => {

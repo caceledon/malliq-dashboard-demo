@@ -12,6 +12,7 @@ import {
   Sparkles,
   TrendingDown,
   Upload,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { InteractiveMap } from '@/components/InteractiveMap';
@@ -22,6 +23,8 @@ import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { useServerHealth } from '@/hooks/useServerHealth';
+import logoNano from '@/assets/nano_banana/logo.png';
+import photo1 from '@/assets/nano_banana/photo1.png';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -158,44 +161,62 @@ export function AdminDashboard() {
       <div
         className="mq-card"
         style={{
-          padding: '22px 24px',
-          marginBottom: 18,
+          padding: '32px 36px',
+          marginBottom: 24,
           display: 'flex',
           alignItems: 'center',
-          gap: 24,
-          borderRadius: 16,
+          gap: 32,
+          borderRadius: 32,
           overflow: 'hidden',
           position: 'relative',
+          background: 'rgba(255, 255, 255, 0.4)',
+          backdropFilter: 'blur(30px)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
         }}
       >
         <div
           style={{
             position: 'absolute',
-            right: -40,
-            top: -40,
-            width: 300,
-            height: 300,
+            inset: 0,
+            zIndex: 0,
+            opacity: 0.05,
+          }}
+        >
+          <img src={photo1} alt="" className="h-full w-full object-cover grayscale" />
+        </div>
+        
+        <div
+          style={{
+            position: 'absolute',
+            right: -60,
+            top: -60,
+            width: 320,
+            height: 320,
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--umber), var(--umber-ink))',
-            opacity: 0.08,
-            filter: 'blur(20px)',
+            background: 'linear-gradient(135deg, var(--umber), transparent)',
+            opacity: 0.15,
+            filter: 'blur(60px)',
           }}
         />
+
+        <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-[24px] bg-white p-1.5 shadow-2xl ring-1 ring-black/5 z-10 transition-transform duration-500 hover:scale-105">
+          <img src={logoNano} alt="Logo" className="h-full w-full rounded-[18px] object-cover" />
+        </div>
+
         <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
-          <div className="t-eyebrow" style={{ marginBottom: 6 }}>
+          <div className="t-eyebrow" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Zap size={12} className="text-orange-500" />
             {today()}
           </div>
-          <h1 className="t-display" style={{ fontSize: 26, margin: 0, lineHeight: 1.1 }}>
-            Hola, Christian.{' '}
-            <span className="t-muted" style={{ fontWeight: 400 }}>
+          <h1 className="t-display" style={{ fontSize: 32, margin: 0, lineHeight: 1.1, fontWeight: 900 }}>
+            Panel de Control.{' '}
+            <span className="t-muted" style={{ fontWeight: 400, opacity: 0.7 }}>
               {momSales > 0
-                ? `las ventas crecen ${pctSign(momSales)} mes a mes si el ritmo actual se mantiene.`
-                : momSales < 0
-                  ? `las ventas ceden ${pctSign(momSales)} respecto al mes anterior.`
-                  : 'revisa los indicadores operativos del día.'}
+                ? `Crecimiento del ${pctSign(momSales)} detectado.`
+                : 'Inteligencia de activos en tiempo real.'}
             </span>
           </h1>
-          <div className="row-wrap" style={{ marginTop: 12, gap: 10 }}>
+          <div className="row-wrap" style={{ marginTop: 14, gap: 10 }}>
             <span className="chip ok">
               <span className="dot" />
               Ocupación {insights.occupancyPct.toFixed(1)}%
@@ -329,7 +350,7 @@ export function AdminDashboard() {
       ) : null}
 
       {/* HEATMAP HERO */}
-      <div className="mq-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
+      <div className="glass-card" style={{ marginBottom: 18, overflow: 'hidden' }}>
         <div className="mq-card-hd">
           <div>
             <div className="t-eyebrow">Mapa operativo</div>
@@ -393,7 +414,7 @@ export function AdminDashboard() {
       {/* TWO COLUMN ROW */}
       <div className="mq-grid-2" style={{ marginBottom: 18 }}>
         {/* Sales trend */}
-        <div className="mq-card">
+        <div className="glass-card">
           <div className="mq-card-hd">
             <div>
               <div className="t-eyebrow">Venta mensual</div>
@@ -470,7 +491,7 @@ export function AdminDashboard() {
         </div>
 
         {/* Occupancy + watchlist */}
-        <div className="mq-card">
+        <div className="glass-card">
           <div className="mq-card-hd">
             <div>
               <div className="t-eyebrow">Ocupación</div>
@@ -515,7 +536,7 @@ export function AdminDashboard() {
       {/* THREE COLUMN ROW */}
       <div className="mq-grid-3">
         {/* top performers */}
-        <div className="mq-card">
+        <div className="glass-card">
           <div className="mq-card-hd">
             <div>
               <div className="t-eyebrow">Top ventas / m²</div>
@@ -541,7 +562,7 @@ export function AdminDashboard() {
         </div>
 
         {/* watchlist */}
-        <div className="mq-card">
+        <div className="glass-card">
           <div className="mq-card-hd">
             <div>
               <div className="t-eyebrow">Watchlist · salud</div>
@@ -568,7 +589,7 @@ export function AdminDashboard() {
         </div>
 
         {/* alerts feed */}
-        <div className="mq-card">
+        <div className="glass-card">
           <div className="mq-card-hd">
             <div>
               <div className="t-eyebrow">Actividad · hoy</div>

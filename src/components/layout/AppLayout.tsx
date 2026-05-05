@@ -101,10 +101,14 @@ function AppLayoutInner({
   const { helpOpen, setHelpOpen, shortcuts } = useKeyboardShortcuts();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="relative flex min-h-screen overflow-hidden">
+      {/* Dynamic Background Blobs */}
+      <div className="pointer-events-none fixed -top-[10%] -left-[5%] h-[40%] w-[40%] rounded-full bg-orange-500/5 blur-[120px]" />
+      <div className="pointer-events-none fixed top-[40%] -right-[10%] h-[50%] w-[50%] rounded-full bg-blue-500/5 blur-[150px]" />
+      
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-h-screen min-w-0 flex-1 flex-col">
         <Navbar onMenuClick={() => setMobileOpen(true)} onOpenCommandPalette={openPalette} />
         <main className="flex-1 overflow-x-hidden">
           <div className="mx-auto w-full max-w-[1440px]">
