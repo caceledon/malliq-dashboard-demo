@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fetchUfForDate, fetchUfLatest, fetchUfRange, resolveApiBase, type UfRate } from '@/lib/api';
+import { chileIsoDay } from '@/lib/dateChile';
 
 // CurrencyProvider sits above AppStateProvider in the tree, so it can't read
 // state.asset.backendUrl directly. resolveApiBase() with no arg honors the
@@ -42,8 +43,7 @@ const FALLBACK_UF = 39000;
 
 function isoFromInput(date: string | Date): string {
   if (date instanceof Date) {
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toISOString().slice(0, 10);
+    return chileIsoDay(date);
   }
   return String(date).slice(0, 10);
 }
@@ -235,9 +235,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshLatestUf();
     const today = new Date();
-    const year = today.getFullYear();
+    const todayIso = chileIsoDay(today);
+    const year = Number(todayIso.slice(0, 4));
     const from = `${year - 1}-01-01`;
-    const to = today.toISOString().slice(0, 10);
+    const to = todayIso;
     fetchUfRange(API_BASE, from, to)
       .then(({ rates }) => {
         if (rates.length === 0) return;

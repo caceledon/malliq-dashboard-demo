@@ -15,13 +15,28 @@ function withTimeout(ms) {
   return { signal: controller.signal, cancel: () => clearTimeout(id) };
 }
 
+// UF rates are published per Chilean calendar day; use America/Santiago so
+// "today" doesn't roll forward during the ~21:00–24:00 Chile window when the
+// server's UTC clock has already crossed midnight.
+const CL_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Santiago',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export function chileIsoDay(date = new Date()) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return CL_DAY_FORMATTER.format(date);
+}
+
 function isoToday() {
-  return new Date().toISOString().slice(0, 10);
+  return chileIsoDay();
 }
 
 function isoFromYmd(date) {
   // Accepts a Date or 'YYYY-MM-DD' string and returns 'YYYY-MM-DD'.
-  if (date instanceof Date) return date.toISOString().slice(0, 10);
+  if (date instanceof Date) return chileIsoDay(date);
   return String(date).slice(0, 10);
 }
 

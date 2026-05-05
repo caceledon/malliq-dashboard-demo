@@ -12,6 +12,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { Agent } from 'undici';
 import './env.js';
 import { fetchFullState, getMeta, incrementRevision, replaceFullState, logActivity, getRecentActivities } from './db.js';
 import { detectSalesAnomalies, anomaliesToAlerts, buildRenewalAlerts } from './anomalies.js';
@@ -68,13 +69,14 @@ const DOCUMENT_KINDS = new Set([
   'permiso',
   'otro',
 ]);
-const POS_METHODS = new Set(['GET', 'POST']);
-
 const ProxyPayloadSchema = z.object({
-  endpoint: z.string().min(1),
-  method: z.enum(['GET', 'POST']).optional(),
-  token: z.string().optional(),
-  requestBody: z.string().optional(),
+  endpoint: z.string().min(1).max(2048),
+  method: z.enum(['GET', 'POST']).default('GET'),
+  token: z.string().max(2000).optional(),
+  requestBody: z.string().optional().refine(
+    (v) => v == null || Buffer.byteLength(v, 'utf8') <= MAX_PROXY_REQUEST_BYTES,
+    { message: 'El body del proxy excede el tamaño permitido.' },
+  ),
 });
 
 const ArchivePutSchema = z.object({
@@ -1254,25 +1256,6 @@ function buildProxyHeaders(token, requestBody) {
   };
 }
 
-function validateProxyPayload(body) {
-  const endpoint = normalizeText(body?.endpoint, 2048);
-  const method = normalizeText(body?.method || 'GET', 10).toUpperCase();
-  const token = normalizeText(body?.token, 2000) || undefined;
-  const requestBody = typeof body?.requestBody === 'string' ? body.requestBody : undefined;
-
-  if (!endpoint) {
-    throw new Error('Endpoint requerido.');
-  }
-  if (!POS_METHODS.has(method)) {
-    throw new Error('Método no soportado. Usa GET o POST.');
-  }
-  if (requestBody && Buffer.byteLength(requestBody, 'utf8') > MAX_PROXY_REQUEST_BYTES) {
-    throw new Error('El body del proxy excede el tamaño permitido.');
-  }
-
-  return { endpoint, method, token, requestBody };
-}
-
 function isBlockedHostname(hostname) {
   const normalized = hostname.toLowerCase();
   return (
@@ -1328,31 +1311,44 @@ function isPrivateIpAddress(address) {
   return true;
 }
 
-async function isAllowedEndpoint(url) {
+// Resolve once, validate every address, then return the pinned IP/family for
+// the dispatcher so the subsequent fetch can't be DNS-rebound to a private
+// address between validation and connection.
+async function validateAndPinEndpoint(url) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return false;
+      return null;
     }
-
     if (isBlockedHostname(parsed.hostname)) {
-      return false;
+      return null;
     }
 
     const directIpVersion = net.isIP(parsed.hostname);
     if (directIpVersion > 0) {
-      return !isPrivateIpAddress(parsed.hostname);
+      if (isPrivateIpAddress(parsed.hostname)) return null;
+      return { address: parsed.hostname, family: directIpVersion };
     }
 
     const resolvedAddresses = await dns.lookup(parsed.hostname, { all: true, verbatim: true });
-    if (resolvedAddresses.length === 0) {
-      return false;
+    if (resolvedAddresses.length === 0) return null;
+    if (!resolvedAddresses.every((entry) => !isPrivateIpAddress(entry.address))) {
+      return null;
     }
-
-    return resolvedAddresses.every((entry) => !isPrivateIpAddress(entry.address));
+    return { address: resolvedAddresses[0].address, family: resolvedAddresses[0].family };
   } catch {
-    return false;
+    return null;
   }
+}
+
+// Build a one-shot undici dispatcher that always connects to the pre-resolved
+// IP, defeating DNS rebinding between validation and dispatch.
+function buildPinnedDispatcher({ address, family }) {
+  return new Agent({
+    connect: {
+      lookup: (_hostname, _options, cb) => cb(null, address, family || 4),
+    },
+  });
 }
 
 const MAX_PDF_PAGES = 50;
@@ -1909,20 +1905,30 @@ function createAppInstance() {
         response.status(400).json({ error: zodResult.error.errors.map((e) => e.message).join(', ') });
         return;
       }
-      const { endpoint, method, token, requestBody } = validateProxyPayload(request.body || {});
+      const { endpoint, method, token, requestBody } = zodResult.data;
 
-      if (!(await isAllowedEndpoint(endpoint))) {
+      const pinned = await validateAndPinEndpoint(endpoint);
+      if (!pinned) {
         response.status(400).json({ error: 'Endpoint no permitido. Usa una URL pública HTTP/HTTPS.' });
         return;
       }
 
-      const proxied = await fetch(endpoint, {
-        method,
-        headers: buildProxyHeaders(token, method === 'POST' ? requestBody : undefined),
-        body: method === 'POST' ? requestBody : undefined,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(POS_PROXY_TIMEOUT_MS),
-      });
+      const dispatcher = buildPinnedDispatcher(pinned);
+      let proxied;
+      try {
+        proxied = await fetch(endpoint, {
+          method,
+          headers: buildProxyHeaders(token, method === 'POST' ? requestBody : undefined),
+          body: method === 'POST' ? requestBody : undefined,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(POS_PROXY_TIMEOUT_MS),
+          dispatcher,
+        });
+      } finally {
+        // Free the agent's sockets — we don't pool across requests because the
+        // pinned dispatcher is bound to a single resolved IP.
+        dispatcher.close().catch(() => {});
+      }
 
       const bodyBuffer = Buffer.from(await proxied.arrayBuffer());
       if (bodyBuffer.byteLength > MAX_PROXY_RESPONSE_BYTES) {
