@@ -302,6 +302,37 @@ export async function explainAnomaly(
   return assertJson(response);
 }
 
+export interface LocatarioSaleInput {
+  contractId: string;
+  occurredAt: string;            // ISO date
+  grossAmount: number;
+  ticketNumber?: string;
+  importReference?: string;
+  storeLabel?: string;
+  localIds?: string[];
+  currency?: string;
+  source?: 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection';
+  assetId?: string;
+}
+
+export interface LocatarioSalesUploadResult {
+  added: number;
+  duplicates: number;
+  revision: number;
+}
+
+export async function submitLocatarioSales(
+  apiBase: string,
+  sales: LocatarioSaleInput[],
+): Promise<LocatarioSalesUploadResult> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/locatario/sales`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sales }),
+  });
+  return assertJson(response);
+}
+
 export interface UfRate {
   date: string; // YYYY-MM-DD
   value: number;

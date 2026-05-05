@@ -8,16 +8,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Download, Search } from 'lucide-react';
+import { Download, Search, Upload } from 'lucide-react';
 import { monthKey } from '@/lib/domain';
 import { downloadTextFile, exportFilteredSalesCsv } from '@/lib/exporters';
 import { formatDate } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
+import { resolveApiBase, submitLocatarioSales } from '@/lib/api';
 import { LocatarioPendingBinding } from '@/pages/locatario/PendingBinding';
 
 export function LocatarioVentas() {
-  const { currentTenantId, state, insights, authUser } = useAppState();
+  const { currentTenantId, state, insights, authUser, actions } = useAppState();
   const { formatCurrency } = useCurrency();
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection'>('all');
@@ -76,6 +77,13 @@ export function LocatarioVentas() {
         <Stat title="Mes anterior" value={formatCurrency(summary.salesPrevious)} />
         <Stat title="Ventas / m2" value={formatCurrency(summary.salesPerM2)} />
       </div>
+
+      <SelfServiceUpload
+        contractId={contract.id}
+        storeLabel={summary.storeName}
+        onUploaded={() => actions.pullFromServer()}
+      />
+
 
       <div className="glass-card p-5">
         <h3 className="text-sm font-semibold">Ventas por mes</h3>
@@ -184,6 +192,132 @@ function Stat({ title, value }: { title: string; value: string }) {
     <div className="glass-card p-5">
       <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">{title}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function SelfServiceUpload({
+  contractId,
+  storeLabel,
+  onUploaded,
+}: {
+  contractId: string;
+  storeLabel: string;
+  onUploaded: () => Promise<unknown> | void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState<string>(today);
+  const [amount, setAmount] = useState<string>('');
+  const [ticket, setTicket] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFeedback(null);
+    const grossAmount = Number(amount.replace(/\./g, '').replace(/,/g, ''));
+    if (!Number.isFinite(grossAmount) || grossAmount < 0) {
+      setFeedback({ kind: 'err', text: 'Monto no válido. Usa sólo números.' });
+      return;
+    }
+    if (!date) {
+      setFeedback({ kind: 'err', text: 'Selecciona una fecha.' });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = await submitLocatarioSales(resolveApiBase(), [{
+        contractId,
+        occurredAt: new Date(date).toISOString(),
+        grossAmount,
+        ticketNumber: ticket.trim() || undefined,
+        storeLabel,
+        source: 'manual',
+      }]);
+      await onUploaded();
+      setAmount('');
+      setTicket('');
+      setFeedback({
+        kind: 'ok',
+        text:
+          result.added === 1
+            ? 'Venta cargada correctamente.'
+            : result.duplicates > 0
+              ? 'Venta duplicada — ya existía un registro idéntico.'
+              : 'Venta registrada.',
+      });
+    } catch (err) {
+      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'No se pudo cargar la venta.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="glass-card p-5">
+      <h3 className="text-sm font-semibold">Cargar venta manual</h3>
+      <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+        Las ventas que registras aquí entran al mismo flujo que la administración consume — con
+        deduplicación por fecha + monto + ticket.
+      </p>
+      <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-[160px_1fr_1fr_auto]">
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="t-eyebrow">Fecha</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="input-field"
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="t-eyebrow">Monto bruto (CLP)</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="input-field"
+            placeholder="1500000"
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="t-eyebrow">Ticket / Folio (opcional)</span>
+          <input
+            type="text"
+            value={ticket}
+            onChange={(event) => setTicket(event.target.value)}
+            className="input-field"
+            placeholder="0000123"
+          />
+        </label>
+        <div className="flex items-end">
+          <button
+            type="submit"
+            disabled={busy}
+            className="mq-btn primary"
+            style={{ height: 40, justifyContent: 'center', width: '100%' }}
+          >
+            <Upload size={14} />
+            {busy ? 'Cargando…' : 'Registrar'}
+          </button>
+        </div>
+      </form>
+      {feedback ? (
+        <div
+          role={feedback.kind === 'err' ? 'alert' : 'status'}
+          style={{
+            marginTop: 12,
+            fontSize: 12.5,
+            color: feedback.kind === 'err' ? 'var(--coral)' : 'var(--mint-deep)',
+          }}
+        >
+          {feedback.text}
+        </div>
+      ) : null}
     </div>
   );
 }

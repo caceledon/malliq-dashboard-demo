@@ -1894,6 +1894,111 @@ function createAppInstance() {
   // documents — mount its own 50mb json parser here, overriding the 1mb
   // global limit applied at boot.
   const archiveJson = express.json({ limit: '50mb' });
+  // C4: tenant self-service sales upload. Scoped to the authenticated
+  // locatario's tenant_contract_id — every sale's contractId must match. The
+  // archive PUT route stays admin/member only; this is a narrow write path so
+  // we can audit and constrain what locatarios can mutate.
+  function buildServerSaleFingerprint(sale) {
+    const scope = sale.contractId || (Array.isArray(sale.localIds) ? sale.localIds.join('|') : '') || sale.storeLabel || '';
+    const ticket = (sale.ticketNumber || '').trim().toLowerCase() || 'no-ticket';
+    const day = String(sale.occurredAt || '').slice(0, 10);
+    const amount = Math.round(Number(sale.grossAmount) || 0);
+    return `${scope}::${day}::${amount}::${ticket}`;
+  }
+
+  const LocatarioSalesSchema = z.object({
+    sales: z.array(z.object({
+      id: z.string().optional(),
+      contractId: z.string().min(1),
+      localIds: z.array(z.string()).optional(),
+      storeLabel: z.string().optional(),
+      occurredAt: z.string().min(1),
+      grossAmount: z.number().nonnegative(),
+      currency: z.string().optional(),
+      ticketNumber: z.string().optional(),
+      importReference: z.string().optional(),
+      source: z.enum(['manual', 'ocr', 'fiscal_printer', 'pos_connection']).optional(),
+      rawText: z.string().optional(),
+      assetId: z.string().optional(),
+    })).min(1).max(100),
+  });
+
+  app.post('/api/locatario/sales', async (request, response) => {
+    if (!request.user) {
+      response.status(401).json({ error: 'Autenticación requerida.' });
+      return;
+    }
+    if (request.user.role !== 'locatario') {
+      response.status(403).json({ error: 'Sólo locatarios pueden usar este endpoint.' });
+      return;
+    }
+    const tenantContractId = request.user.tenantContractId;
+    if (!tenantContractId) {
+      response.status(403).json({ error: 'Tu usuario no está vinculado a un contrato.' });
+      return;
+    }
+
+    try {
+      const parsed = LocatarioSalesSchema.safeParse(request.body || {});
+      if (!parsed.success) {
+        response.status(400).json({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+        return;
+      }
+
+      const offending = parsed.data.sales.find((s) => s.contractId !== tenantContractId);
+      if (offending) {
+        response.status(403).json({ error: 'Sólo puedes cargar ventas para tu propio contrato.' });
+        return;
+      }
+
+      const state = await loadState();
+      const existingFingerprints = new Set((state.sales || []).map(buildServerSaleFingerprint));
+      const accepted = [];
+      let duplicates = 0;
+
+      for (const sale of parsed.data.sales) {
+        const fp = buildServerSaleFingerprint(sale);
+        if (existingFingerprints.has(fp)) {
+          duplicates += 1;
+          continue;
+        }
+        existingFingerprints.add(fp);
+        accepted.push({
+          id: sale.id || `sale-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          source: sale.source || 'manual',
+          currency: sale.currency || 'CLP',
+          localIds: sale.localIds || [],
+          storeLabel: sale.storeLabel || null,
+          ticketNumber: sale.ticketNumber || null,
+          importReference: sale.importReference || null,
+          rawText: sale.rawText || null,
+          assetId: sale.assetId || null,
+          contractId: sale.contractId,
+          occurredAt: sale.occurredAt,
+          grossAmount: sale.grossAmount,
+        });
+      }
+
+      const nextState = {
+        ...state,
+        sales: [...accepted, ...(state.sales || [])].sort((l, r) =>
+          String(r.occurredAt).localeCompare(String(l.occurredAt)),
+        ),
+      };
+      await saveState(nextState);
+      const meta = await touchRevision();
+
+      void logActivity('locatario_sales_upload', 'sales', tenantContractId, request.user.id, {
+        added: accepted.length,
+        duplicates,
+      });
+      response.json({ added: accepted.length, duplicates, revision: meta.revision });
+    } catch (error) {
+      console.error('Error uploading locatario sales:', error);
+      response.status(500).json({ error: error instanceof Error ? error.message : 'No se pudo guardar las ventas.' });
+    }
+  });
+
   app.put('/api/archive', writerRoles, archiveWriteLimiter, archiveJson, async (request, response) => {
     try {
       const zodResult = ArchivePutSchema.safeParse(request.body || {});
