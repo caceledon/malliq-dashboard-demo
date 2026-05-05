@@ -109,7 +109,7 @@ function getPrimaryUnitContract(unitContracts: Contract[]) {
 function fillForUnit(unitContracts: Contract[]) {
   if (unitContracts.length === 0) {
     return {
-      stroke: '#94A3B8',
+      stroke: 'rgba(148, 163, 184, 0.4)',
       text: '#475569',
       gradient: 'url(#empty-grad)',
     };
@@ -123,7 +123,7 @@ function fillForUnit(unitContracts: Contract[]) {
   );
   if (hasOverlap) {
     return {
-      stroke: '#DC2626',
+      stroke: 'rgba(239, 68, 68, 0.5)',
       text: '#991B1B',
       gradient: 'url(#danger-grad)',
     };
@@ -133,7 +133,7 @@ function fillForUnit(unitContracts: Contract[]) {
   const lifecycle = getContractLifecycle(contract);
   if (contract.signatureStatus !== 'firmado' || lifecycle === 'por_vencer') {
     return {
-      stroke: '#F59E0B',
+      stroke: 'rgba(245, 158, 11, 0.5)',
       text: '#92400E',
       gradient: 'url(#warning-grad)',
     };
@@ -141,14 +141,14 @@ function fillForUnit(unitContracts: Contract[]) {
 
   if (lifecycle === 'vencido') {
     return {
-      stroke: '#EF4444',
+      stroke: 'rgba(239, 68, 68, 0.5)',
       text: '#B91C1C',
       gradient: 'url(#vencido-grad)',
     };
   }
 
   return {
-    stroke: '#10B981',
+    stroke: 'rgba(16, 185, 129, 0.5)',
     text: 'var(--fg)',
     gradient: 'url(#active-grad)',
   };
@@ -198,27 +198,30 @@ export function InteractiveMap() {
                 <path d="M 0 4 L 4 4 0 4" fill="none" stroke="rgba(148,163,184,0.08)" strokeWidth="0.1" />
               </pattern>
               <linearGradient id="active-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(16, 185, 129, 0.25)" />
-                <stop offset="100%" stopColor="rgba(16, 185, 129, 0.10)" />
+                <stop offset="0%" stopColor="rgba(16, 185, 129, 0.45)" />
+                <stop offset="100%" stopColor="rgba(16, 185, 129, 0.15)" />
               </linearGradient>
               <linearGradient id="warning-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(245, 158, 11, 0.25)" />
-                <stop offset="100%" stopColor="rgba(245, 158, 11, 0.10)" />
+                <stop offset="0%" stopColor="rgba(245, 158, 11, 0.45)" />
+                <stop offset="100%" stopColor="rgba(245, 158, 11, 0.15)" />
               </linearGradient>
               <linearGradient id="danger-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(239, 68, 68, 0.25)" />
-                <stop offset="100%" stopColor="rgba(239, 68, 68, 0.10)" />
+                <stop offset="0%" stopColor="rgba(239, 68, 68, 0.45)" />
+                <stop offset="100%" stopColor="rgba(239, 68, 68, 0.15)" />
               </linearGradient>
               <linearGradient id="vencido-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(239, 68, 68, 0.25)" />
-                <stop offset="100%" stopColor="rgba(239, 68, 68, 0.10)" />
+                <stop offset="0%" stopColor="rgba(239, 68, 68, 0.45)" />
+                <stop offset="100%" stopColor="rgba(239, 68, 68, 0.15)" />
               </linearGradient>
               <linearGradient id="empty-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(148, 163, 184, 0.15)" />
-                <stop offset="100%" stopColor="rgba(148, 163, 184, 0.05)" />
+                <stop offset="0%" stopColor="rgba(148, 163, 184, 0.35)" />
+                <stop offset="100%" stopColor="rgba(148, 163, 184, 0.10)" />
               </linearGradient>
               <filter id="shadow-hover" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="2" stdDeviation="1.5" floodOpacity="0.2" />
+                <feDropShadow dx="0" dy="4" stdDeviation="2.5" floodOpacity="0.3" floodColor="#000" />
+              </filter>
+              <filter id="shadow-base" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.15" floodColor="#000" />
               </filter>
             </defs>
 
@@ -247,10 +250,12 @@ export function InteractiveMap() {
                     y={unit.y}
                     width={unit.width}
                     height={unit.height}
+                    rx="3"
+                    ry="3"
                     fill={colors.gradient}
                     stroke={colors.stroke}
-                    strokeWidth={isHovered ? '0.8' : '0.4'}
-                    filter={isHovered ? 'url(#shadow-hover)' : 'none'}
+                    strokeWidth={isHovered ? '0.8' : '0.5'}
+                    filter={isHovered ? 'url(#shadow-hover)' : 'url(#shadow-base)'}
                     className="transform-gpu transition-all duration-300"
                   />
                   <text x={unit.x + 2} y={unit.y + 6.5} fontSize="3.8" fontWeight="800" fill={colors.text}>

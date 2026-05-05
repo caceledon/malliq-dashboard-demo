@@ -91,24 +91,12 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           'md:sticky md:top-0 md:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
-        style={{ background: 'var(--sidebar)', borderColor: 'var(--line)' }}
+        style={{ background: 'color-mix(in oklab, var(--sidebar) 75%, transparent)', borderColor: 'color-mix(in oklab, var(--line) 50%, transparent)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         {/* Brand */}
         <div className="mq-brand">
-          <div className="logo">
-            <span className="mark">M</span>
-            <span
-              style={{
-                position: 'absolute',
-                bottom: -2,
-                right: -2,
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                background: 'var(--umber)',
-                boxShadow: '0 0 0 2px var(--sidebar)',
-              }}
-            />
+          <div className="logo" style={{ background: 'transparent', width: 36, height: 36 }}>
+            <img src="https://img.logoipsum.com/296.svg" alt="MallQ Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <div>
             <div className="title">MallQ</div>

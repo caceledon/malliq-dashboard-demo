@@ -103,7 +103,7 @@ function AppLayoutInner({
   const { helpOpen, setHelpOpen, shortcuts } = useKeyboardShortcuts();
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--paper)' }}>
+    <div className="flex min-h-screen">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
