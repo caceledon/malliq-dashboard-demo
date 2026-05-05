@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import miniLogoUrl from '@/assets/mini logo.png';
-import wordmarkUrl from '@/assets/logo white.png';
+import miniLogoUrl from '@/assets/mini-logo.webp';
+import wordmarkUrl from '@/assets/logo-white.webp';
 
 type NavKey = 'product' | 'operators' | 'tenants' | 'pricing' | 'about';
 

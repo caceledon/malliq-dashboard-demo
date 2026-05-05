@@ -25,9 +25,9 @@ import { useAppState } from '@/store/appState';
 import { logout } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
-import miniLogoUrl from '@/assets/mini logo.png';
-import wordmarkLightUrl from '@/assets/logo white.png';
-import wordmarkDarkUrl from '@/assets/logo black.png';
+import miniLogoUrl from '@/assets/mini-logo.webp';
+import wordmarkLightUrl from '@/assets/logo-white.webp';
+import wordmarkDarkUrl from '@/assets/logo-black.webp';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',

@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ShieldCheck, Sparkles, Store, Truck } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { useTheme } from '@/lib/theme';
-import miniLogoUrl from '@/assets/mini logo.png';
-import wordmarkLightUrl from '@/assets/logo white.png';
-import wordmarkDarkUrl from '@/assets/logo black.png';
+import miniLogoUrl from '@/assets/mini-logo.webp';
+import wordmarkLightUrl from '@/assets/logo-white.webp';
+import wordmarkDarkUrl from '@/assets/logo-black.webp';
 
 export function PortalSelector() {
   const navigate = useNavigate();
