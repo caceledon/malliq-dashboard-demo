@@ -1,9 +1,4 @@
-import { useState, useEffect, type CSSProperties, type ReactNode } from 'react';
-
-interface SkeletonLoaderProps {
-  children: ReactNode;
-  duration?: number;
-}
+import { type CSSProperties } from 'react';
 
 function SkeletonBlock({ className, style }: { className?: string; style?: CSSProperties }) {
   return <div className={`skeleton ${className || ''}`} style={style} />;
@@ -47,20 +42,6 @@ function DashboardSkeleton() {
       </div>
     </div>
   );
-}
-
-export function SkeletonLoader({ children, duration = 600 }: SkeletonLoaderProps) {
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), duration);
-    return () => clearTimeout(timer);
-  }, [duration]);
-
-  if (loading) {
-    return <DashboardSkeleton />;
-  }
-  return <div className="fade-in">{children}</div>;
 }
 
 export function PageSkeleton() {

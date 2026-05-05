@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { GatewayStatus } from '@/components/GatewayStatus';
-import { SkeletonLoader } from '@/components/SkeletonLoader';
 import { SetupWizard } from '@/components/app/SetupWizard';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -96,7 +95,6 @@ function AppLayoutInner({
   openPalette: () => void;
   closePalette: () => void;
 }) {
-  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { insights } = useAppState();
   const items = useCommandItems(closePalette);
@@ -110,9 +108,10 @@ function AppLayoutInner({
         <Navbar onMenuClick={() => setMobileOpen(true)} onOpenCommandPalette={openPalette} />
         <main className="flex-1 overflow-x-hidden">
           <div className="mx-auto w-full max-w-[1440px]">
-            <SkeletonLoader key={location.pathname}>
-              <Outlet />
-            </SkeletonLoader>
+            {/* App.tsx already wraps every route in <Suspense> with a
+                PageSkeleton fallback for lazy-loaded pages. We don't need
+                a forced-delay loader on top of that. */}
+            <Outlet />
           </div>
         </main>
       </div>
