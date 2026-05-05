@@ -1731,6 +1731,126 @@ function createAppInstance() {
     }
   });
 
+  // C3: anomaly explainer. The cache key is derived from the anomaly
+  // fingerprint (contract + month + reason + direction) so repeat calls for the
+  // same anomaly are free even though anomaly ids regenerate each refresh.
+  const anomalyExplainCache = new Map();
+  const ANOMALY_EXPLAIN_CACHE_MAX = 256;
+
+  function anomalyCacheKey(anomaly) {
+    return [
+      anomaly?.contractId ?? '',
+      anomaly?.storeLabel ?? '',
+      anomaly?.month ?? '',
+      anomaly?.reason ?? '',
+      anomaly?.direction ?? '',
+    ].join('|');
+  }
+
+  const AnomalyExplainSchema = z.object({
+    anomaly: z.object({
+      contractId: z.string().nullable().optional(),
+      storeLabel: z.string().min(1),
+      month: z.string().min(1),
+      value: z.number(),
+      median: z.number(),
+      modifiedZ: z.number().optional(),
+      direction: z.enum(['high', 'low']),
+      severity: z.enum(['warning', 'critical']),
+      reason: z.string().min(1),
+    }),
+    category: z.string().optional(),
+    recentSales: z.array(z.object({
+      month: z.string(),
+      value: z.number(),
+    })).max(24).optional(),
+  });
+
+  app.post('/api/anomalies/explain', async (request, response) => {
+    if (!request.user) {
+      response.status(401).json({ error: 'Autenticación requerida.' });
+      return;
+    }
+    try {
+      const parsed = AnomalyExplainSchema.safeParse(request.body || {});
+      if (!parsed.success) {
+        response.status(400).json({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+        return;
+      }
+
+      const { anomaly, category, recentSales = [] } = parsed.data;
+      const key = anomalyCacheKey(anomaly);
+      const cached = anomalyExplainCache.get(key);
+      if (cached) {
+        response.json({ explanation: cached.explanation, source: cached.source, cached: true });
+        return;
+      }
+
+      const aiConfig = getContractAutofillAiConfig();
+      if (!aiConfig) {
+        response.json({
+          explanation:
+            'Modo local: configura MOONSHOT_API_KEY o OPENAI_API_KEY para que el asistente explique posibles causas. Mientras tanto: revisa pagos, reportes y tráfico del local en el mes señalado.',
+          source: 'mock_local',
+          cached: false,
+        });
+        return;
+      }
+
+      const openai = new OpenAI({
+        apiKey: aiConfig.apiKey,
+        ...(aiConfig.baseURL ? { baseURL: aiConfig.baseURL } : {}),
+      });
+
+      const deltaPct = anomaly.median > 0 ? ((anomaly.value - anomaly.median) / anomaly.median) * 100 : 0;
+      const signo = deltaPct >= 0 ? '+' : '';
+      const tail = recentSales.slice(-12);
+      const recentTable = tail.length > 0
+        ? tail.map((s) => `${s.month}: ${s.value.toLocaleString('es-CL')}`).join(', ')
+        : 'sin histórico reciente disponible';
+
+      const systemPrompt =
+        'Eres un analista de retail y centros comerciales en Chile. Explica brevemente la posible causa de una anomalía de ventas, en español neutro de Chile, sin moralizar y sin clichés. Máximo 3 frases. No inventes datos: si la información es insuficiente, dilo y sugiere qué revisar.';
+
+      const userPrompt =
+        `Locatario: ${anomaly.storeLabel}\n` +
+        (category ? `Categoría: ${category}\n` : '') +
+        `Mes: ${anomaly.month}\n` +
+        `Tipo de anomalía: ${anomaly.reason} (${anomaly.severity}, dirección ${anomaly.direction})\n` +
+        `Venta del mes: ${anomaly.value.toLocaleString('es-CL')} CLP\n` +
+        `Mediana/promedio reciente: ${anomaly.median.toLocaleString('es-CL')} CLP\n` +
+        `Delta: ${signo}${deltaPct.toFixed(0)}%\n` +
+        `Histórico (mes: monto CLP): ${recentTable}\n\n` +
+        `Devuelve solo el texto explicativo, sin JSON, sin viñetas, máximo 3 frases.`;
+
+      const aiResponse = await openai.chat.completions.create(
+        buildContractAutofillCompletionRequest(aiConfig, [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ]),
+      );
+
+      const explanation = String(aiResponse.choices?.[0]?.message?.content ?? '').trim() ||
+        'Sin contexto suficiente para explicar la anomalía.';
+
+      // Bound the cache so a long-running server doesn't grow indefinitely.
+      if (anomalyExplainCache.size >= ANOMALY_EXPLAIN_CACHE_MAX) {
+        const oldestKey = anomalyExplainCache.keys().next().value;
+        if (oldestKey) anomalyExplainCache.delete(oldestKey);
+      }
+      anomalyExplainCache.set(key, { explanation, source: aiConfig.provider });
+
+      void logActivity('anomaly_explain', 'anomaly', anomaly.contractId ?? null, request.user?.id ?? null, {
+        month: anomaly.month,
+        reason: anomaly.reason,
+      });
+      response.json({ explanation, source: aiConfig.provider, cached: false });
+    } catch (error) {
+      console.error('Error explaining anomaly:', error);
+      response.status(500).json({ error: error instanceof Error ? error.message : 'No se pudo generar la explicación.' });
+    }
+  });
+
   app.get('/api/notifications/daily', async (_request, response) => {
     try {
       const state = await loadState();

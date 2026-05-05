@@ -268,6 +268,40 @@ export async function fetchDailyDigest(apiBase: string): Promise<DailyDigest> {
   return assertJson(response);
 }
 
+export interface AnomalyExplainPayload {
+  anomaly: {
+    contractId?: string | null;
+    storeLabel: string;
+    month: string;
+    value: number;
+    median: number;
+    modifiedZ?: number;
+    direction: 'high' | 'low';
+    severity: 'warning' | 'critical';
+    reason: string;
+  };
+  category?: string;
+  recentSales?: { month: string; value: number }[];
+}
+
+export interface AnomalyExplainResult {
+  explanation: string;
+  source: string;
+  cached: boolean;
+}
+
+export async function explainAnomaly(
+  apiBase: string,
+  payload: AnomalyExplainPayload,
+): Promise<AnomalyExplainResult> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/anomalies/explain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return assertJson(response);
+}
+
 export interface UfRate {
   date: string; // YYYY-MM-DD
   value: number;
