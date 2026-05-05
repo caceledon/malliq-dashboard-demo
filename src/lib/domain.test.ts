@@ -5,8 +5,10 @@ import {
 
   calculateVentaPorM2,
   contractDateRangesOverlap,
+  convertAmountToClp,
   createId,
   emptyAppState,
+  getContractHealthScorePct,
   getContractLifecycle,
   getEffectiveBaseRentUF,
   validateContract,
@@ -174,7 +176,7 @@ describe('getContractLifecycle', () => {
 })
 
 describe('buildTenantSummaries', () => {
-  it('computes rent and costo ocupacion correctly', () => {
+  it('computes rent from fixedRent + currency, ignoring UF/m²', () => {
     const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
     const contract: Contract = {
       id: 'c-1',
@@ -184,8 +186,9 @@ describe('buildTenantSummaries', () => {
       localIds: ['u1'],
       startDate: '2024-01-01',
       endDate: '2024-12-31',
-      fixedRent: 0,
+      fixedRent: 2_500_000,
       variableRentPct: 5,
+      // baseRentUF informativo, NO debe entrar al cálculo de rentFixed.
       baseRentUF: 1,
       commonExpenses: 100_000,
       fondoPromocion: 50_000,
@@ -204,6 +207,11 @@ describe('buildTenantSummaries', () => {
       healthNivelVenta: false,
       healthNivelRenta: false,
       healthPercepcionAdmin: true,
+      fixedRentCurrency: 'CLP',
+      commonExpensesCurrency: 'CLP',
+      fondoPromocionCurrency: 'CLP',
+      garantiaMontoCurrency: 'CLP',
+      feeIngresoCurrency: 'CLP',
       createdAt: '2024-01-01T00:00:00Z',
     }
 
@@ -221,17 +229,157 @@ describe('buildTenantSummaries', () => {
     const [t] = summaries
     expect(t.storeName).toBe('Tienda A')
     expect(t.areaM2).toBe(50)
-    // fixed rent = area * baseRentUF * ufValue = 50 * 1 * 39000 = 1_950_000
-    expect(t.rentFixed).toBe(1_950_000)
+    // fixed rent = pacted monthly amount in CLP — NOT area * UF/m² * UF rate
+    expect(t.rentFixed).toBe(2_500_000)
     // variable rent = 1_000_000 * 5% = 50_000
     expect(t.rentVariable).toBe(50_000)
-    // total rent = max(fixed, variable) but buildTenantSummaries uses fixed + variable. Let's assert actual value.
     expect(t.rentTotal).toBe(t.rentFixed + t.rentVariable)
-    // costo ocupacion = (rentTotal + common + fondo) / sales * 100
     const expectedCosto = ((t.rentTotal + 100_000 + 50_000) / 1_000_000) * 100
     expect(t.costoOcupacionPct).toBeCloseTo(expectedCosto)
     expect(t.ventaPorM2).toBe(20_000)
     expect(t.healthScore).toBe(3)
+    expect(t.healthScorePct).toBe(60)
+  })
+
+  it('flags needsFixedRentReview when baseRentUF is set but fixedRent is 0', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-legacy',
+      companyName: 'Legacy',
+      storeName: 'Legacy',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      fixedRent: 0,
+      variableRentPct: 0,
+      baseRentUF: 0.5, // legacy UF/m² reference, no monthly amount yet
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const state = { ...emptyAppState(), units: [unit], contracts: [contract] }
+    const [t] = buildTenantSummaries(state, new Date('2024-06-15'))
+    expect(t.needsFixedRentReview).toBe(true)
+    // And rentFixed must NOT be auto-multiplied — it's 0 until the operator fills it.
+    expect(t.rentFixed).toBe(0)
+  })
+
+  it('interprets fixedRent in UF when fixedRentCurrency is UF', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-2',
+      companyName: 'B',
+      storeName: 'B',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      fixedRent: 60,
+      fixedRentCurrency: 'UF',
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+
+    const state = { ...emptyAppState(), units: [unit], contracts: [contract] }
+    const [t] = buildTenantSummaries(state, new Date('2024-06-15'))
+    // 60 UF * 39000 = 2_340_000 — must NOT be multiplied by area
+    expect(t.rentFixed).toBe(60 * 39000)
+  })
+})
+
+describe('convertAmountToClp', () => {
+  it('converts UF amounts using ufValue', () => {
+    expect(convertAmountToClp(60, 'UF', 39000)).toBe(60 * 39000)
+  })
+  it('returns CLP value as-is', () => {
+    expect(convertAmountToClp(2_500_000, 'CLP', 39000)).toBe(2_500_000)
+  })
+  it('handles missing currency as CLP', () => {
+    expect(convertAmountToClp(1_000, undefined, 39000)).toBe(1_000)
+  })
+  it('falls back to CLP when ufValue is 0', () => {
+    // Defensive: a stale or unset UF rate should not zero-out a UF amount.
+    expect(convertAmountToClp(60, 'UF', 0)).toBe(60)
+  })
+  it('returns 0 for non-finite input', () => {
+    expect(convertAmountToClp(Number.NaN, 'CLP', 39000)).toBe(0)
+    expect(convertAmountToClp(Number.POSITIVE_INFINITY, 'UF', 39000)).toBe(0)
+  })
+})
+
+describe('getContractHealthScorePct', () => {
+  const make = (n: 0 | 1 | 2 | 3 | 4 | 5): Contract => ({
+    id: 'c-h',
+    companyName: 'A',
+    storeName: 'A',
+    category: 'X',
+    localIds: [],
+    startDate: '2024-01-01',
+    endDate: '2024-12-31',
+    fixedRent: 0,
+    variableRentPct: 0,
+    baseRentUF: 0,
+    commonExpenses: 0,
+    fondoPromocion: 0,
+    salesParticipationPct: 0,
+    escalation: '',
+    conditions: '',
+    signatureStatus: 'firmado',
+    annexCount: 0,
+    autoFillUnits: true,
+    garantiaMonto: 0,
+    garantiaVencimiento: '',
+    feeIngreso: 0,
+    rentSteps: [],
+    healthPagoAlDia: n >= 1,
+    healthEntregaVentas: n >= 2,
+    healthNivelVenta: n >= 3,
+    healthNivelRenta: n >= 4,
+    healthPercepcionAdmin: n >= 5,
+    createdAt: '2024-01-01T00:00:00Z',
+  })
+
+  it('returns 0/20/40/60/80/100', () => {
+    expect(getContractHealthScorePct(make(0))).toBe(0)
+    expect(getContractHealthScorePct(make(1))).toBe(20)
+    expect(getContractHealthScorePct(make(2))).toBe(40)
+    expect(getContractHealthScorePct(make(3))).toBe(60)
+    expect(getContractHealthScorePct(make(4))).toBe(80)
+    expect(getContractHealthScorePct(make(5))).toBe(100)
   })
 })
 
@@ -557,20 +705,40 @@ describe('validateContract', () => {
 })
 
 describe('buildContractCommercialSnapshot', () => {
-  it('computes fixed, variable and occupancy values', () => {
+  it('computes fixed, variable and occupancy from monthly fixedRent + currency', () => {
     const snapshot = buildContractCommercialSnapshot({
-      baseRentUF: 12,
+      baseRentUF: 12, // informativo, no debe entrar al cálculo
       rentSteps: [],
-      fixedRent: 0,
+      fixedRent: 60,
+      fixedRentCurrency: 'UF',
       variableRentPct: 5,
       commonExpenses: 100000,
+      commonExpensesCurrency: 'CLP',
       fondoPromocion: 50000,
+      fondoPromocionCurrency: 'CLP',
     }, 100, 20000000, new Date('2026-04-15'), 40000)
 
     expect(snapshot.effectiveBaseRentUF).toBe(12)
-    expect(snapshot.fixedRent).toBe(48000000)
-    expect(snapshot.variableRent).toBe(1000000)
-    expect(snapshot.totalOccupancyCost).toBe(49150000)
-    expect(snapshot.costoOcupacionPct).toBeGreaterThan(200)
+    // 60 UF * 40000 = 2_400_000
+    expect(snapshot.fixedRent).toBe(2_400_000)
+    expect(snapshot.variableRent).toBe(1_000_000)
+    // total = 2_400_000 + 1_000_000 + 100_000 + 50_000
+    expect(snapshot.totalOccupancyCost).toBe(3_550_000)
+  })
+
+  it('treats CLP fixedRent as monthly and ignores baseRentUF', () => {
+    const snapshot = buildContractCommercialSnapshot({
+      baseRentUF: 0,
+      rentSteps: [],
+      fixedRent: 2_500_000,
+      fixedRentCurrency: 'CLP',
+      variableRentPct: 8,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+    }, 50, 1_000_000, new Date('2026-04-15'), 40000)
+
+    expect(snapshot.fixedRent).toBe(2_500_000)
+    expect(snapshot.variableRent).toBe(80_000)
+    expect(snapshot.rentTotal).toBe(2_580_000)
   })
 })

@@ -5,6 +5,8 @@ export type SyncStatus = 'idle' | 'syncing' | 'online' | 'offline' | 'conflict';
 
 export type SaleSource = 'manual' | 'ocr' | 'fiscal_printer' | 'pos_connection';
 
+export type CurrencyTag = 'UF' | 'CLP';
+
 export type SignatureStatus = 'pendiente' | 'en_revision' | 'parcial' | 'firmado';
 
 export type ContractLifecycle = 'borrador' | 'en_firma' | 'vigente' | 'por_vencer' | 'vencido';
@@ -93,6 +95,12 @@ export interface Contract {
   garantiaVencimiento: string;
   feeIngreso: number;
   rentSteps: RentStep[];
+  // Currency tags per amount field. Default 'CLP'. Numeric value is stored in the tagged unit.
+  fixedRentCurrency?: CurrencyTag;
+  commonExpensesCurrency?: CurrencyTag;
+  fondoPromocionCurrency?: CurrencyTag;
+  garantiaMontoCurrency?: CurrencyTag;
+  feeIngresoCurrency?: CurrencyTag;
   // Salud del locatario (rating 0-5)
   healthPagoAlDia: boolean;
   healthEntregaVentas: boolean;
@@ -226,6 +234,19 @@ export interface TenantSummary {
   localCount: number;
   garantiaVencimiento?: string;
   healthScore: number;
+  // Health score normalized to /100 (score * 20). Used by dashboard.
+  healthScorePct: number;
+  // Pre-computed CLP equivalents for downstream views
+  commonExpensesClp: number;
+  fondoPromocionClp: number;
+  garantiaMontoClp: number;
+  feeIngresoClp: number;
+  // UF equivalents for display columns
+  rentFixedUF: number;
+  rentVariableUF: number;
+  salesUF: number;
+  // Whether legacy contract relies on baseRentUF without fixedRent (needs review)
+  needsFixedRentReview: boolean;
 }
 
 export interface AlertItem {
@@ -332,6 +353,25 @@ export function getContractHealthScore(contract: Contract): number {
   return score;
 }
 
+export function getContractHealthScorePct(contract: Contract): number {
+  return getContractHealthScore(contract) * 20;
+}
+
+export function convertAmountToClp(value: number, currency: CurrencyTag | undefined, ufValue: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (currency === 'UF' && ufValue > 0) {
+    return Math.round(value * ufValue);
+  }
+  return Math.round(value);
+}
+
+export function convertClpToCurrency(amountClp: number, currency: CurrencyTag, ufValue: number): number {
+  if (currency === 'UF' && ufValue > 0) {
+    return amountClp / ufValue;
+  }
+  return amountClp;
+}
+
 export function monthKey(dateLike: Date | string): string {
   const date = typeof dateLike === 'string' ? new Date(dateLike) : dateLike;
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -404,17 +444,31 @@ export function getEffectiveBaseRentUF(
 }
 
 export function buildContractCommercialSnapshot(
-  contract: Pick<Contract, 'baseRentUF' | 'rentSteps' | 'fixedRent' | 'variableRentPct' | 'commonExpenses' | 'fondoPromocion'>,
+  contract: Pick<
+    Contract,
+    | 'baseRentUF'
+    | 'rentSteps'
+    | 'fixedRent'
+    | 'variableRentPct'
+    | 'commonExpenses'
+    | 'fondoPromocion'
+    | 'fixedRentCurrency'
+    | 'commonExpensesCurrency'
+    | 'fondoPromocionCurrency'
+  >,
   areaM2: number,
   salesAmount: number,
   referenceDate = startOfToday(),
   ufToClpRate = 39000,
 ): ContractCommercialSnapshot {
+  void areaM2;
   const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, referenceDate);
-  const fixedRent =
-    contract.baseRentUF > 0
-      ? calculateFixedRentFromUF(areaM2, effectiveBaseRentUF, ufToClpRate)
-      : contract.fixedRent;
+  // The contract pact is monthly fixed rent + % over sales. baseRentUF/m² is
+  // informative only and never auto-multiplied by area. The numeric `fixedRent`
+  // is interpreted in its `fixedRentCurrency` (default CLP).
+  const fixedRent = convertAmountToClp(contract.fixedRent, contract.fixedRentCurrency ?? 'CLP', ufToClpRate);
+  const commonExpensesClp = convertAmountToClp(contract.commonExpenses, contract.commonExpensesCurrency ?? 'CLP', ufToClpRate);
+  const fondoPromocionClp = convertAmountToClp(contract.fondoPromocion || 0, contract.fondoPromocionCurrency ?? 'CLP', ufToClpRate);
   const variableRent = calculateVariableRentAmount(salesAmount, contract.variableRentPct);
   const rentTotal = fixedRent + variableRent;
 
@@ -423,8 +477,8 @@ export function buildContractCommercialSnapshot(
     fixedRent,
     variableRent,
     rentTotal,
-    totalOccupancyCost: rentTotal + contract.commonExpenses + (contract.fondoPromocion || 0),
-    costoOcupacionPct: calculateCostoOcupacion(rentTotal, contract.commonExpenses, contract.fondoPromocion || 0, salesAmount),
+    totalOccupancyCost: rentTotal + commonExpensesClp + fondoPromocionClp,
+    costoOcupacionPct: calculateCostoOcupacion(rentTotal, commonExpensesClp, fondoPromocionClp, salesAmount),
   };
 }
 
@@ -569,6 +623,11 @@ export function buildRenewalContractTemplate(contract: Contract): Partial<Contra
     healthNivelVenta: contract.healthNivelVenta,
     healthNivelRenta: contract.healthNivelRenta,
     healthPercepcionAdmin: contract.healthPercepcionAdmin,
+    fixedRentCurrency: contract.fixedRentCurrency ?? 'CLP',
+    commonExpensesCurrency: contract.commonExpensesCurrency ?? 'CLP',
+    fondoPromocionCurrency: contract.fondoPromocionCurrency ?? 'CLP',
+    garantiaMontoCurrency: contract.garantiaMontoCurrency ?? 'CLP',
+    feeIngresoCurrency: contract.feeIngresoCurrency ?? 'CLP',
   };
 }
 
@@ -716,6 +775,11 @@ export function buildProspectContractTemplate(prospect: Prospect, localIds: stri
     healthNivelVenta: false,
     healthNivelRenta: false,
     healthPercepcionAdmin: true,
+    fixedRentCurrency: 'CLP',
+    commonExpensesCurrency: 'CLP',
+    fondoPromocionCurrency: 'CLP',
+    garantiaMontoCurrency: 'CLP',
+    feeIngresoCurrency: 'CLP',
   };
 }
 
@@ -746,14 +810,19 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
       const salesPrevious = sumSalesByContract(contract.id, state.sales, previousMonth);
 
       const effectiveBaseRentUF = getEffectiveBaseRentUF(contract, referenceDate);
-      const rentFixed = contract.baseRentUF > 0
-        ? calculateFixedRentFromUF(areaM2, effectiveBaseRentUF, ufToClpRate)
-        : contract.fixedRent;
+      const rentFixed = convertAmountToClp(contract.fixedRent, contract.fixedRentCurrency ?? 'CLP', ufToClpRate);
+      const commonExpensesClp = convertAmountToClp(contract.commonExpenses, contract.commonExpensesCurrency ?? 'CLP', ufToClpRate);
+      const fondoPromocionClp = convertAmountToClp(contract.fondoPromocion || 0, contract.fondoPromocionCurrency ?? 'CLP', ufToClpRate);
+      const garantiaMontoClp = convertAmountToClp(contract.garantiaMonto || 0, contract.garantiaMontoCurrency ?? 'CLP', ufToClpRate);
+      const feeIngresoClp = convertAmountToClp(contract.feeIngreso || 0, contract.feeIngresoCurrency ?? 'CLP', ufToClpRate);
       const rentVariable = calculateVariableRentAmount(salesCurrent, contract.variableRentPct);
       const rentTotal = rentFixed + rentVariable;
-      const costoOcupacionPct = calculateCostoOcupacion(rentTotal, contract.commonExpenses, contract.fondoPromocion || 0, salesCurrent);
+      const costoOcupacionPct = calculateCostoOcupacion(rentTotal, commonExpensesClp, fondoPromocionClp, salesCurrent);
       const ventaPorM2 = calculateVentaPorM2(salesCurrent, areaM2);
       const healthScore = getContractHealthScore(contract);
+      const healthScorePct = healthScore * 20;
+      const needsFixedRentReview = (contract.baseRentUF || 0) > 0 && (contract.fixedRent || 0) === 0;
+      const ufRate = ufToClpRate > 0 ? ufToClpRate : 1;
 
       return {
         id: contract.id,
@@ -780,6 +849,15 @@ export function buildTenantSummaries(state: AppState, referenceDate = new Date()
         localCount: contract.localIds.length,
         garantiaVencimiento: contract.garantiaVencimiento,
         healthScore,
+        healthScorePct,
+        commonExpensesClp,
+        fondoPromocionClp,
+        garantiaMontoClp,
+        feeIngresoClp,
+        rentFixedUF: rentFixed / ufRate,
+        rentVariableUF: rentVariable / ufRate,
+        salesUF: salesCurrent / ufRate,
+        needsFixedRentReview,
       };
     })
     .sort((left, right) => left.storeName.localeCompare(right.storeName, 'es'));
