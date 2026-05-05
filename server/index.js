@@ -1413,14 +1413,17 @@ function createAppInstance() {
     app.use(cors());
   }
 
-  const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+  // Cheap per-IP guard on /api/health only — the rest of /api is gated by
+  // role-based middleware further down. The earlier global 100 req/15m limiter
+  // was throttling legitimate sessions: the SPA polls /api/health every 15s
+  // (60 hits/15m) plus auto-push on each 1.5s idle, easily reaching the cap.
+  const healthLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
   });
-
-  app.use(generalLimiter);
+  app.use('/api/health', healthLimiter);
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
