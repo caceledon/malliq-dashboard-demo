@@ -133,11 +133,28 @@ Campos relevantes del contrato:
 
 Reglas y cálculos vigentes:
 
-- Renta fija total: `m2 * UF/m2 * valor UF` cuando aplica `baseRentUF`.
-- Renta variable total: `ventas * variableRentPct`.
-- Renta total: fija + variable.
-- Costo de ocupación: `(renta total + gastos comunes + fondo promocion) / ventas`.
-- El editor de contratos valida rangos de fechas, montos negativos, porcentaje variable > 100%, escalonados fuera de rango y step-ups superpuestos.
+- Renta fija mensual: monto pactado en `fixedRent`, interpretado en su `fixedRentCurrency` (UF o CLP).
+  `baseRentUF` (UF/m²) es referencia comercial informativa y **no** se multiplica por superficie.
+- Renta variable: `ventas * variableRentPct`.
+- Renta total: fija + variable (en CLP).
+- Costo de ocupación: `(renta total + gastos comunes + fondo promoción) / ventas`.
+- Cada monto del contrato (`fixedRent`, `commonExpenses`, `fondoPromocion`, `garantiaMonto`, `feeIngreso`)
+  acepta su propio `*Currency` (`UF` | `CLP`, default `CLP`); los KPIs convierten a CLP usando el
+  `ufValue` actual del contexto.
+- El editor valida rangos de fechas, montos negativos, porcentaje variable > 100%,
+  escalonados fuera de rango y step-ups superpuestos. Cuando detecta `baseRentUF > 0 && fixedRent === 0`
+  muestra un banner de revisión para que el operador ingrese el monto pactado.
+
+Roles y multi-tenant:
+
+- Tres roles en `users`: `admin`, `member`, `locatario`.
+- Un usuario `locatario` queda vinculado a un contrato vía `tenant_contract_id` (y opcionalmente `asset_id`).
+  El portal `/locatario/*` solo expone los datos de ese contrato; los `admin`/`member` que intenten
+  abrir esas rutas son redirigidos a `/admin/dashboard`, y los `locatario` que pidan `/admin/*` van a
+  `/locatario/dashboard`.
+- Las rutas de escritura y de conectores (`PUT /api/archive`, `POST /api/documents`,
+  `DELETE /api/documents/:id`, `POST /api/connectors/pos/proxy`, `POST /api/connectors/fiscal/ingest`,
+  `POST /api/contracts/autofill[/ask]`) requieren rol `admin` o `member`.
 
 ## Calidad y pruebas
 

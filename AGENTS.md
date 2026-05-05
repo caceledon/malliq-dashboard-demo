@@ -158,22 +158,30 @@ Each contract (`Contract`) supports the following fields:
 - `companyName` / `storeName` / `category`
 - `localIds`: array of linked unit IDs
 - `startDate` / `endDate`
-- `fixedRent`: renta fija en CLP
+- `fixedRent`: monto fijo mensual pactado, interpretado por `fixedRentCurrency` (UF | CLP, default CLP)
 - `variableRentPct`: % sobre ventas
-- `baseRentUF`: tarifa UF/m²
-- `commonExpenses`: gastos comunes
-- `fondoPromocion`: fondo de promoción
-- `garantiaMonto` / `garantiaVencimiento`
-- `feeIngreso`: guante / costo de estudio
+- `baseRentUF`: referencia UF/m² **informativa** (no entra al cálculo automático)
+- `commonExpenses` + `commonExpensesCurrency`
+- `fondoPromocion` + `fondoPromocionCurrency`
+- `garantiaMonto` + `garantiaMontoCurrency` / `garantiaVencimiento`
+- `feeIngreso` + `feeIngresoCurrency` (guante / costo de estudio)
 - `rentSteps`: array de escalonados (`RentStep[]`)
 - Health checks: `healthPagoAlDia`, `healthEntregaVentas`, `healthNivelVenta`, `healthNivelRenta`, `healthPercepcionAdmin`
 
 ### KPIs calculados automáticamente
-- **Renta Fija Total:** `gla_m2 * renta_fija_uf_m2 * ufValue`
-- **Renta Variable Total:** `ventas * renta_variable_pct`
-- **Renta Total:** Fija + Variable
+- **Renta Fija Mensual:** `convertAmountToClp(fixedRent, fixedRentCurrency, ufValue)` — el monto pactado, no UF/m² × área.
+- **Renta Variable:** `ventas * variableRentPct / 100`
+- **Renta Total:** Fija + Variable (en CLP)
 - **Costo de Ocupación (%):** `(Renta Total + GC + Fondo Promoción) / ventas` — destacado en rojo si supera 20%
-- **Venta x M2:** `ventas / gla_m2`
+- **Venta x M²:** `ventas / gla_m2`
+- **Salud:** `getContractHealthScorePct(contract)` = nº de checks marcados × 20 (0/20/40/60/80/100).
+- Banner "revisa renta fija" cuando `baseRentUF > 0 && fixedRent === 0` (legacy migration prompt).
+
+### Roles y portales
+- `admin` y `member` operan en `/admin/*`; `locatario` opera solo en `/locatario/*`.
+- Un usuario `locatario` está pinneado a `users.tenant_contract_id`; sin vinculación ve un empty state.
+- Backend: `PUT /api/archive`, `POST/DELETE /api/documents`, `/api/connectors/*` y `/api/contracts/autofill*`
+  están protegidos con `requireRole(['admin','member'])`.
 
 ## Code Style Guidelines
 
