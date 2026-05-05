@@ -103,13 +103,32 @@ export function AdminDashboard() {
   const vacantM2 = Math.max(totalM2 - occupiedM2, 0);
   const occupancyRatio = occupiedM2 / totalM2;
 
-  const salesTrend = insights.chartSeries.map((p) => p.sales);
-  const salesLabels = insights.chartSeries.map((p) => monthKeyToLabel(p.month));
+  const [salesRange, setSalesRange] = useState<'12M' | 'YTD' | 'QTD'>('12M');
+  // chartSeries is generated as the last 6 months; the seg buttons just slice it.
+  // YTD = months in the current calendar year inferred from offset (newest entry
+  // is the current month).
+  const visibleSeries = useMemo(() => {
+    const all = insights.chartSeries;
+    if (all.length === 0) return all;
+    if (salesRange === 'QTD') return all.slice(-3);
+    if (salesRange === 'YTD') {
+      const today = new Date();
+      const currentMonthIndex = today.getMonth(); // 0-11
+      // The chart spans (length-1) months back from today, so the entry at
+      // position i corresponds to (currentMonthIndex - (length-1) + i). Months
+      // with computed value < 0 belong to the previous year and are dropped.
+      return all.filter((_, i) => currentMonthIndex - (all.length - 1) + i >= 0);
+    }
+    return all;
+  }, [insights.chartSeries, salesRange]);
+
+  const salesTrend = visibleSeries.map((p) => p.sales);
+  const salesLabels = visibleSeries.map((p) => monthKeyToLabel(p.month));
   const lastSales = salesTrend[salesTrend.length - 1] ?? 0;
   const prevSales = salesTrend[salesTrend.length - 2] ?? 0;
   const momSales = prevSales > 0 ? (lastSales - prevSales) / prevSales : 0;
 
-  const rentTrend = insights.chartSeries.map((p) => p.rent);
+  const rentTrend = visibleSeries.map((p) => p.rent);
 
   const salesBySource = {
     manual: state.sales.filter((s) => s.source === 'manual').reduce((acc, s) => acc + s.grossAmount, 0),
@@ -331,13 +350,6 @@ export function AdminDashboard() {
             </div>
           </div>
           <div className="row" style={{ gap: 6 }}>
-            <div className="seg">
-              <button className="on" type="button">
-                Ventas/m²
-              </button>
-              <button type="button">Foot traffic</button>
-              <button type="button">Salud</button>
-            </div>
             <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
               <ExternalLink size={13} /> Expandir
             </button>
@@ -402,12 +414,34 @@ export function AdminDashboard() {
                 ) : null}
               </h3>
             </div>
-            <div className="seg">
-              <button type="button" className="on">
+            <div className="seg" role="tablist" aria-label="Rango de ventas">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={salesRange === '12M'}
+                className={salesRange === '12M' ? 'on' : undefined}
+                onClick={() => setSalesRange('12M')}
+              >
                 12M
               </button>
-              <button type="button">YTD</button>
-              <button type="button">QTD</button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={salesRange === 'YTD'}
+                className={salesRange === 'YTD' ? 'on' : undefined}
+                onClick={() => setSalesRange('YTD')}
+              >
+                YTD
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={salesRange === 'QTD'}
+                className={salesRange === 'QTD' ? 'on' : undefined}
+                onClick={() => setSalesRange('QTD')}
+              >
+                QTD
+              </button>
             </div>
           </div>
           <div style={{ padding: '8px 10px 6px' }}>

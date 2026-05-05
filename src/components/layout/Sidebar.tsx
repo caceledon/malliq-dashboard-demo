@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Bolt,
@@ -20,7 +20,22 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/store/appState';
+import { logout } from '@/lib/auth';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Administrador',
+  member: 'Operador',
+  locatario: 'Locatario',
+};
+
+function deriveInitials(name: string, fallbackEmail: string): string {
+  const source = name.trim() || fallbackEmail.split('@')[0] || '?';
+  const parts = source.split(/\s+/).filter(Boolean).slice(0, 2);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return parts.map((part) => part[0]).join('').toUpperCase();
+}
 
 interface NavDef {
   to: string;
@@ -71,14 +86,9 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   );
 
   const asset = state.asset;
-  const userName = 'Christian Celedón';
-  const userRole = 'Gerente de operación';
-  const userInitials = userName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((s) => s[0])
-    .join('')
-    .toUpperCase();
+  const userName = authUser?.displayName?.trim() || authUser?.email || 'Invitado';
+  const userRole = authUser?.role ? ROLE_LABELS[authUser.role] ?? 'Sin rol' : 'Sin rol';
+  const userInitials = deriveInitials(authUser?.displayName ?? '', authUser?.email ?? '');
 
   return (
     <>
@@ -135,19 +145,28 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
           <div style={{ flex: 1 }} />
 
-          <div className="mq-nav-section" style={{ marginTop: 14 }}>
-            IA + Sync
-          </div>
-          <div className="mq-nav-item" style={{ cursor: 'default' }}>
-            <Sparkles size={16} style={{ color: 'var(--umber)' }} />
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-              <span style={{ fontSize: 12.5 }}>Autofill Moonshot</span>
-              <span className="t-dim" style={{ fontSize: 10.5 }}>
-                {state.documents.length} docs · kimi-k2.5
-              </span>
-            </div>
-          </div>
-          <SyncStatusRow />
+          {isAdmin ? (
+            <>
+              <div className="mq-nav-section" style={{ marginTop: 14 }}>
+                IA + Sync
+              </div>
+              <NavLink
+                to="/admin/configuracion"
+                onClick={() => setMobileOpen(false)}
+                title="Configurar el modo de IA y sincronización"
+                className={({ isActive }) => cn('mq-nav-item', isActive && 'active')}
+              >
+                <Sparkles size={16} style={{ color: 'var(--umber)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+                  <span style={{ fontSize: 12.5 }}>Autofill Moonshot</span>
+                  <span className="t-dim" style={{ fontSize: 10.5 }}>
+                    {state.documents.length} docs · kimi-k2.5
+                  </span>
+                </div>
+              </NavLink>
+              <SyncStatusRow onNavigate={() => setMobileOpen(false)} />
+            </>
+          ) : null}
         </nav>
 
         {/* Footer */}
@@ -163,9 +182,11 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
             type="button"
             className="iconbtn"
             title="Cerrar sesión"
+            aria-label="Cerrar sesión"
             onClick={() => {
               setMobileOpen(false);
-              window.location.href = '#/';
+              logout();
+              window.location.reload();
             }}
           >
             <LogOut size={15} />
@@ -202,6 +223,7 @@ interface AssetSwitcherProps {
 function AssetSwitcher({ assetSummaries, activeAssetId, assetName, assetCity, onSwitch }: AssetSwitcherProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
@@ -294,9 +316,12 @@ function AssetSwitcher({ assetSummaries, activeAssetId, assetName, assetCity, on
             </div>
           ))}
           <div className="mq-divider" style={{ margin: '4px 6px' }} />
-          <a
-            href="#/admin/activos"
-            onClick={() => setOpen(false)}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate('/admin/activos');
+            }}
             style={{
               padding: '8px 10px',
               display: 'flex',
@@ -305,43 +330,53 @@ function AssetSwitcher({ assetSummaries, activeAssetId, assetName, assetCity, on
               color: 'var(--ink-3)',
               fontSize: 12.5,
               cursor: 'pointer',
+              width: '100%',
+              background: 'transparent',
+              border: 0,
+              textAlign: 'left',
             }}
           >
             <Plus size={14} /> Gestionar activos
-          </a>
+          </button>
         </div>
       ) : null}
     </div>
   );
 }
 
-function SyncStatusRow() {
+function SyncStatusRow({ onNavigate }: { onNavigate: () => void }) {
   const { state } = useAppState();
   const syncEnabled = state.asset?.syncEnabled && !!state.asset?.backendUrl;
-  if (!syncEnabled) {
-    return (
-      <div className="mq-nav-item" style={{ cursor: 'default' }}>
-        <Plug2 size={16} style={{ color: 'var(--ink-4)' }} />
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-          <span style={{ fontSize: 12.5 }}>Sync local</span>
-          <span className="t-dim" style={{ fontSize: 10.5 }}>
-            SQLite · sin remoto
-          </span>
-        </div>
-      </div>
-    );
-  }
   return (
-    <div className="mq-nav-item" style={{ cursor: 'default' }}>
-      <span className="mq-dot ok" style={{ marginLeft: 2, marginRight: 4 }} />
-      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-        <span style={{ fontSize: 12.5 }}>Sync activo</span>
-        <span className="t-dim" style={{ fontSize: 10.5 }}>
-          <Bolt size={10} style={{ display: 'inline', marginRight: 2, verticalAlign: -1 }} />
-          Remoto · cada 15 s
-        </span>
-      </div>
-    </div>
+    <NavLink
+      to="/admin/configuracion"
+      onClick={onNavigate}
+      title="Configurar la sincronización del backend"
+      className={({ isActive }) => cn('mq-nav-item', isActive && 'active')}
+    >
+      {syncEnabled ? (
+        <>
+          <span className="mq-dot ok" style={{ marginLeft: 2, marginRight: 4 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+            <span style={{ fontSize: 12.5 }}>Sync activo</span>
+            <span className="t-dim" style={{ fontSize: 10.5 }}>
+              <Bolt size={10} style={{ display: 'inline', marginRight: 2, verticalAlign: -1 }} />
+              Remoto · cada 15 s
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <Plug2 size={16} style={{ color: 'var(--ink-4)' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+            <span style={{ fontSize: 12.5 }}>Sync local</span>
+            <span className="t-dim" style={{ fontSize: 10.5 }}>
+              SQLite · sin remoto
+            </span>
+          </div>
+        </>
+      )}
+    </NavLink>
   );
 }
 

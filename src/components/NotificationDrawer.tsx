@@ -1,10 +1,25 @@
 import { useState } from 'react';
-import { AlertCircle, AlertTriangle, Bell, Info, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Bell, ChevronRight, Info, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/store/appState';
+
+const SYNC_ALERT_IDS = new Set(['sync-conflict', 'sync-offline', 'sync-running']);
 
 export function NotificationDrawer() {
   const [open, setOpen] = useState(false);
-  const { insights, state } = useAppState();
+  const { insights, state, authUser } = useAppState();
+  const navigate = useNavigate();
+  const canSeeAdminPages = authUser?.role !== 'locatario';
+
+  const goTo = (path: string) => {
+    setOpen(false);
+    navigate(path);
+  };
+
+  const targetForAlert = (id: string) => {
+    if (SYNC_ALERT_IDS.has(id)) return '/admin/configuracion';
+    return '/admin/alertas';
+  };
   const systemAlerts =
     state.asset?.syncStatus === 'conflict'
       ? [
@@ -136,26 +151,68 @@ export function NotificationDrawer() {
                   Sin alertas activas.
                 </div>
               ) : (
-                alerts.map((alert, idx) => (
-                  <div
-                    key={alert.id}
-                    style={{
-                      padding: '12px 18px',
-                      borderTop: idx === 0 ? 0 : '1px solid var(--line)',
-                      display: 'flex',
-                      gap: 10,
-                      alignItems: 'flex-start',
-                    }}
-                  >
-                    <div style={{ marginTop: 2 }}>{getIcon(alert.type)}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }}>{alert.title}</div>
-                      <div className="t-muted" style={{ fontSize: 11.5, marginTop: 2, lineHeight: 1.5 }}>
-                        {alert.description}
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <>
+                  {alerts.map((alert, idx) => {
+                    const target = targetForAlert(alert.id);
+                    const clickable = canSeeAdminPages;
+                    const Tag: 'button' | 'div' = clickable ? 'button' : 'div';
+                    return (
+                      <Tag
+                        key={alert.id}
+                        type={clickable ? 'button' : undefined}
+                        onClick={clickable ? () => goTo(target) : undefined}
+                        title={clickable ? 'Abrir detalle' : undefined}
+                        style={{
+                          padding: '12px 18px',
+                          borderTop: idx === 0 ? 0 : '1px solid var(--line)',
+                          display: 'flex',
+                          gap: 10,
+                          alignItems: 'flex-start',
+                          width: '100%',
+                          textAlign: 'left',
+                          background: 'transparent',
+                          border: 0,
+                          cursor: clickable ? 'pointer' : 'default',
+                        }}
+                      >
+                        <div style={{ marginTop: 2 }}>{getIcon(alert.type)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }}>{alert.title}</div>
+                          <div className="t-muted" style={{ fontSize: 11.5, marginTop: 2, lineHeight: 1.5 }}>
+                            {alert.description}
+                          </div>
+                        </div>
+                        {clickable ? (
+                          <ChevronRight size={14} style={{ color: 'var(--ink-4)', flex: 'none', marginTop: 4 }} />
+                        ) : null}
+                      </Tag>
+                    );
+                  })}
+                  {canSeeAdminPages ? (
+                    <button
+                      type="button"
+                      onClick={() => goTo('/admin/alertas')}
+                      style={{
+                        width: '100%',
+                        padding: '12px 18px',
+                        borderTop: '1px solid var(--line)',
+                        background: 'transparent',
+                        border: 0,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        color: 'var(--umber)',
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>Ver todas las alertas</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  ) : null}
+                </>
               )}
             </div>
           </aside>

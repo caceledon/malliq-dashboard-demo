@@ -64,6 +64,7 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
       <button
         onClick={onMenuClick}
         title="Menú"
+        aria-label="Abrir menú"
         type="button"
         className="iconbtn md:hidden"
       >
@@ -209,9 +210,10 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
         <button
           type="button"
           className="mq-btn primary sm"
-          onClick={() => navigate('/admin/rentas')}
+          onClick={() => navigate('/admin/locatarios')}
+          title="Abre el asistente de contratos en la pantalla de Locatarios"
         >
-          <Sparkles size={14} /> Asistente MallQ
+          <Sparkles size={14} /> Asistente de contratos
         </button>
       ) : null}
 
