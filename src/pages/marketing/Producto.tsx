@@ -7,11 +7,11 @@ const COCKPIT_KPIS = [
 ];
 
 const COCKPIT_ROWS: { name: string; occ: number; noi: string }[] = [
-  { name: 'Plaza Reforma 222', occ: 94, noi: '12.4M' },
-  { name: 'Antara Fashion Hall', occ: 91, noi: '9.1M' },
-  { name: 'Centro Santa Fe', occ: 96, noi: '18.2M' },
-  { name: 'Parque Toreo', occ: 88, noi: '5.6M' },
-  { name: 'Forum Buenavista', occ: 79, noi: '3.3M' },
+  { name: 'Mall A · demo', occ: 94, noi: '12.4M' },
+  { name: 'Mall B · demo', occ: 91, noi: '9.1M' },
+  { name: 'Mall C · demo', occ: 96, noi: '18.2M' },
+  { name: 'Mall D · demo', occ: 88, noi: '5.6M' },
+  { name: 'Mall E · demo', occ: 79, noi: '3.3M' },
 ];
 
 const HEALTH_COLORS = [
@@ -65,11 +65,11 @@ const INTEGRATIONS = [
   'Oracle Property',
   'Yardi',
   'Argus',
-  'SAT · CFDI',
-  'Banorte API',
-  'HSBC API',
-  'Square POS',
-  'Clip POS',
+  'SII · DTE',
+  'Banco de Chile API',
+  'Santander API',
+  'Transbank',
+  'Mercado Pago',
   'Hubspot',
   'Slack',
   'WhatsApp Business',
@@ -227,7 +227,7 @@ export function Producto() {
                 marginBottom: 16,
               }}
             >
-              Plaza Reforma 222 · Nivel L1
+              Mall · demo · Nivel L1
             </div>
             <svg viewBox="0 0 480 260" style={{ width: '100%' }}>
               <rect width="480" height="260" fill="var(--surface-2)" rx="8" />

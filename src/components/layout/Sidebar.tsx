@@ -118,13 +118,17 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           <img
             src={miniLogoUrl}
             alt=""
-            style={{ height: 36, width: 'auto', display: 'block', flexShrink: 0 }}
+            width={36}
+            height={36}
+            style={{ height: 36, width: 36, display: 'block', flexShrink: 0, objectFit: 'contain' }}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: '0 1 auto' }}>
             <img
               src={wordmarkUrl}
               alt="MallIQ"
-              style={{ height: 22, width: 'auto', display: 'block' }}
+              width={62}
+              height={22}
+              style={{ height: 22, width: 'auto', display: 'block', flexShrink: 0, maxWidth: '100%', objectFit: 'contain' }}
             />
             <span
               style={{

@@ -14,8 +14,8 @@ const JOBS = [
     d: 'El portal de locatario los captura. Si no reportan, MallIQ los persigue en automático por WhatsApp.',
   },
   {
-    t: 'Reconciliar pagos con CFDI uno por uno',
-    d: 'La integración con SAT cruza cada depósito con su factura y marca discrepancias en segundos.',
+    t: 'Reconciliar pagos con DTE uno por uno',
+    d: 'La integración con SII cruza cada depósito con su factura electrónica y marca discrepancias en segundos.',
   },
   {
     t: 'Armar board pack en PowerPoint a mano',
@@ -44,7 +44,7 @@ const TIMELINE = [
   {
     n: 'Día 3-7',
     t: 'Ingesta',
-    b: 'Conectamos tu ERP, tu portal de cobranza y CFDIs del SAT. La data histórica se carga automáticamente.',
+    b: 'Conectamos tu ERP, tu portal de cobranza y DTEs del SII. La data histórica se carga automáticamente.',
   },
   {
     n: 'Día 8-12',
@@ -61,8 +61,8 @@ const TIMELINE = [
 const SECURITY = [
   { t: 'ISO/IEC 27001', d: 'Sistema de gestión de seguridad de la información, certificado anualmente.' },
   { t: 'SOC 2 Type II', d: 'Controles de seguridad, disponibilidad y confidencialidad auditados.' },
-  { t: 'Residencia · MX', d: 'Tus datos viven en data centers en Querétaro. Nunca cruzan frontera.' },
-  { t: 'SAT compatible', d: 'Lectura nativa de CFDI 4.0. Reconciliación automática de complementos de pago.' },
+  { t: 'Residencia · CL', d: 'Tus datos viven en data centers en Chile. Nunca cruzan frontera.' },
+  { t: 'SII compatible', d: 'Lectura nativa de DTE (factura y boleta electrónica). Reconciliación automática de pagos.' },
 ];
 
 export function Operadores() {
@@ -85,9 +85,9 @@ export function Operadores() {
               <Link to="/login" className="mk-btn primary">
                 Ver cockpit en vivo <span className="arr">→</span>
               </Link>
-              <a href="#" className="mk-btn ghost">
-                Descargar pitch (PDF)
-              </a>
+              <Link to="/demo" className="mk-btn ghost">
+                Solicitar demo
+              </Link>
             </div>
           </div>
           <div className="mk-tile" style={{ padding: 24 }}>
@@ -254,11 +254,11 @@ export function Operadores() {
           <div>
             <span className="mk-eyebrow">Seguridad y cumplimiento</span>
             <h2 className="mk-display mk-h3" style={{ marginTop: 20, maxWidth: '14ch' }}>
-              Hecho para fideicomisos y FIBRAs.
+              Hecho para fondos inmobiliarios y operadores premium.
             </h2>
             <p className="mk-lede" style={{ marginTop: 24 }}>
               Auditoría continua, control granular de permisos por rol, bitácora inmutable de cambios, residencia de
-              datos en México.
+              datos en Chile.
             </p>
           </div>
           <div className="mk-security-cards">

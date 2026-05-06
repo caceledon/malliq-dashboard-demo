@@ -48,9 +48,8 @@ export function Demo() {
             <div className="mk-tile outlined" style={{ marginTop: 48, padding: 24 }}>
               <div className="mk-eyebrow">¿Prefieres escribir?</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12, fontSize: 14, color: 'var(--fg)' }}>
-                <span>hola@malliq.mx</span>
-                <span style={{ color: 'var(--fg-3)' }}>+52 55 1234 5678</span>
-                <span style={{ color: 'var(--fg-3)' }}>Av. Reforma 222, piso 18 · CDMX</span>
+                <span>hola@malliq.cl</span>
+                <span style={{ color: 'var(--fg-3)' }}>Santiago, Chile</span>
               </div>
             </div>
           </div>
@@ -83,33 +82,33 @@ export function Demo() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="mk-field">
                   <label>Nombre</label>
-                  <input placeholder="Mariana Solís" />
+                  <input placeholder="Nombre" />
                 </div>
                 <div className="mk-field">
                   <label>Apellido</label>
-                  <input placeholder="Quirarte" />
+                  <input placeholder="Apellido" />
                 </div>
               </div>
               <div className="mk-field">
                 <label>Email corporativo</label>
-                <input type="email" placeholder="mariana@grupo.mx" />
+                <input type="email" placeholder="nombre@empresa.cl" />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="mk-field">
                   <label>Teléfono</label>
-                  <input placeholder="+52 55 ..." />
+                  <input placeholder="+56 9 ..." />
                 </div>
                 <div className="mk-field">
                   <label>Cargo</label>
-                  <input placeholder="Directora de Activos" />
+                  <input placeholder="Director(a) de Activos" />
                 </div>
               </div>
 
               <hr className="mk-rule" style={{ margin: '8px 0' }} />
               <div className="mk-eyebrow">Tu portafolio</div>
               <div className="mk-field">
-                <label>Empresa / fideicomiso</label>
-                <input placeholder="Grupo Sordo Madaleno" />
+                <label>Empresa</label>
+                <input placeholder="Tu empresa" />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="mk-field">

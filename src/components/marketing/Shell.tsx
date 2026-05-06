@@ -16,14 +16,27 @@ const NAV_LINKS: { id: NavKey; label: string; to: string }[] = [
 export function MkLogo({ size = 'md', monoOnly = false }: { size?: 'sm' | 'md' | 'lg'; monoOnly?: boolean }) {
   const markH = size === 'sm' ? 26 : size === 'lg' ? 44 : 32;
   const wordH = size === 'sm' ? 22 : size === 'lg' ? 40 : 28;
+  // Intrinsic dims (mini-logo.webp 105x96, logo-white.webp 218x88) drive the
+  // explicit width/height pair so the browser reserves space pre-decode and
+  // doesn't squish under flex compression.
+  const markW = Math.round((markH * 105) / 96);
+  const wordW = Math.round((wordH * 218) / 88);
   return (
-    <Link to="/" className="mk-logo" aria-label="MallIQ">
-      <img src={miniLogoUrl} alt="" style={{ height: markH, width: 'auto', display: 'block' }} />
+    <Link to="/" className="mk-logo" aria-label="MallIQ" style={{ display: 'inline-flex', alignItems: 'center' }}>
+      <img
+        src={miniLogoUrl}
+        alt=""
+        width={markW}
+        height={markH}
+        style={{ height: markH, width: markW, display: 'block', flexShrink: 0, objectFit: 'contain' }}
+      />
       {!monoOnly ? (
         <img
           src={wordmarkUrl}
           alt="MallIQ"
-          style={{ height: wordH, width: 'auto', display: 'block', marginLeft: 4 }}
+          width={wordW}
+          height={wordH}
+          style={{ height: wordH, width: 'auto', display: 'block', marginLeft: 4, flexShrink: 0, maxWidth: '100%', objectFit: 'contain' }}
         />
       ) : null}
     </Link>
@@ -64,12 +77,12 @@ export function MkFooter() {
             <MkLogo size="lg" />
             <p className="mk-body" style={{ marginTop: 18, maxWidth: '34ch' }}>
               El cerebro digital de los centros comerciales. Inteligencia operativa para portafolios premium en
-              Latinoamérica.
+              Chile.
             </p>
             <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
               <span className="mk-tag">
                 <span className="dot" />
-                Operando · CDMX · Bogotá · Lima
+                Operando · Santiago de Chile
               </span>
             </div>
           </div>
@@ -97,52 +110,21 @@ export function MkFooter() {
             </ul>
           </div>
           <div>
-            <h5>Empresa</h5>
+            <h5>Compañía</h5>
             <ul>
               <li>
                 <Link to="/manifiesto">Manifiesto</Link>
               </li>
               <li>
-                <Link to="/manifiesto">Equipo</Link>
-              </li>
-              <li>
-                <Link to="/manifiesto">Clientes</Link>
-              </li>
-              <li>
-                <Link to="/manifiesto">
-                  Carreras <span style={{ color: 'var(--mint)' }}>· 4</span>
-                </Link>
-              </li>
-              <li>
-                <Link to="/manifiesto">Prensa</Link>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h5>Recursos</h5>
-            <ul>
-              <li>
-                <a href="#">Bitácora</a>
-              </li>
-              <li>
-                <a href="#">Reporte 2025: Retail Real Estate LATAM</a>
-              </li>
-              <li>
-                <a href="#">Centro de ayuda</a>
-              </li>
-              <li>
-                <a href="#">Estado del sistema</a>
-              </li>
-              <li>
-                <a href="#">Seguridad</a>
+                <a href="mailto:hola@malliq.cl">Contacto</a>
               </li>
             </ul>
           </div>
         </div>
         <hr className="mk-rule" />
         <div className="mk-foot-bottom" style={{ paddingTop: 24 }}>
-          <span>© 2025 MALLIQ TECHNOLOGIES SAPI DE CV</span>
-          <span>HECHO EN LA CDMX · ISO/IEC 27001 · SOC 2 TYPE II</span>
+          <span>© 2025 MALLIQ SPA</span>
+          <span>HECHO EN SANTIAGO · ISO/IEC 27001 · SOC 2 TYPE II</span>
           <span>PRIVACIDAD · TÉRMINOS · COOKIES</span>
         </div>
       </div>

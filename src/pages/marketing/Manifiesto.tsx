@@ -19,15 +19,6 @@ const PRINCIPLES: [string, string][] = [
   ],
 ];
 
-const TEAM = [
-  { n: 'Andrea Pellicer Vázquez', r: 'CEO · Cofundadora', bg: '18 años en Fibra Danhos. Antes, asociada en Bain.' },
-  { n: 'Tomás Berenguer Iturbe', r: 'CTO · Cofundador', bg: 'Ex-Plaid. Construyó la plataforma de pagos de Belvo.' },
-  { n: 'Renata Quiroz Mancera', r: 'Head of Product', bg: 'Diseñó el cockpit de operaciones de Rappi México.' },
-  { n: 'Iñaki Saavedra Domínguez', r: 'Head of Real Estate', bg: '27 años. Operó Antara, Reforma 222 y Patio Universidad.' },
-];
-
-const INVESTORS = ['Variv Capital', 'Kaszek', 'MAYA Capital', 'ALL VP', 'Magma Partners', 'Liquid 2'];
-
 export function Manifiesto() {
   return (
     <MkPage>
@@ -91,70 +82,21 @@ export function Manifiesto() {
               </h2>
             </div>
             <p className="mk-lede">
-              Mitad real estate, mitad ingeniería. Hemos administrado, financiado y construido los malls que ahora
-              medimos.
+              Mitad real estate, mitad ingeniería. Equipo en formación.
             </p>
           </div>
 
-          <div className="mk-grid-4" style={{ gap: 16 }}>
-            {TEAM.map((p) => (
-              <div
-                key={p.n}
-                className="mk-tile outlined"
-                style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 200 }}
-              >
-                <div
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 999,
-                    background: 'var(--surface-3)',
-                    border: '1px solid var(--hairline-strong)',
-                  }}
-                />
-                <div>
-                  <div style={{ fontWeight: 500, fontSize: 15 }}>{p.n}</div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--mint-deep)',
-                      fontFamily: 'var(--font-mono)',
-                      letterSpacing: '0.06em',
-                      marginTop: 4,
-                    }}
-                  >
-                    {p.r}
-                  </div>
-                </div>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.45 }}>{p.bg}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="mk-section dense"
-        style={{ background: 'var(--surface-2)', borderTop: '1px solid var(--hairline)' }}
-      >
-        <div className="mk-container">
-          <div className="mk-investors-grid">
-            <div>
-              <span className="mk-eyebrow">Respaldo</span>
-              <h2 className="mk-display mk-h3" style={{ marginTop: 20, maxWidth: '12ch' }}>
-                Bien acompañados.
-              </h2>
-              <p className="mk-lede" style={{ marginTop: 24 }}>
-                Capital paciente. Inversionistas que entienden retail real estate y construyen para décadas.
-              </p>
-            </div>
-            <div className="mk-investors-list">
-              {INVESTORS.map((i) => (
-                <div key={i} className="mk-investor-card">
-                  {i}
-                </div>
-              ))}
-            </div>
+          <div
+            className="mk-tile outlined"
+            style={{ padding: 40, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'flex-start' }}
+          >
+            <span className="mk-eyebrow" style={{ color: 'var(--mint-deep)' }}>
+              Próximamente
+            </span>
+            <p className="mk-body" style={{ margin: 0, maxWidth: '52ch' }}>
+              Estamos formando el equipo. Si te interesa construir el cerebro digital de los centros comerciales en
+              Chile, escríbenos a <a href="mailto:hola@malliq.cl">hola@malliq.cl</a>.
+            </p>
           </div>
         </div>
       </section>

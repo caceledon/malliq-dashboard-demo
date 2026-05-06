@@ -123,11 +123,11 @@ const FAQ: [string, string][] = [
   ],
   [
     '¿Se integra con nuestro ERP?',
-    'Sí. Conectores nativos a SAP, Oracle Property, Yardi, Argus, y APIs custom para sistemas propios. CFDI 4.0 directo del SAT.',
+    'Sí. Conectores nativos a SAP, Oracle Property, Yardi, Argus, y APIs custom para sistemas propios. DTE (factura y boleta electrónica) directo del SII.',
   ],
   [
     '¿Cómo manejan PII y datos sensibles?',
-    'ISO 27001 + SOC 2 Type II. Residencia en México (Querétaro). Permisos granulares por rol. Bitácora inmutable. Encriptación at-rest y in-transit.',
+    'ISO 27001 + SOC 2 Type II. Residencia en Chile. Permisos granulares por rol. Bitácora inmutable. Encriptación at-rest y in-transit.',
   ],
 ];
 
@@ -198,7 +198,7 @@ export function Pricing() {
               letterSpacing: '0.06em',
             }}
           >
-            PRECIOS EN PESOS MEXICANOS · IVA NO INCLUIDO · CONTRATO MENSUAL · SIN LOCK-IN · 30 DÍAS DE PRUEBA
+            PRECIOS EN UF / CLP · IVA NO INCLUIDO · CONTRATO MENSUAL · SIN LOCK-IN · 30 DÍAS DE PRUEBA
           </p>
         </div>
       </section>

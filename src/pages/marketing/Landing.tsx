@@ -91,7 +91,7 @@ export function Landing() {
                 }}
               >
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--mint-deep)' }} />
-                Mall · Plaza Reforma 222 · live
+                Mall · demo · live
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>14:32:08</span>
             </div>
@@ -148,7 +148,7 @@ export function Landing() {
                   fill="var(--fg-3)"
                   transform="rotate(-90 292 148)"
                 >
-                  ANCLA · LIVERPOOL
+                  ANCLA
                 </text>
                 <circle cx="245" cy="87" r="4" fill="#C8523B">
                   <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
@@ -204,7 +204,7 @@ export function Landing() {
             </div>
             <div style={{ paddingLeft: 24 }}>
               <div className="num">
-                $3.2 <span style={{ fontSize: 22, color: 'var(--fg-3)' }}>BN MXN</span>
+                <span style={{ fontSize: 22, color: 'var(--fg-3)' }}>UF</span> XXX
               </div>
               <div className="mk-eyebrow" style={{ marginTop: 8 }}>
                 Renta gestionada / año
@@ -225,17 +225,15 @@ export function Landing() {
       <div className="mk-container">
         <div className="mk-strip">
           <span>CONFIADO POR</span>
-          <span style={{ color: 'var(--fg-2)' }}>Grupo Sordo Madaleno</span>
+          <span style={{ color: 'var(--fg-2)' }}>Próximamente</span>
           <span>·</span>
-          <span style={{ color: 'var(--fg-2)' }}>Fibra Danhos</span>
+          <span style={{ color: 'var(--fg-2)' }}>Próximamente</span>
           <span>·</span>
-          <span style={{ color: 'var(--fg-2)' }}>Plaza Reforma 222</span>
+          <span style={{ color: 'var(--fg-2)' }}>Próximamente</span>
           <span>·</span>
-          <span style={{ color: 'var(--fg-2)' }}>Antara Fashion Hall</span>
+          <span style={{ color: 'var(--fg-2)' }}>Próximamente</span>
           <span>·</span>
-          <span style={{ color: 'var(--fg-2)' }}>Centro Santa Fe</span>
-          <span>·</span>
-          <span style={{ color: 'var(--fg-2)' }}>Parque Toreo</span>
+          <span style={{ color: 'var(--fg-2)' }}>Próximamente</span>
         </div>
       </div>
 
@@ -333,7 +331,7 @@ export function Landing() {
         <div className="mk-container">
           <div className="mk-grid-2" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
             <div>
-              <span className="mk-eyebrow">Caso · Plaza Reforma 222</span>
+              <span className="mk-eyebrow">Caso · Próximamente</span>
               <h2 className="mk-display mk-h3" style={{ marginTop: 24, maxWidth: '14ch' }}>
                 <em>"</em>Antes cerraba mes con tres semanas de retraso. Ahora cierro al día siguiente, con
                 confianza<em>."</em>
@@ -347,10 +345,11 @@ export function Landing() {
                     background: 'var(--surface-3)',
                     border: '1px solid var(--hairline-strong)',
                   }}
+                  aria-hidden="true"
                 />
                 <div>
-                  <div style={{ fontWeight: 500 }}>Mariana Solís Quirarte</div>
-                  <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>Directora de Activos · GSM Real Estate</div>
+                  <div style={{ fontWeight: 500 }}>Caso piloto</div>
+                  <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>Próximamente · Chile</div>
                 </div>
               </div>
             </div>
@@ -415,7 +414,7 @@ export function Landing() {
               Hablar con ventas <span className="arr">→</span>
             </Link>
             <div className="mk-eyebrow" style={{ marginTop: 12 }}>
-              O escríbenos a hola@malliq.mx
+              O escríbenos a hola@malliq.cl
             </div>
           </div>
         </div>

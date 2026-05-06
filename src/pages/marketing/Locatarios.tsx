@@ -3,7 +3,7 @@ import { MkFooter, MkHeader, MkPage, MkPulse } from '@/components/marketing/Shel
 
 const FEATURES = [
   { n: '01', t: 'Reporta ventas en 30 seg', b: 'Captura desde tu POS, súbelo en CSV o escribe el monto del día. WhatsApp también funciona.' },
-  { n: '02', t: 'Paga renta en línea', b: 'OXXO, transferencia o tarjeta. Tu CFDI se genera automático y queda en tu portal.' },
+  { n: '02', t: 'Paga renta en línea', b: 'Transferencia, débito o crédito. Tu factura electrónica (DTE) se genera automática y queda en tu portal.' },
   { n: '03', t: 'Ve tu salud en vivo', b: 'Misma vista que tu administrador. Sin sorpresas en la junta de renovación.' },
   { n: '04', t: 'Solicitudes y mantenimiento', b: 'Una fuga, un foco fundido, una solicitud de remodelación — todo en un ticket.' },
   { n: '05', t: 'Comparativa anónima', b: 'Cómo va tu giro vs el promedio del mall. Sin nombres, sin chismes — solo benchmarks.' },
@@ -30,9 +30,9 @@ export function LocatariosInfo() {
               <Link to="/login" className="mk-btn primary">
                 Entrar al portal <span className="arr">→</span>
               </Link>
-              <a href="#" className="mk-btn ghost">
-                Ver demo (2 min)
-              </a>
+              <Link to="/demo" className="mk-btn ghost">
+                Solicitar demo
+              </Link>
             </div>
           </div>
           <div className="mk-tile" style={{ padding: 0, overflow: 'hidden' }}>
@@ -135,7 +135,7 @@ export function LocatariosInfo() {
       <section className="mk-section">
         <div className="mk-container mk-grid-2" style={{ gridTemplateColumns: '1fr 1.2fr', gap: 64, alignItems: 'center' }}>
           <div className="mk-tile outlined" style={{ padding: 32 }}>
-            <div className="mk-eyebrow">Caso · Cocina d'Autor</div>
+            <div className="mk-eyebrow">Caso · Próximamente</div>
             <p className="mk-display" style={{ fontSize: 26, lineHeight: 1.25, letterSpacing: '-0.01em', marginTop: 16 }}>
               <em>"</em>Por primera vez negocié mi renovación con números, no con corazonadas. Bajé 8% mi renta porque
               tenía la data del giro en mi mall y en otros tres.<em>"</em>
@@ -149,10 +149,11 @@ export function LocatariosInfo() {
                   background: 'var(--surface-3)',
                   border: '1px solid var(--hairline-strong)',
                 }}
+                aria-hidden="true"
               />
               <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>Sebastián Otaegui Marín</div>
-                <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>Chef y dueño · Cocina d'Autor · Antara</div>
+                <div style={{ fontWeight: 500, fontSize: 14 }}>Locatario piloto</div>
+                <div style={{ fontSize: 12.5, color: 'var(--fg-3)' }}>Próximamente · Chile</div>
               </div>
             </div>
           </div>
