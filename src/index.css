@@ -786,23 +786,7 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 0 0 3px oklch(0.55 0.14 165 / 0.18);
 }
 
-.glass-card {
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  /* Surface opacity floor (88%) keeps body text in --ink-2 at WCAG AA against
-     the card surface in both light and dark mode. The earlier .glass-card
-     rule above set the same floor; this duplicate rule used to override it
-     at 60% — which broke contrast. Audit fix: align the floor across both. */
-  background: color-mix(in oklab, var(--card) 88%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease, transform 0.2s ease, background-color 0.25s ease;
-}
 
-.glass-card:hover {
-  box-shadow: var(--shadow-md);
-}
 
 .badge-success {
   border: 1px solid rgba(16, 185, 129, 0.25);

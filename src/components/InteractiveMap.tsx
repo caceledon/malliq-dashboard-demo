@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect, useLayoutEffect, MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '@/lib/currency';
 import { contractDateRangesOverlap, getContractDisplayValues, getContractLifecycle, type AssetUnit, type Contract } from '@/lib/domain';
@@ -109,8 +109,8 @@ function getPrimaryUnitContract(unitContracts: Contract[]) {
 function fillForUnit(unitContracts: Contract[]) {
   if (unitContracts.length === 0) {
     return {
-      stroke: 'rgba(148, 163, 184, 0.4)',
-      text: '#475569',
+      stroke: 'var(--hairline-strong)',
+      text: 'var(--ink-3)',
       gradient: 'url(#empty-grad)',
     };
   }
@@ -123,8 +123,8 @@ function fillForUnit(unitContracts: Contract[]) {
   );
   if (hasOverlap) {
     return {
-      stroke: 'rgba(239, 68, 68, 0.5)',
-      text: '#991B1B',
+      stroke: 'var(--coral)',
+      text: 'var(--coral)',
       gradient: 'url(#danger-grad)',
     };
   }
@@ -133,22 +133,22 @@ function fillForUnit(unitContracts: Contract[]) {
   const lifecycle = getContractLifecycle(contract);
   if (contract.signatureStatus !== 'firmado' || lifecycle === 'por_vencer') {
     return {
-      stroke: 'rgba(245, 158, 11, 0.5)',
-      text: '#92400E',
+      stroke: 'var(--amber)',
+      text: 'oklch(0.42 0.11 60)',
       gradient: 'url(#warning-grad)',
     };
   }
 
   if (lifecycle === 'vencido') {
     return {
-      stroke: 'rgba(239, 68, 68, 0.5)',
-      text: '#B91C1C',
+      stroke: 'var(--coral)',
+      text: 'var(--coral)',
       gradient: 'url(#vencido-grad)',
     };
   }
 
   return {
-    stroke: 'rgba(16, 185, 129, 0.5)',
+    stroke: 'var(--mint)',
     text: 'var(--fg)',
     gradient: 'url(#active-grad)',
   };
@@ -158,9 +158,107 @@ export function InteractiveMap() {
   const navigate = useNavigate();
   const { formatCurrency } = useCurrency();
   const { state, insights } = useAppState();
+  
   const [hoveredUnitId, setHoveredUnitId] = useState<string | null>(null);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
   const { layout: units, maxX, maxY } = useMemo(() => buildLayout(state.units), [state.units]);
+
+  // Pre-calculate conflicting contracts so we don't do it on hover
+  const conflictingContractsByUnit = useMemo(() => {
+    const mapping: Record<string, string[]> = {};
+    state.units.forEach(unit => {
+      const unitContracts = getUnitContracts(unit.id, state.contracts);
+      const conflicts = unitContracts
+        .filter((candidate, index) =>
+          unitContracts.some((other, otherIndex) => otherIndex !== index && contractDateRangesOverlap(candidate, other)),
+        )
+        .map((candidate) => getContractDisplayValues(candidate).storeName);
+      if (conflicts.length > 1) {
+        mapping[unit.id] = conflicts;
+      }
+    });
+    return mapping;
+  }, [state.units, state.contracts]);
+
+  // Zoom & Pan state
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+
+
+  const handleMouseDown = (e: ReactMouseEvent) => {
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX - transform.x, y: e.clientY - transform.y };
+  };
+
+  const handleMouseMoveMap = (e: ReactMouseEvent) => {
+    if (isDragging) {
+      setTransform(prev => ({ ...prev, x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }));
+    }
+    setHoverPosition({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+    setHoveredUnitId(null);
+  };
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      const onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        const zoomSensitivity = 0.002;
+        setTransform(prev => {
+          const newScale = Math.max(0.5, Math.min(prev.scale - e.deltaY * zoomSensitivity, 4));
+          const rect = container.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          const dx = (mouseX - prev.x) * (newScale / prev.scale - 1);
+          const dy = (mouseY - prev.y) * (newScale / prev.scale - 1);
+          return { x: prev.x - dx, y: prev.y - dy, scale: newScale };
+        });
+      };
+      container.addEventListener('wheel', onWheel, { passive: false });
+      return () => container.removeEventListener('wheel', onWheel);
+    }
+  }, []);
+
+  // Position the hover tooltip directly on the DOM node — measuring layout
+  // requires a ref read after paint, but routing the result through React
+  // state would mean setState-in-effect (forbidden by the
+  // react-hooks/set-state-in-effect rule in React 19) and would also cost
+  // an extra render per pixel of mouse motion.
+  useLayoutEffect(() => {
+    const node = tooltipRef.current;
+    if (!node) return;
+    if (!hoveredUnitId) {
+      node.style.opacity = '0';
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    const margin = 10;
+    let newX = hoverPosition.x + 15;
+    let newY = hoverPosition.y;
+
+    if (newX + rect.width + margin > window.innerWidth) {
+      newX = hoverPosition.x - rect.width - 15;
+    }
+    if (newY - rect.height / 2 < margin) {
+      newY = margin + rect.height / 2;
+    } else if (newY + rect.height / 2 > window.innerHeight - margin) {
+      newY = window.innerHeight - margin - rect.height / 2;
+    }
+    node.style.left = `${newX}px`;
+    node.style.top = `${newY}px`;
+    node.style.transform = 'translate(0, -50%)';
+    node.style.opacity = '1';
+  }, [hoveredUnitId, hoverPosition.x, hoverPosition.y]);
 
   return (
     <div className="glass-card p-5">
@@ -168,7 +266,7 @@ export function InteractiveMap() {
         <div>
           <h3 className="text-lg font-bold">Plano dinámico del activo</h3>
           <p className="text-sm text-[var(--sidebar-fg)]">
-            El tamaño de cada bloque se calcula en base a los m2 cargados. Un contrato puede ocupar varios locales.
+            El tamaño de cada bloque se calcula en base a los m2 cargados. Usa el mouse para arrastrar y hacer zoom.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -184,158 +282,166 @@ export function InteractiveMap() {
           Completa la configuración inicial del activo para generar el plano automáticamente.
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-[24px] border-2 border-[var(--border-color)] bg-white shadow-inner dark:bg-slate-900">
+        <div 
+          ref={containerRef}
+          className="mt-4 overflow-hidden rounded-[24px] border-2 border-[var(--border-color)] bg-[var(--surface-2)] shadow-inner dark:bg-[var(--bg-deep)] relative cursor-grab active:cursor-grabbing"
+          style={{ height: 600, touchAction: 'none' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMoveMap}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
           <svg
-            onMouseMove={(event) => setHoverPosition({ x: event.clientX, y: event.clientY })}
-            viewBox={`0 0 ${maxX} ${maxY}`}
-            className="h-auto max-h-[600px] min-h-[300px] w-full"
+            width="100%"
+            height="100%"
+            className="w-full h-full"
             style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.05))' }}
           >
-            <rect x="0" y="0" width={maxX} height={maxY} fill="url(#mall-grid)" />
             <defs>
-              <pattern id="mall-grid" width="4" height="4" patternUnits="userSpaceOnUse">
-                <path d="M 4 0 L 0 0 0 4" fill="none" stroke="rgba(148,163,184,0.08)" strokeWidth="0.1" />
-                <path d="M 0 4 L 4 4 0 4" fill="none" stroke="rgba(148,163,184,0.08)" strokeWidth="0.1" />
+              <pattern id="mall-grid" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--hairline)" strokeWidth="0.5" />
               </pattern>
               <linearGradient id="active-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(16, 185, 129, 0.45)" />
-                <stop offset="100%" stopColor="rgba(16, 185, 129, 0.15)" />
+                <stop offset="0%" stopColor="var(--mint-soft)" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="var(--mint-soft)" stopOpacity="0.3" />
               </linearGradient>
               <linearGradient id="warning-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(245, 158, 11, 0.45)" />
-                <stop offset="100%" stopColor="rgba(245, 158, 11, 0.15)" />
+                <stop offset="0%" stopColor="var(--amber-soft)" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="var(--amber-soft)" stopOpacity="0.3" />
               </linearGradient>
               <linearGradient id="danger-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(239, 68, 68, 0.45)" />
-                <stop offset="100%" stopColor="rgba(239, 68, 68, 0.15)" />
+                <stop offset="0%" stopColor="var(--coral-soft)" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="var(--coral-soft)" stopOpacity="0.3" />
               </linearGradient>
               <linearGradient id="vencido-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(239, 68, 68, 0.45)" />
-                <stop offset="100%" stopColor="rgba(239, 68, 68, 0.15)" />
+                <stop offset="0%" stopColor="var(--coral-soft)" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="var(--coral-soft)" stopOpacity="0.3" />
               </linearGradient>
               <linearGradient id="empty-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(148, 163, 184, 0.35)" />
-                <stop offset="100%" stopColor="rgba(148, 163, 184, 0.10)" />
+                <stop offset="0%" stopColor="var(--surface-3)" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="var(--surface-3)" stopOpacity="0.3" />
               </linearGradient>
               <filter id="shadow-hover" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="4" stdDeviation="2.5" floodOpacity="0.3" floodColor="#000" />
+                <feDropShadow dx="0" dy="4" stdDeviation="3" floodOpacity="0.25" floodColor="#000" />
               </filter>
               <filter id="shadow-base" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.15" floodColor="#000" />
+                <feDropShadow dx="0" dy="2" stdDeviation="1.5" floodOpacity="0.1" floodColor="#000" />
               </filter>
             </defs>
 
-            {units.map((unit) => {
+            <rect x="0" y="0" width="100%" height="100%" fill="url(#mall-grid)" pointerEvents="none" />
+            
+            <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
+              <g transform={`translate(${400 - (maxX*3)/2}, ${300 - (maxY*3)/2}) scale(3)`}>
+                {units.map((unit) => {
+                  const unitContracts = getUnitContracts(unit.id, state.contracts);
+                  const contract = getPrimaryUnitContract(unitContracts);
+                  const display = contract ? getContractDisplayValues(contract) : undefined;
+                  const colors = fillForUnit(unitContracts);
+                  const summary = contract ? insights.tenantSummaries.find((item) => item.id === contract.id) : undefined;
+                  const isHovered = hoveredUnitId === unit.id;
+
+                  return (
+                    <g
+                      key={unit.id}
+                      onMouseEnter={() => setHoveredUnitId(unit.id)}
+                      onClick={() => {
+                        if (contract) {
+                          navigate(`/admin/locatarios/${contract.id}`);
+                        }
+                      }}
+                      className={cn(contract ? 'cursor-pointer' : '', 'transition-all duration-300')}
+                      style={{ transformOrigin: `${unit.x + unit.width/2}px ${unit.y + unit.height/2}px`, transform: isHovered ? 'scale(1.02)' : 'scale(1)' }}
+                    >
+                      <rect
+                        x={unit.x}
+                        y={unit.y}
+                        width={unit.width}
+                        height={unit.height}
+                        rx="1.5"
+                        ry="1.5"
+                        fill={colors.gradient}
+                        stroke={colors.stroke}
+                        strokeWidth={isHovered ? '0.8' : '0.5'}
+                        filter={isHovered ? 'url(#shadow-hover)' : 'url(#shadow-base)'}
+                        className="transition-all duration-300"
+                      />
+                      <text x={unit.x + 2} y={unit.y + 6.5} fontSize="3.8" fontWeight="800" fill={colors.text} style={{ pointerEvents: 'none' }}>
+                        {unit.code}
+                      </text>
+                      <text x={unit.x + 2} y={unit.y + 11} fontSize="2.8" fontWeight="600" fill={colors.text} opacity="0.9" style={{ pointerEvents: 'none' }}>
+                        {display?.storeName ?? unit.manualDisplayName ?? unit.label}
+                      </text>
+                      <text x={unit.x + 2} y={unit.y + 15} fontSize="2.2" fontWeight="600" fill={colors.text} opacity="0.75" style={{ pointerEvents: 'none' }}>
+                        {unit.areaM2} m²
+                      </text>
+
+                      {summary && unit.height >= 25 && unit.width >= 15 ? (
+                        <text x={unit.x + 2} y={unit.y + 21} fontSize="2.5" fontWeight="800" fill={colors.text} style={{ pointerEvents: 'none' }}>
+                          {formatCurrency(summary.salesCurrent)}
+                        </text>
+                      ) : null}
+                    </g>
+                  );
+                })}
+              </g>
+            </g>
+          </svg>
+
+          {/* Tooltip Overlay — position written directly via tooltipRef in
+              the useLayoutEffect above. Initial style hides the node
+              before the first measurement lands. */}
+          <div
+            ref={tooltipRef}
+            className="pointer-events-none fixed z-[9999] rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/95 p-3 text-xs shadow-pop backdrop-blur-md transition-opacity duration-200"
+            style={{ left: 0, top: 0, transform: 'translate(0, -50%)', opacity: 0 }}
+          >
+            {hoveredUnitId && (() => {
+              const unit = state.units.find((item) => item.id === hoveredUnitId);
+              if (!unit) return null;
+
               const unitContracts = getUnitContracts(unit.id, state.contracts);
               const contract = getPrimaryUnitContract(unitContracts);
               const display = contract ? getContractDisplayValues(contract) : undefined;
-              const colors = fillForUnit(unitContracts);
               const summary = contract ? insights.tenantSummaries.find((item) => item.id === contract.id) : undefined;
-              const isHovered = hoveredUnitId === unit.id;
+              const conflictingStores = conflictingContractsByUnit[unit.id] || [];
 
               return (
-                <g
-                  key={unit.id}
-                  onMouseEnter={() => setHoveredUnitId(unit.id)}
-                  onMouseLeave={() => setHoveredUnitId(null)}
-                  onClick={() => {
-                    if (contract) {
-                      navigate(`/admin/locatarios/${contract.id}`);
-                    }
-                  }}
-                  className={cn(contract ? 'cursor-pointer' : '', 'transition-all duration-300')}
-                >
-                  <rect
-                    x={unit.x}
-                    y={unit.y}
-                    width={unit.width}
-                    height={unit.height}
-                    rx="3"
-                    ry="3"
-                    fill={colors.gradient}
-                    stroke={colors.stroke}
-                    strokeWidth={isHovered ? '0.8' : '0.5'}
-                    filter={isHovered ? 'url(#shadow-hover)' : 'url(#shadow-base)'}
-                    className="transform-gpu transition-all duration-300"
-                  />
-                  <text x={unit.x + 2} y={unit.y + 6.5} fontSize="3.8" fontWeight="800" fill={colors.text}>
-                    {unit.code}
-                  </text>
-                  <text x={unit.x + 2} y={unit.y + 11} fontSize="2.8" fontWeight="600" fill={colors.text} opacity="0.9">
-                    {display?.storeName ?? unit.manualDisplayName ?? unit.label}
-                  </text>
-                  <text x={unit.x + 2} y={unit.y + 15} fontSize="2.2" fontWeight="600" fill={colors.text} opacity="0.75">
-                    {unit.areaM2} m²
-                  </text>
-
-                  {summary && unit.height >= 25 && unit.width >= 15 ? (
-                    <text x={unit.x + 2} y={unit.y + 21} fontSize="2.5" fontWeight="800" fill={colors.text}>
-                      {formatCurrency(summary.salesCurrent)}
-                    </text>
+                <>
+                  <p className="text-[14px] font-bold text-[var(--fg)]">
+                    {conflictingStores.length > 1
+                      ? `Conflicto: ${conflictingStores.join(', ')}`
+                      : display?.storeName ?? unit.manualDisplayName ?? unit.label}
+                  </p>
+                  <div className="mb-2 mt-1 border-b border-[var(--border-color)] pb-2">
+                    <span className="font-medium text-[var(--sidebar-fg)]">
+                      {unit.code} · {unit.areaM2} m²
+                    </span>
+                    {!contract && unit.manualCategory ? (
+                      <span className="ml-2 rounded-md bg-[var(--hover-bg)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider">
+                        {unit.manualCategory}
+                      </span>
+                    ) : null}
+                  </div>
+                  {conflictingStores.length > 1 ? (
+                    <p className="font-semibold text-[var(--coral)] mb-2">Hay contratos superpuestos.</p>
                   ) : null}
-                </g>
+                  <div className="space-y-1">
+                    <p className="font-medium text-[var(--fg)]">
+                      <span className="text-[var(--sidebar-fg)]">Ventas:</span> {summary ? formatCurrency(summary.salesCurrent) : 'Sin datos'}
+                    </p>
+                    {summary ? (
+                      <p className="font-medium text-[var(--fg)]">
+                        <span className="text-[var(--sidebar-fg)]">Renta:</span> {formatCurrency(summary.rentTotal)}
+                      </p>
+                    ) : null}
+                  </div>
+                </>
               );
-            })}
-          </svg>
+            })()}
+          </div>
         </div>
       )}
-
-      {hoveredUnitId ? (
-        <div
-          className="pointer-events-none fixed z-[9999] rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/95 p-3 text-xs shadow-2xl backdrop-blur-md animate-in fade-in duration-200"
-          style={{ left: hoverPosition.x + 15, top: hoverPosition.y + 15, transform: 'translate(0, -50%)' }}
-        >
-          {(() => {
-            const unit = state.units.find((item) => item.id === hoveredUnitId);
-            if (!unit) {
-              return null;
-            }
-
-            const unitContracts = getUnitContracts(unit.id, state.contracts);
-            const contract = getPrimaryUnitContract(unitContracts);
-            const display = contract ? getContractDisplayValues(contract) : undefined;
-            const summary = contract ? insights.tenantSummaries.find((item) => item.id === contract.id) : undefined;
-            const conflictingStores = unitContracts
-              .filter((candidate, index) =>
-                unitContracts.some((other, otherIndex) => otherIndex !== index && contractDateRangesOverlap(candidate, other)),
-              )
-              .map((candidate) => getContractDisplayValues(candidate).storeName);
-
-            return (
-              <>
-                <p className="text-[14px] font-bold text-[var(--fg)]">
-                  {conflictingStores.length > 1
-                    ? `Conflicto: ${conflictingStores.join(', ')}`
-                    : display?.storeName ?? unit.manualDisplayName ?? unit.label}
-                </p>
-                <div className="mb-2 mt-1 border-b border-[var(--border-color)] pb-2">
-                  <span className="font-medium text-[var(--sidebar-fg)]">
-                    {unit.code} · {unit.areaM2} m²
-                  </span>
-                  {!contract && unit.manualCategory ? (
-                    <span className="ml-2 rounded-md bg-[var(--hover-bg)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider">
-                      {unit.manualCategory}
-                    </span>
-                  ) : null}
-                </div>
-                {conflictingStores.length > 1 ? (
-                  <p className="font-semibold text-red-600 dark:text-red-400">Hay contratos superpuestos.</p>
-                ) : null}
-                <div className="space-y-1">
-                  <p className="font-medium text-[var(--fg)]">
-                    <span className="text-[var(--sidebar-fg)]">Ventas:</span> {summary ? formatCurrency(summary.salesCurrent) : 'Sin datos'}
-                  </p>
-                  {summary ? (
-                    <p className="font-medium text-[var(--fg)]">
-                      <span className="text-[var(--sidebar-fg)]">Renta:</span> {formatCurrency(summary.rentTotal)}
-                    </p>
-                  ) : null}
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      ) : null}
     </div>
   );
 }

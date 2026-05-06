@@ -17,7 +17,7 @@ import {
   TopBar,
 } from '@/components/mallq/ui';
 import { InteractiveMap } from '@/components/InteractiveMap';
-import { diffInDays, getContractLifecycle } from '@/lib/domain';
+import { diffInDays } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
 import { useCurrency } from '@/lib/currency';
@@ -77,8 +77,6 @@ export function AdminDashboard() {
   const healthBelow65 = insights.tenantSummaries.filter((t) => t.healthScorePct < 65).length;
   const healthAbove90 = insights.tenantSummaries.filter((t) => t.healthScorePct >= 90).length;
 
-  const renewalsSoon = insights.tenantSummaries.filter((t) => t.lifecycle === 'por_vencer').length;
-  const expired = insights.tenantSummaries.filter((t) => t.lifecycle === 'vencido').length;
   const activeCount = insights.tenantSummaries.filter((t) => t.lifecycle === 'vigente').length;
 
   const renewalQueue = useMemo(() => {
@@ -91,18 +89,7 @@ export function AdminDashboard() {
       .sort((a, b) => a.daysToEnd - b.daysToEnd);
   }, [insights.tenantSummaries]);
 
-  // Active vs vacant areas
-  const activeUnitIds = useMemo(() => {
-    const set = new Set<string>();
-    state.contracts.filter((c) => getContractLifecycle(c) !== 'vencido').forEach((c) => c.localIds.forEach((id) => set.add(id)));
-    return set;
-  }, [state.contracts]);
-  const occupiedM2 = useMemo(
-    () => state.units.filter((u) => activeUnitIds.has(u.id)).reduce((sum, u) => sum + u.areaM2, 0),
-    [state.units, activeUnitIds],
-  );
-  const totalM2 = insights.totalAreaM2 || 1;
-  const vacantM2 = Math.max(totalM2 - occupiedM2, 0);
+
 
   const avgSalesPerM2 = insights.averageSalesPerM2;
   const vacancies = insights.vacantUnits;
@@ -391,9 +378,6 @@ export function AdminDashboard() {
           )}
         </div>
       </div>
-
-      {/* hidden references to keep old derived state typed without unused-locals */}
-      <span hidden>{occupiedM2}/{vacantM2}/{renewalsSoon}/{expired}</span>
 
       <HealthLegendModal open={healthLegendOpen} onClose={() => setHealthLegendOpen(false)} />
     </div>

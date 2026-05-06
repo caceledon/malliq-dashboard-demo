@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Download, Search, Upload } from 'lucide-react';
+import { Download, Search, Upload, Inbox } from 'lucide-react';
 import { monthKey } from '@/lib/domain';
 import { downloadTextFile, exportFilteredSalesCsv } from '@/lib/exporters';
 import { formatDate } from '@/lib/format';
@@ -33,7 +33,15 @@ export function LocatarioVentas() {
   if (!summary || !contract) {
     return (
       <div className="p-6">
-        <div className="glass-card p-6 text-sm text-[var(--sidebar-fg)]">Aún no hay ventas disponibles para este locatario.</div>
+        <div className="glass-card flex min-h-[300px] flex-col items-center justify-center p-6 text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--sidebar-fg)]">
+            <Inbox size={24} />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold t-display">Sin ventas disponibles</h3>
+          <p className="max-w-md text-sm text-[var(--sidebar-fg)]">
+            Aún no hay ventas cargadas o asociadas a este locatario. Puedes registrar ventas manualmente o mediante integración.
+          </p>
+        </div>
       </div>
     );
   }
@@ -154,8 +162,11 @@ export function LocatarioVentas() {
               ))}
               {filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-[var(--sidebar-fg)]">
-                    No hay ventas que coincidan con los filtros.
+                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-[var(--sidebar-fg)]">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Inbox className="h-8 w-8 text-[var(--surface-3)]" />
+                      <p>No hay ventas que coincidan con los filtros aplicados.</p>
+                    </div>
                   </td>
                 </tr>
               ) : null}
@@ -179,7 +190,10 @@ export function LocatarioVentas() {
             </div>
           ))}
           {filteredSales.length === 0 ? (
-            <p className="text-center text-sm text-[var(--sidebar-fg)]">No hay ventas que coincidan con los filtros.</p>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-[var(--border-color)] border-dashed p-8 text-center text-sm text-[var(--sidebar-fg)]">
+              <Inbox className="h-6 w-6 text-[var(--surface-3)]" />
+              <p>No hay ventas que coincidan con los filtros.</p>
+            </div>
           ) : null}
         </div>
       </div>
