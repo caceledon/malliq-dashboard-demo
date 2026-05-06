@@ -14,6 +14,7 @@ import { Landing } from '@/pages/marketing/Landing';
 
 const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard').then((module) => ({ default: module.AdminDashboard })));
 const Portafolio = lazy(() => import('@/pages/admin/Portafolio').then((module) => ({ default: module.Portafolio })));
+const AssetDetail = lazy(() => import('@/pages/admin/AssetDetail').then((module) => ({ default: module.AssetDetail })));
 const Locatarios = lazy(() => import('@/pages/admin/Locatarios').then((module) => ({ default: module.Locatarios })));
 const LocatarioDetail = lazy(() => import('@/pages/admin/LocatarioDetail').then((module) => ({ default: module.LocatarioDetail })));
 const RentasContratos = lazy(() => import('@/pages/admin/RentasContratos').then((module) => ({ default: module.RentasContratos })));
@@ -131,6 +132,7 @@ function App() {
                 <Route element={<AppLayout />}>
                   <Route path="dashboard" element={<AdminOnly>{withSuspense(<AdminDashboard />)}</AdminOnly>} />
                   <Route path="activos" element={<AdminOnly>{withSuspense(<Portafolio />)}</AdminOnly>} />
+                  <Route path="activos/:id" element={<AdminOnly>{withSuspense(<AssetDetail />)}</AdminOnly>} />
                   <Route path="locatarios" element={<AdminOnly>{withSuspense(<Locatarios />)}</AdminOnly>} />
                   <Route path="locatarios/:id" element={<AdminOnly>{withSuspense(<LocatarioDetail />)}</AdminOnly>} />
                   <Route path="rentas" element={<AdminOnly>{withSuspense(<RentasContratos />)}</AdminOnly>} />

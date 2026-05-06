@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Building2, CopyPlus, Percent, Plus, Trash2, Wallet } from 'lucide-react';
+import { AlertTriangle, Building2, CopyPlus, Map, Percent, Plus, Trash2, Wallet } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Bento, KpiTile, TopBar } from '@/components/mallq/ui';
 import { formatM } from '@/components/mallq/helpers';
@@ -205,7 +205,19 @@ export function Portafolio() {
               <p className="text-sm text-[var(--sidebar-fg)]">Aún no hay activos cargados en este portafolio.</p>
             ) : (
               assetSummaries.map((summary) => (
-                <div key={summary.id} className="rounded-2xl border border-[var(--border-color)] p-4">
+                <div
+                  key={summary.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/admin/activos/${summary.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(`/admin/activos/${summary.id}`);
+                    }
+                  }}
+                  className="cursor-pointer rounded-2xl border border-[var(--border-color)] p-4 transition-colors hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--violet)]"
+                >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -228,7 +240,13 @@ export function Portafolio() {
                         <SmallStat label="Alertas" value={String(summary.alertCount)} />
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        onClick={() => navigate(`/admin/activos/${summary.id}`)}
+                        className="inline-flex items-center gap-1 rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
+                      >
+                        <Map className="h-4 w-4" /> Plano
+                      </button>
                       {summary.id !== activeAssetId ? (
                         <button
                           onClick={() => actions.switchAsset(summary.id)}
@@ -244,7 +262,7 @@ export function Portafolio() {
                         }}
                         className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
                       >
-                        Abrir
+                        Cockpit
                       </button>
                       <button
                         onClick={() => {

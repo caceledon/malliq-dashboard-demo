@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode, type ChangeEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import { Building2, FileSignature, Sparkles, Loader2 } from 'lucide-react';
 import {
   buildContractCommercialSnapshot,
@@ -93,8 +93,32 @@ export function ContractEditor({
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Anchor for scroll preservation: the first stable element below the
+  // dynamic autofill panels. When those panels mount/grow asynchronously
+  // (autofillEvidence, autofillPendingFields, priorContract diff), this
+  // anchor's offset within the scroll container shifts; we restore the
+  // user's relative scroll position to keep the form fields where they were
+  // before the panels expanded. This fixes K8 (page reflow / jump after AI
+  // analysis lands).
+  const formAnchorRef = useRef<HTMLDivElement>(null);
+  const lastAnchorOffsetRef = useRef<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const previewDraft = sanitizeDraftForPreview(draft);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const anchor = formAnchorRef.current;
+    if (!container || !anchor) return;
+    const containerRect = container.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const anchorOffset = anchorRect.top - containerRect.top + container.scrollTop;
+    const previous = lastAnchorOffsetRef.current;
+    if (previous !== null && previous !== anchorOffset) {
+      container.scrollTop += anchorOffset - previous;
+    }
+    lastAnchorOffsetRef.current = anchorOffset;
+  });
 
   const selectedArea = draft.localIds.reduce((sum, unitId) => {
     const unit = units.find((item) => item.id === unitId);
@@ -112,7 +136,11 @@ export function ContractEditor({
   };
 
   return (
-    <div className="glass-card relative min-w-0 self-start overflow-x-hidden overflow-y-auto p-6 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[clamp(560px,38vw,720px)] xl:min-w-[560px]">
+    <div
+      ref={containerRef}
+      style={{ overflowAnchor: 'auto', scrollbarGutter: 'stable' }}
+      className="glass-card relative min-w-0 self-start overflow-x-hidden overflow-y-auto p-6 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[clamp(560px,38vw,720px)] xl:min-w-[560px]"
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Editor de contrato</h2>
@@ -224,6 +252,7 @@ export function ContractEditor({
             ) : null}
           </div>
         ) : null}
+        <div ref={formAnchorRef} aria-hidden="true" data-form-anchor="contract-editor" />
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Razón social">
             <input
