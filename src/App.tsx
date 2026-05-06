@@ -10,8 +10,8 @@ import { CurrencyProvider } from '@/lib/currency';
 import { AppStateProvider, useAppState } from '@/store/appState';
 import { NotFound } from '@/pages/NotFound';
 import { PortalSelector } from '@/pages/PortalSelector';
-import { Landing } from '@/pages/marketing/Landing';
 
+const Landing = lazy(() => import('@/pages/marketing/Landing').then((module) => ({ default: module.Landing })));
 const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard').then((module) => ({ default: module.AdminDashboard })));
 const Portafolio = lazy(() => import('@/pages/admin/Portafolio').then((module) => ({ default: module.Portafolio })));
 const AssetDetail = lazy(() => import('@/pages/admin/AssetDetail').then((module) => ({ default: module.AssetDetail })));
@@ -105,7 +105,7 @@ function App() {
     <HashRouter>
       <Routes>
         {/* Public marketing site — no auth, no providers */}
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={withMarketingSuspense(<Landing />)} />
         <Route path="/producto" element={withMarketingSuspense(<Producto />)} />
         <Route path="/operadores" element={withMarketingSuspense(<Operadores />)} />
         <Route path="/locatarios-info" element={withMarketingSuspense(<LocatariosInfo />)} />

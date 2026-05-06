@@ -105,13 +105,17 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       {mobileOpen ? (
         <div className="overlay-backdrop fixed inset-0 z-40 md:hidden" onClick={() => setMobileOpen(false)} />
       ) : null}
+      {/* Surface opacity floor capped at 88% (was 75%) so nav text in --ink-2
+          holds WCAG AA against the sidebar surface in both light + dark
+          themes. The blur+saturate still gives the glassy feel; we just
+          don't let the underlay leak through. */}
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex h-screen w-[260px] flex-col border-r transition-transform duration-300',
           'md:sticky md:top-0 md:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
-        style={{ background: 'color-mix(in oklab, var(--sidebar) 75%, transparent)', borderColor: 'color-mix(in oklab, var(--line) 50%, transparent)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+        style={{ background: 'color-mix(in oklab, var(--sidebar) 88%, transparent)', borderColor: 'color-mix(in oklab, var(--line) 50%, transparent)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         {/* Brand */}
         <div className="mq-brand" style={{ padding: '24px 20px 20px', alignItems: 'center', gap: 10 }}>

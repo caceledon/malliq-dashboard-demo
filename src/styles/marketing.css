@@ -220,10 +220,13 @@
   border-color: var(--fg);
 }
 .mk-btn.primary:hover {
-  background: var(--mint-deep);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--mint-deep);
+  border-color: var(--accent);
 }
+/* Legacy `.mint` variant kept for the subset of CTAs that still want the
+   green tone (health-positive contexts). New primary CTAs should use
+   `.primary`, which lands on the accent (Claude coral) on hover. */
 .mk-btn.mint {
   background: var(--mint);
   color: #07120f;
@@ -234,13 +237,22 @@
   color: #fff;
   border-color: var(--mint-deep);
 }
+.mk-btn.accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.mk-btn.accent:hover {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
 .mk-btn.ghost {
   border-color: transparent;
   padding: 0 8px;
 }
 .mk-btn.ghost:hover {
   background: transparent;
-  color: var(--mint);
+  color: var(--accent);
 }
 .mk-btn.sm {
   height: 36px;

@@ -1,4 +1,5 @@
 import { MkFooter, MkHeader, MkPage } from '@/components/marketing/Shell';
+import { useReducedMotion } from '@/lib/useReducedMotion';
 
 const COCKPIT_KPIS = [
   { l: 'NOI mensual', n: '$48.6M', d: '+12.4%', c: 'var(--mint-deep)' },
@@ -76,6 +77,7 @@ const INTEGRATIONS = [
 ];
 
 export function Producto() {
+  const reducedMotion = useReducedMotion();
   return (
     <MkPage>
       <MkHeader active="product" />
@@ -258,8 +260,12 @@ export function Producto() {
                 );
               })}
               <circle cx="386" cy="200" r="5" fill="var(--coral)">
-                <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" />
+                {!reducedMotion ? (
+                  <>
+                    <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" />
+                  </>
+                ) : null}
               </circle>
             </svg>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, marginTop: 20 }}>

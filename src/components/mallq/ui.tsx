@@ -380,7 +380,7 @@ export function BarStack({ value, color = 'var(--mint-deep)' }: { value: number;
           width: `${(pct * 100).toFixed(1)}%`,
           background: color,
           borderRadius: 999,
-          transition: 'width .6s cubic-bezier(.16,1,.3,1)',
+          transition: 'width .6s var(--ease-emphasized)',
         }}
       />
     </div>

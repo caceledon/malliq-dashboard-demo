@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MkFooter, MkHeader, MkPage } from '@/components/marketing/Shell';
+import { useReducedMotion } from '@/lib/useReducedMotion';
 
 const TENANTS = [
   { x: 40, y: 60, w: 46, h: 54, c: 'var(--mint-deep)', o: 0.85, l: 'A1' },
@@ -32,6 +33,7 @@ const PRINCIPLES = [
 ];
 
 export function Landing() {
+  const reducedMotion = useReducedMotion();
   return (
     <MkPage>
       <MkHeader active="" />
@@ -151,8 +153,12 @@ export function Landing() {
                   ANCLA
                 </text>
                 <circle cx="245" cy="87" r="4" fill="#C8523B">
-                  <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite" />
+                  {!reducedMotion ? (
+                    <>
+                      <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite" />
+                    </>
+                  ) : null}
                 </circle>
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
