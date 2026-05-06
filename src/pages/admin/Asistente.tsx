@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Bot, FileText, Send, Sparkles, Upload } from 'lucide-react';
-import { autofillContractFromPdf, resolveApiBase } from '@/lib/api';
+import { autofillContractFromPdf, chatWithAsistente, resolveApiBase, type AsistenteChatMessage } from '@/lib/api';
 import { InsightCard, TopBar } from '@/components/mallq/ui';
 import { useAppState } from '@/store/appState';
 import { useToast } from '@/components/Toast';
@@ -20,13 +20,18 @@ const QUICK_PROMPTS = [
 ];
 
 export function Asistente() {
-  const { state, insights, portfolioStats, assetSummaries } = useAppState();
+  const { state, insights, portfolioStats, assetSummaries, authUser, isFeatureEnabled } = useAppState();
+  const aiChatEnabled = isFeatureEnabled('asistenteIA');
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([
+  const greetingName =
+    authUser?.displayName?.trim().split(/\s+/)[0] ||
+    authUser?.email?.split('@')[0] ||
+    'tú';
+  const [messages, setMessages] = useState<Message[]>(() => [
     {
       id: 'm-1',
       role: 'bot',
-      text: 'Hola Christian. Soy tu asistente. Conozco tu portafolio en tiempo real — pídeme un resumen, una alerta o una proyección y te respondo en lenguaje natural.',
+      text: `Hola ${greetingName}. Modo local: respondo con datos derivados de tu portafolio (alertas, salud, ventas, renovaciones). Para chat conversacional con IA, configura MOONSHOT_API_KEY.`,
     },
   ]);
   const [draft, setDraft] = useState('');
@@ -65,13 +70,39 @@ export function Asistente() {
     return `Tengo ${insights.tenantSummaries.length} locatario${insights.tenantSummaries.length === 1 ? '' : 's'} y ${state.contracts.length} contrato${state.contracts.length === 1 ? '' : 's'} indexados en ${assetSummaries.length} activo${assetSummaries.length === 1 ? '' : 's'}. Hazme una pregunta concreta.`;
   };
 
-  const send = (text?: string) => {
+  const send = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content) return;
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', text: content };
-    const botMsg: Message = { id: `b-${Date.now() + 1}`, role: 'bot', text: localAnswer(content) };
-    setMessages((m) => [...m, userMsg, botMsg]);
+    setMessages((m) => [...m, userMsg]);
     setDraft('');
+
+    if (!aiChatEnabled) {
+      // Local heuristic — same fast deterministic answer as before.
+      const botMsg: Message = { id: `b-${Date.now() + 1}`, role: 'bot', text: localAnswer(content) };
+      setMessages((m) => [...m, botMsg]);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const history: AsistenteChatMessage[] = [
+        ...messages.map<AsistenteChatMessage>((message) => ({
+          role: message.role === 'bot' ? 'assistant' : 'user',
+          content: message.text,
+        })),
+        { role: 'user', content },
+      ];
+      const result = await chatWithAsistente(apiBase, history);
+      const reply = result.message.content || 'Sin respuesta del asistente.';
+      const tools = result.toolCalls.length > 0 ? ` (tools: ${result.toolCalls.map((t) => t.name).join(', ')})` : '';
+      setMessages((m) => [...m, { id: `b-${Date.now() + 1}`, role: 'bot', text: `${reply}${tools}` }]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falló la consulta al asistente.';
+      setMessages((m) => [...m, { id: `b-${Date.now() + 1}`, role: 'bot', text: `Error: ${message}` }]);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onAutofill = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -108,18 +139,18 @@ export function Asistente() {
   return (
     <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
       <TopBar
-        eyebrow="Asistente IA"
+        eyebrow="Asistente"
         title={
           <>
             Tu cockpit, en{' '}
             <i style={{ fontStyle: 'italic', color: 'var(--violet-deep)' }}>lenguaje natural</i>.
           </>
         }
-        sub="El asistente conoce tu portafolio en tiempo real. Pregunta por un locatario, una métrica o sube un contrato para autofill."
+        sub="Respuestas determinísticas sobre tu portafolio (alertas, salud, ventas, renovaciones). El autofill de contratos sí usa IA cuando hay API key configurada."
         right={
           <span className="mq-pill violet">
             <span className="dot" />
-            kimi-k2.5 · context aware
+            modo local · autofill kimi-k2.5
           </span>
         }
       />
@@ -159,7 +190,7 @@ export function Asistente() {
           >
             <input
               type="text"
-              placeholder="Pregunta lo que necesites — datos en tiempo real."
+              placeholder="Pregunta lo que necesites sobre tu portafolio."
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {

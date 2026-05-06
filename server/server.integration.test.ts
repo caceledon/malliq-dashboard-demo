@@ -267,6 +267,18 @@ describe('MallIQ API integration', () => {
     expect(payload.missingFields).toEqual(expect.arrayContaining(['storeName', 'startDate', 'variableRentPct']));
   });
 
+  // Track 1 v1 regression: mock_local must NOT persist a source PDF (no AI ran,
+  // no provenance to defend) and the new payload fields are absent.
+  it('Track 1: mock_local autofill does not surface a sourceDocument', async () => {
+    const form = new FormData();
+    form.set('file', new File(['%PDF-1.4 fake'], 'Contrato.pdf', { type: 'application/pdf' }));
+    const response = await fetch(`${baseUrl}/api/contracts/autofill`, { method: 'POST', body: form });
+    const payload = await readJson(response);
+    expect(payload.sourceDocumentId).toBeUndefined();
+    expect(payload.sourceDocument).toBeUndefined();
+    expect(payload.evidencePages).toBeUndefined();
+  });
+
   // F2 regression: /api/notifications/daily must include activities since 24h
   // ago — the prior bug filtered on `createdAt` (camelCase) but the SQL row
   // returns `created_at`, so the activities array was always empty.

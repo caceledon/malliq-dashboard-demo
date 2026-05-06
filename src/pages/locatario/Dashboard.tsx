@@ -26,6 +26,8 @@ import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { LocatarioPendingBinding } from '@/pages/locatario/PendingBinding';
 import { ComponentBar, HealthRing, InsightCard, TopBar } from '@/components/mallq/ui';
+import { TenantInstallPrompt } from '@/components/app/TenantInstallPrompt';
+import { TenantBroadcastAcks } from '@/components/app/TenantBroadcastAcks';
 
 export function LocatarioDashboard() {
   const { currentTenantId, insights, state, authUser } = useAppState();
@@ -83,6 +85,9 @@ export function LocatarioDashboard() {
         }
         sub={`${summary.localCodes.join(', ')} · ${summary.areaM2} m² · contrato ${formatDate(contract.startDate)} → ${formatDate(contract.endDate)}`}
       />
+
+      <TenantBroadcastAcks contractId={contract.id} />
+      <TenantInstallPrompt />
 
       {/* Health + insight strip — always visible at top */}
       <div className="mq-card" style={{ padding: 22, marginBottom: 18, display: 'flex', gap: 22, alignItems: 'center' }}>

@@ -18,7 +18,7 @@ const CATEGORIES: Category[] = [
   { key: 'ingesta', label: 'Ingesta', match: (id) => id.startsWith('sales-missing-') || id === 'budget-missing-current' || id === 'forecast-missing-current' },
   { key: 'vencimientos', label: 'Vencimientos', match: (id) => id.startsWith('expiring-') || id.startsWith('expired-') || id.startsWith('garantia-') || id.startsWith('signature-') || id.startsWith('stepup-') },
   { key: 'caida', label: 'Caída de ventas', match: (id) => id.startsWith('anomaly:') },
-  { key: 'riesgo', label: 'Riesgo de pago', match: (id) => id.startsWith('overlap-') || id.startsWith('unit-vacant-') },
+  { key: 'riesgo', label: 'Riesgo de pago', match: (id) => id.startsWith('overlap-') || id.startsWith('unit-vacant-') || id.startsWith('occupation-cost-') },
   { key: 'configuracion', label: 'Configuración', match: (id) => id === 'setup-asset' },
 ];
 
@@ -136,7 +136,14 @@ export function NotificationDrawer() {
     persistSeen(seen);
   }, [serialized, seen]);
 
-  const unreadCount = useMemo(() => allAlerts.filter((a) => !seen.has(a.id)).length, [allAlerts, seen]);
+  // Sync alerts represent current state (online / offline / conflict / syncing),
+  // not discrete events — they shouldn't contribute to the unread badge or bounce
+  // it back up when status flickers (e.g. offline → online → conflict). They still
+  // render in the drawer for visibility.
+  const unreadCount = useMemo(
+    () => allAlerts.filter((a) => !seen.has(a.id) && !SYNC_ALERT_IDS.has(a.id)).length,
+    [allAlerts, seen],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, { label: string; items: AlertItem[] }>();
@@ -364,7 +371,9 @@ export function NotificationDrawer() {
                           {group.items.map((alert, idx) => {
                             const target = targetForAlert(alert.id);
                             const clickable = canSeeAdminPages;
-                            const isUnread = !seen.has(alert.id);
+                            // Sync alerts are state, not events — never render as
+                            // "unread" so the dot doesn't bounce with status flips.
+                            const isUnread = !seen.has(alert.id) && !SYNC_ALERT_IDS.has(alert.id);
                             const Tag: 'button' | 'div' = clickable ? 'button' : 'div';
                             return (
                               <Tag

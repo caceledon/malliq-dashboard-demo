@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
-import { Building2, FileSignature, Sparkles, Loader2 } from 'lucide-react';
+import { Building2, FileSignature, Sparkles, Loader2, FileSearch } from 'lucide-react';
 import {
   buildContractCommercialSnapshot,
   buildContractDiff,
@@ -17,6 +17,9 @@ import { TenantHealthRating } from '@/components/app/TenantHealthRating';
 import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ContractEvidenceModal } from '@/components/app/ContractEvidenceModal';
+import { ScenarioPanel } from '@/components/app/ScenarioPanel';
+import { useAppState } from '@/store/appState';
 
 const signatureLabels: Record<SignatureStatus, string> = {
   pendiente: 'Pendiente',
@@ -104,6 +107,19 @@ export function ContractEditor({
   const formAnchorRef = useRef<HTMLDivElement>(null);
   const lastAnchorOffsetRef = useRef<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [evidenceModal, setEvidenceModal] = useState<{
+    fieldLabel: string;
+    snippet: string;
+    page?: number;
+  } | null>(null);
+  const { isFeatureEnabled } = useAppState();
+  // Track 1 v1 — open the source PDF only when the operator opted into the
+  // flag, the contract carries a persisted source document, and the field
+  // has a citation we can deep-link to.
+  const sourceLinksOn =
+    isFeatureEnabled('sourceLinkedAbstracts') && Boolean(draft.sourceDocumentId);
+  const fieldEvidence = draft.evidence?.fields ?? {};
+  const stepFieldEvidence = draft.evidence?.rentSteps ?? [];
   const previewDraft = sanitizeDraftForPreview(draft);
 
   useLayoutEffect(() => {
@@ -211,13 +227,23 @@ export function ContractEditor({
             <p className="mt-1 text-xs opacity-80">Fragmentos literales del PDF usados para respaldar los campos extraídos.</p>
             {Object.keys(autofillEvidence.fields).length > 0 ? (
               <div className="mt-3 space-y-2">
-                {Object.entries(autofillEvidence.fields).map(([field, snippet]) => (
-                  <EvidenceRow
-                    key={field}
-                    label={autofillFieldLabels[field] ?? field}
-                    snippet={snippet}
-                  />
-                ))}
+                {Object.entries(autofillEvidence.fields).map(([field, snippet]) => {
+                  const page = fieldEvidence[field]?.page;
+                  const label = autofillFieldLabels[field] ?? field;
+                  return (
+                    <EvidenceRow
+                      key={field}
+                      label={label}
+                      snippet={snippet}
+                      page={page}
+                      onOpenSource={
+                        sourceLinksOn
+                          ? () => setEvidenceModal({ fieldLabel: label, snippet, page })
+                          : undefined
+                      }
+                    />
+                  );
+                })}
               </div>
             ) : null}
             {autofillEvidence.rentSteps.some((step) => Object.keys(step).length > 0) ? (
@@ -230,21 +256,31 @@ export function ContractEditor({
                   >
                     <p className="text-xs font-semibold">Escalonado {index + 1}</p>
                     <div className="mt-2 space-y-2">
-                      {Object.entries(stepEvidence).map(([field, snippet]) => (
-                        <EvidenceRow
-                          key={`${index + 1}-${field}`}
-                          label={
-                            field === 'rentaFijaUfM2'
-                              ? 'Renta fija UF/m²'
-                              : field === 'startDate'
-                                ? 'Inicio'
-                                : field === 'endDate'
-                                  ? 'Término'
-                                  : field
-                          }
-                          snippet={snippet}
-                        />
-                      ))}
+                      {Object.entries(stepEvidence).map(([field, snippet]) => {
+                        const label =
+                          field === 'rentaFijaUfM2'
+                            ? 'Renta fija UF/m²'
+                            : field === 'startDate'
+                              ? 'Inicio'
+                              : field === 'endDate'
+                                ? 'Término'
+                                : field;
+                        const stepLabel = `Escalonado ${index + 1} · ${label}`;
+                        const page = stepFieldEvidence[index]?.[field]?.page;
+                        return (
+                          <EvidenceRow
+                            key={`${index + 1}-${field}`}
+                            label={label}
+                            snippet={snippet}
+                            page={page}
+                            onOpenSource={
+                              sourceLinksOn
+                                ? () => setEvidenceModal({ fieldLabel: stepLabel, snippet, page })
+                                : undefined
+                            }
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -611,6 +647,10 @@ export function ContractEditor({
           />
         </div>
 
+        {isFeatureEnabled('scenarioModeling') ? (
+          <ScenarioPanel contract={previewDraft} monthlySales={currentMonthSales} />
+        ) : null}
+
         <Field label="Reajuste / condiciones">
           <input
             value={draft.escalation}
@@ -732,6 +772,14 @@ export function ContractEditor({
         }}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+      <ContractEvidenceModal
+        open={Boolean(evidenceModal)}
+        onClose={() => setEvidenceModal(null)}
+        fieldLabel={evidenceModal?.fieldLabel ?? ''}
+        snippet={evidenceModal?.snippet ?? ''}
+        page={evidenceModal?.page}
+        sourceDocumentId={draft.sourceDocumentId ?? null}
+      />
     </div>
   );
 }
@@ -802,10 +850,33 @@ function MoneyField({
   );
 }
 
-function EvidenceRow({ label, snippet }: { label: string; snippet: string }) {
+function EvidenceRow({
+  label,
+  snippet,
+  page,
+  onOpenSource,
+}: {
+  label: string;
+  snippet: string;
+  page?: number;
+  onOpenSource?: () => void;
+}) {
   return (
     <div className="rounded-xl border border-sky-200/80 bg-white/75 p-3 dark:border-sky-900/60 dark:bg-slate-950/40">
-      <p className="text-xs font-semibold text-sky-900 dark:text-sky-100">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold text-sky-900 dark:text-sky-100">{label}</p>
+        {onOpenSource ? (
+          <button
+            type="button"
+            onClick={onOpenSource}
+            title={page ? `Abrir el PDF en la página ${page}` : 'Abrir el PDF fuente'}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-sky-900 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-slate-950/40 dark:text-sky-100 dark:hover:bg-slate-900"
+          >
+            <FileSearch className="h-3 w-3" />
+            Ver fuente{page ? ` · p. ${page}` : ''}
+          </button>
+        ) : null}
+      </div>
       <p className="mt-1 text-xs leading-relaxed text-[var(--sidebar-fg)]">"{snippet}"</p>
     </div>
   );

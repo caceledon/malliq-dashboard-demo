@@ -18,6 +18,9 @@ import { fetchFullState, getMeta, incrementRevision, replaceFullState, logActivi
 import { detectSalesAnomalies, anomaliesToAlerts, buildRenewalAlerts } from './anomalies.js';
 import { buildRichExtractionMessages } from './autofill/richPrompt.js';
 import { applyPostDerivations } from './autofill/postDerivations.js';
+import { buildPageTaggedEvidence } from './autofill/pageTagging.js';
+import { ASISTENTE_TOOL_DEFINITIONS, executeAsistenteTool } from './asistente/tools.js';
+import { buildClauseExtractionMessages, normalizeExtractedClauses } from './clauses/extractor.js';
 import {
   buildAuthMiddleware,
   createUser,
@@ -109,6 +112,9 @@ function emptyState() {
     prospects: [],
     posConnections: [],
     importLogs: [],
+    casualLicenses: [],
+    camReconciliations: [],
+    broadcasts: [],
   };
 }
 
@@ -133,6 +139,9 @@ function normalizeState(state) {
     prospects: normalizeArray(normalized.prospects),
     posConnections: normalizeArray(normalized.posConnections),
     importLogs: normalizeArray(normalized.importLogs),
+    casualLicenses: normalizeArray(normalized.casualLicenses),
+    camReconciliations: normalizeArray(normalized.camReconciliations),
+    broadcasts: normalizeArray(normalized.broadcasts),
   };
 }
 
@@ -1354,25 +1363,39 @@ function buildPinnedDispatcher({ address, family }) {
 const MAX_PDF_PAGES = 50;
 const MAX_AUTOFILL_SNIPPET_CHARS = 32000;
 
+// Track 1 v1 — also returns per-page text so the autofill route can map
+// each evidence snippet back to a page. The legacy joined text is kept for
+// the existing AI prompt and downstream snippet logic.
+async function extractUploadedPdfWithPages(file) {
+  const buffer = await fs.readFile(file.path);
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const info = await parser.getInfo();
+    if (info?.total > MAX_PDF_PAGES) {
+      const error = new Error(`PDF excede el máximo de ${MAX_PDF_PAGES} páginas.`);
+      error.code = 'PDF_TOO_LARGE';
+      throw error;
+    }
+    const pdfData = await parser.getText();
+    const pages = Array.isArray(pdfData?.pages)
+      ? pdfData.pages.map((p) => ({ num: Number(p.num) || 0, text: String(p.text || '') }))
+      : [];
+    return {
+      text: String(pdfData?.text || '').trim(),
+      pages,
+    };
+  } finally {
+    await parser.destroy().catch(() => {});
+  }
+}
+
 async function extractUploadedText(file) {
   const extension = path.extname(file.originalname || '').toLowerCase();
   const mimeType = String(file.mimetype || '').toLowerCase();
 
   if (mimeType === 'application/pdf' || extension === '.pdf') {
-    const buffer = await fs.readFile(file.path);
-    const parser = new PDFParse({ data: buffer });
-    try {
-      const info = await parser.getInfo();
-      if (info?.total > MAX_PDF_PAGES) {
-        const error = new Error(`PDF excede el máximo de ${MAX_PDF_PAGES} páginas.`);
-        error.code = 'PDF_TOO_LARGE';
-        throw error;
-      }
-      const pdfData = await parser.getText();
-      return String(pdfData.text || '').trim();
-    } finally {
-      await parser.destroy().catch(() => {});
-    }
+    const { text } = await extractUploadedPdfWithPages(file);
+    return text;
   }
 
   if (mimeType.startsWith('image/') || IMAGE_EXTENSIONS.has(extension)) {
@@ -1851,6 +1874,82 @@ function createAppInstance() {
     }
   });
 
+  // Track 7 — VAPID public key + push subscription registry. Subscriptions
+  // persist as a single JSON file in DATA_DIR; sending stays unconfigured
+  // until VAPID keys + web-push are wired (Track 10 deliverable).
+  const pushStorePath = path.join(DATA_DIR, 'push-subscriptions.json');
+
+  async function readPushStore() {
+    try {
+      const raw = await fs.readFile(pushStorePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function writePushStore(items) {
+    await fs.writeFile(pushStorePath, JSON.stringify(items, null, 2), 'utf8');
+  }
+
+  app.get('/api/notifications/push/vapid-public', (_req, res) => {
+    res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' });
+  });
+
+  // Any authenticated role can subscribe (admin/member/locatario all valid).
+  // When auth is not required (zero-user dev mode) request.user is undefined;
+  // we still accept the subscription so local QA works without registering.
+  app.post('/api/notifications/push/subscribe', async (request, response) => {
+    try {
+      const sub = request.body || {};
+      const endpoint = typeof sub.endpoint === 'string' ? sub.endpoint.trim() : '';
+      const p256dh = typeof sub.keys?.p256dh === 'string' ? sub.keys.p256dh : '';
+      const auth = typeof sub.keys?.auth === 'string' ? sub.keys.auth : '';
+      if (!endpoint || !p256dh || !auth) {
+        response.status(400).json({ error: 'Suscripción inválida.' });
+        return;
+      }
+      const store = await readPushStore();
+      const filtered = store.filter((entry) => entry.endpoint !== endpoint);
+      const record = {
+        endpoint,
+        keys: { p256dh, auth },
+        userId: request.user?.id ?? null,
+        contractId: request.user?.tenantContractId ?? null,
+        role: request.user?.role ?? 'unknown',
+        createdAt: new Date().toISOString(),
+      };
+      filtered.push(record);
+      await writePushStore(filtered);
+      void logActivity('push_subscribe', 'notification', record.userId, request.user?.email, {
+        endpointHost: new URL(endpoint).hostname,
+      });
+      response.json({ ok: true });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'No se pudo registrar la suscripción.' });
+    }
+  });
+
+  app.post('/api/notifications/push/unsubscribe', async (request, response) => {
+    try {
+      const endpoint = typeof request.body?.endpoint === 'string' ? request.body.endpoint.trim() : '';
+      if (!endpoint) {
+        response.status(400).json({ error: 'Endpoint requerido.' });
+        return;
+      }
+      const store = await readPushStore();
+      const filtered = store.filter((entry) => entry.endpoint !== endpoint);
+      await writePushStore(filtered);
+      void logActivity('push_unsubscribe', 'notification', request.user?.id ?? null, request.user?.email, {
+        endpointHost: new URL(endpoint).hostname,
+      });
+      response.json({ ok: true });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : 'No se pudo eliminar la suscripción.' });
+    }
+  });
+
   app.get('/api/notifications/daily', async (_request, response) => {
     try {
       const state = await loadState();
@@ -2229,7 +2328,7 @@ function createAppInstance() {
         return;
       }
 
-      const textContent = await extractUploadedText(request.file);
+      const { text: textContent, pages } = await extractUploadedPdfWithPages(request.file);
       if (!textContent) {
         response.status(422).json({
           error: 'No se pudo extraer texto del PDF. Prueba con un PDF con texto seleccionable o usa el modo local sin API key.',
@@ -2263,7 +2362,53 @@ function createAppInstance() {
       const ufActual = Number(request.body?.ufActual) || undefined;
       const areaM2 = Number(request.body?.areaM2) || undefined;
       const enriched = applyPostDerivations(normalized, textContent, { ufActual, areaM2 });
-      response.json({ ...enriched, textSnippet: textContent.slice(0, MAX_AUTOFILL_SNIPPET_CHARS) });
+      // Track 1 v1: tag every evidence snippet with the page it came from, and
+      // persist the source PDF as a documents row so the UI can deep-link
+      // (#page=N) into the original PDF. Both are best-effort — if persistence
+      // fails we still return the enriched extraction.
+      const taggedEvidence = buildPageTaggedEvidence(pages, enriched.evidence, aiConfig.provider);
+
+      let sourceDocument = null;
+      try {
+        const state = await loadState();
+        const documentId = `document-${crypto.randomUUID()}`;
+        const recordName = request.file.originalname || `contrato-${documentId}.pdf`;
+        const record = {
+          id: documentId,
+          entityType: 'asset',
+          entityId: state.asset?.id || null,
+          name: recordName,
+          kind: 'contrato',
+          mimeType: request.file.mimetype || 'application/pdf',
+          size: request.file.size || 0,
+          note: 'Origen del autofill — Track 1 abstracts.',
+          uploadedAt: new Date().toISOString(),
+          storage: 'remote',
+        };
+        const targetPath = getDocumentAbsolutePath(record);
+        await fs.copyFile(request.file.path, targetPath);
+        state.documents = [record, ...(state.documents || [])];
+        await saveState(state);
+        const meta = await touchRevision();
+        sourceDocument = {
+          ...record,
+          remotePath: `/api/documents/${record.id}/download?rev=${meta.revision}`,
+        };
+        void logActivity('contract_autofill_source', 'document', documentId, null, {
+          name: recordName,
+          source: aiConfig.provider,
+        });
+      } catch (persistError) {
+        console.error('No se pudo persistir el PDF de autofill:', persistError);
+      }
+
+      response.json({
+        ...enriched,
+        textSnippet: textContent.slice(0, MAX_AUTOFILL_SNIPPET_CHARS),
+        evidencePages: taggedEvidence,
+        sourceDocumentId: sourceDocument?.id ?? null,
+        sourceDocument,
+      });
     } catch (error) {
       console.error('Error autofilling contract:', error);
       if (error?.code === 'PDF_TOO_LARGE') {
@@ -2347,6 +2492,292 @@ Los campos válidos para suggestedUpdates son: companyName, storeName, category,
     } catch (error) {
       console.error('Error in autofill ask:', error);
       response.status(500).json({ error: error instanceof Error ? error.message : 'Error consultando la IA.' });
+    }
+  });
+
+  // Track 10 — crisis broadcast. Records the broadcast in state and runs each
+  // configured channel adapter. v1 ships web push (subscriber list); SMS,
+  // WhatsApp and email return "unconfigured" until provider keys are added —
+  // by design, since those decisions are out of scope for this PR.
+  const adminOnly = requireRole(['admin']);
+
+  async function dispatchBroadcastChannel(channel, payload) {
+    const attemptedAt = new Date().toISOString();
+    if (channel === 'web_push') {
+      // Subscriptions live as a JSON file. v1 does not actually transmit — it
+      // logs the attempt and counts subscribers so the operator can see the
+      // reach. Wire web-push (or a similar lib) in a follow-up to send.
+      const subs = await readPushStore();
+      if (subs.length === 0) {
+        return { channel, status: 'skipped', detail: 'Sin suscriptores web push.', attemptedAt };
+      }
+      if (!process.env.VAPID_PRIVATE_KEY || !process.env.VAPID_PUBLIC_KEY) {
+        return {
+          channel,
+          status: 'unconfigured',
+          detail: `${subs.length} suscriptor(es) registrado(s); falta VAPID en el backend.`,
+          attemptedAt,
+        };
+      }
+      // Real transmission requires a provider. Keep this deliberate fallthrough
+      // so the broadcast surface is honest about what it could do.
+      return {
+        channel,
+        status: 'unconfigured',
+        detail: `${subs.length} suscriptor(es); pipeline web-push pendiente.`,
+        attemptedAt,
+      };
+    }
+    if (channel === 'email') {
+      return process.env.MALLIQ_SMTP_URL
+        ? { channel, status: 'unconfigured', detail: 'SMTP configurado pero adaptador no implementado en v1.', attemptedAt }
+        : { channel, status: 'unconfigured', detail: 'Falta MALLIQ_SMTP_URL.', attemptedAt };
+    }
+    if (channel === 'sms') {
+      return { channel, status: 'unconfigured', detail: 'Adaptador SMS no configurado.', attemptedAt };
+    }
+    if (channel === 'whatsapp') {
+      return { channel, status: 'unconfigured', detail: 'Adaptador WhatsApp Business no configurado.', attemptedAt };
+    }
+    return { channel, status: 'error', detail: 'Canal desconocido.', attemptedAt };
+  }
+
+  app.post('/api/broadcasts', adminOnly, async (request, response) => {
+    try {
+      const body = request.body || {};
+      const severity = ['aviso', 'incidente', 'evacuacion'].includes(body.severity) ? body.severity : null;
+      const audience = ['all', 'tenants', 'staff'].includes(body.audience) ? body.audience : 'tenants';
+      const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : '';
+      const messageBody = typeof body.body === 'string' ? body.body.trim().slice(0, 4000) : '';
+      const channels = Array.isArray(body.channels)
+        ? body.channels.filter((c) => ['web_push', 'email', 'sms', 'whatsapp'].includes(c))
+        : [];
+      const twoPersonConfirmedBy = typeof body.twoPersonConfirmedBy === 'string'
+        ? body.twoPersonConfirmedBy.trim()
+        : '';
+      if (!severity || !title || !messageBody || channels.length === 0) {
+        response.status(400).json({ error: 'Severity, title, body y al menos un canal son requeridos.' });
+        return;
+      }
+      if (severity === 'evacuacion' && !twoPersonConfirmedBy) {
+        response.status(400).json({ error: 'Evacuación requiere two-person confirm explícito en twoPersonConfirmedBy.' });
+        return;
+      }
+      const triggeredAt = new Date().toISOString();
+      const results = [];
+      for (const channel of channels) {
+        try {
+          results.push(await dispatchBroadcastChannel(channel, { severity, title, body: messageBody }));
+        } catch (channelError) {
+          results.push({
+            channel,
+            status: 'error',
+            detail: channelError instanceof Error ? channelError.message : 'unknown',
+            attemptedAt: triggeredAt,
+          });
+        }
+      }
+      const broadcast = {
+        id: `broadcast-${crypto.randomUUID()}`,
+        severity,
+        audience,
+        title,
+        body: messageBody,
+        channels,
+        results,
+        triggeredBy: request.user?.email ?? null,
+        twoPersonConfirmedBy: twoPersonConfirmedBy || undefined,
+        triggeredAt,
+        acknowledgements: [],
+      };
+      const state = await loadState();
+      state.broadcasts = [broadcast, ...(state.broadcasts || [])];
+      await saveState(state);
+      const meta = await touchRevision();
+      void logActivity('broadcast_send', 'broadcast', broadcast.id, request.user?.email, {
+        severity,
+        channels,
+        twoPerson: Boolean(twoPersonConfirmedBy),
+      });
+      response.json({ broadcast, revision: meta.revision, updatedAt: meta.updatedAt });
+    } catch (error) {
+      console.error('Error /api/broadcasts:', error);
+      response.status(500).json({ error: error instanceof Error ? error.message : 'No se pudo registrar el broadcast.' });
+    }
+  });
+
+  // Track 3 — clause extraction. Re-reads the persisted source PDF (Track 1)
+  // and runs a clause-classifier prompt; updates the contract with the
+  // resulting ContractClause[] (idempotent: replaces existing clauses).
+  app.post('/api/contracts/:id/clauses/extract', writerRoles, autofillLimiter, async (request, response) => {
+    try {
+      const aiConfig = getContractAutofillAiConfig();
+      if (!aiConfig) {
+        response.status(503).json({ error: 'IA no configurada. Establece MOONSHOT_API_KEY o OPENAI_API_KEY.' });
+        return;
+      }
+      const state = await loadState();
+      const contract = state.contracts.find((c) => c.id === request.params.id);
+      if (!contract) {
+        response.status(404).json({ error: 'Contrato no encontrado.' });
+        return;
+      }
+      if (!contract.sourceDocumentId) {
+        response.status(422).json({ error: 'El contrato no tiene un PDF fuente persistido. Reprocesa el autofill primero.' });
+        return;
+      }
+      const document = state.documents.find((d) => d.id === contract.sourceDocumentId);
+      if (!document) {
+        response.status(404).json({ error: 'Documento fuente no encontrado en el archivo.' });
+        return;
+      }
+      const absolutePath = getDocumentAbsolutePath(document);
+      const buffer = await fs.readFile(absolutePath);
+      const parser = new PDFParse({ data: buffer });
+      let pages = [];
+      let textContent = '';
+      try {
+        const info = await parser.getInfo();
+        if (info?.total > MAX_PDF_PAGES) {
+          response.status(413).json({ error: `PDF excede el máximo de ${MAX_PDF_PAGES} páginas.` });
+          return;
+        }
+        const pdfData = await parser.getText();
+        textContent = String(pdfData?.text || '').trim();
+        pages = Array.isArray(pdfData?.pages)
+          ? pdfData.pages.map((p) => ({ num: Number(p.num) || 0, text: String(p.text || '') }))
+          : [];
+      } finally {
+        await parser.destroy().catch(() => {});
+      }
+      if (!textContent) {
+        response.status(422).json({ error: 'No se pudo extraer texto del PDF fuente.' });
+        return;
+      }
+
+      const openai = new OpenAI({
+        apiKey: aiConfig.apiKey,
+        ...(aiConfig.baseURL ? { baseURL: aiConfig.baseURL } : {}),
+      });
+      const messages = buildClauseExtractionMessages(textContent.slice(0, MAX_AUTOFILL_SNIPPET_CHARS));
+      const completion = await openai.chat.completions.create(
+        buildContractAutofillCompletionRequest(aiConfig, messages),
+      );
+      const rawOutput = extractJsonObject(completion.choices?.[0]?.message?.content || '{}');
+      let parsed = {};
+      try {
+        parsed = JSON.parse(rawOutput);
+      } catch {
+        response.status(422).json({ error: 'La IA no devolvió un JSON válido.' });
+        return;
+      }
+      const clauses = normalizeExtractedClauses(parsed, pages);
+      state.contracts = state.contracts.map((c) =>
+        c.id === contract.id ? { ...c, clauses } : c,
+      );
+      await saveState(state);
+      const meta = await touchRevision();
+      void logActivity('contract_clauses_extract', 'contract', contract.id, request.user?.email, {
+        clauseCount: clauses.length,
+        source: aiConfig.provider,
+      });
+      response.json({ clauses, revision: meta.revision, updatedAt: meta.updatedAt });
+    } catch (error) {
+      console.error('Error /api/contracts/:id/clauses/extract:', error);
+      response.status(500).json({ error: error instanceof Error ? error.message : 'Error extrayendo cláusulas.' });
+    }
+  });
+
+  // Track 2 — Asistente IA chat with tool-calling. Read-only tools execute
+  // server-side over the live state so the model can answer concrete portfolio
+  // questions without leaking sensitive data into the prompt.
+  app.post('/api/asistente/chat', writerRoles, autofillLimiter, async (request, response) => {
+    try {
+      const aiConfig = getContractAutofillAiConfig();
+      const messages = Array.isArray(request.body?.messages) ? request.body.messages : [];
+      if (messages.length === 0) {
+        response.status(400).json({ error: 'Mensajes requeridos.' });
+        return;
+      }
+      if (!aiConfig) {
+        response.json({
+          message: {
+            role: 'assistant',
+            content:
+              'Modo local: configura MOONSHOT_API_KEY o OPENAI_API_KEY para activar el chat IA con tools.',
+          },
+          source: 'mock_local',
+          toolCalls: [],
+        });
+        return;
+      }
+
+      const state = await loadState();
+      const referenceDate = new Date();
+      const systemPrompt = `Eres MallIQ Asistente, un copiloto operativo en es-CL para directores de centros comerciales chilenos. Responde en español, conciso (máx 4 frases). Llama a tools cuando el usuario pregunte por datos concretos del portafolio. Reglas: nunca inventes números — si no hay datos, dilo. Cita siempre el nombre de la tienda y, cuando aplique, el mes en formato YYYY-MM.`;
+      const conversation = [
+        { role: 'system', content: systemPrompt },
+        ...messages.filter((m) => m && typeof m.role === 'string' && typeof m.content === 'string'),
+      ];
+
+      const openai = new OpenAI({
+        apiKey: aiConfig.apiKey,
+        ...(aiConfig.baseURL ? { baseURL: aiConfig.baseURL } : {}),
+      });
+
+      const toolCalls = [];
+      let finalMessage = null;
+      // Allow up to 3 tool-calling rounds; in practice 1-2 suffices.
+      for (let round = 0; round < 3; round += 1) {
+        const completion = await openai.chat.completions.create({
+          ...buildContractAutofillCompletionRequest(aiConfig, conversation),
+          tools: ASISTENTE_TOOL_DEFINITIONS,
+        });
+        const reply = completion.choices?.[0]?.message;
+        if (!reply) break;
+        const calls = Array.isArray(reply.tool_calls) ? reply.tool_calls : [];
+        if (calls.length === 0) {
+          finalMessage = reply;
+          break;
+        }
+        conversation.push(reply);
+        for (const call of calls) {
+          let parsed = {};
+          try {
+            parsed = call.function?.arguments ? JSON.parse(call.function.arguments) : {};
+          } catch {
+            parsed = {};
+          }
+          let result;
+          try {
+            result = executeAsistenteTool(call.function?.name, parsed, state, referenceDate);
+          } catch (err) {
+            result = { error: err instanceof Error ? err.message : 'tool_error' };
+          }
+          toolCalls.push({ name: call.function?.name, arguments: parsed, result });
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify(result).slice(0, 12_000),
+          });
+        }
+      }
+
+      void logActivity('asistente_chat', 'asistente', request.user?.id ?? null, request.user?.email, {
+        toolCalls: toolCalls.map((t) => t.name),
+        rounds: toolCalls.length === 0 ? 1 : Math.min(3, toolCalls.length + 1),
+      });
+
+      response.json({
+        message: finalMessage
+          ? { role: 'assistant', content: finalMessage.content || '' }
+          : { role: 'assistant', content: 'Sin respuesta del modelo.' },
+        toolCalls,
+        source: aiConfig.provider,
+      });
+    } catch (error) {
+      console.error('Error en /api/asistente/chat:', error);
+      response.status(500).json({ error: error instanceof Error ? error.message : 'Error en el asistente.' });
     }
   });
 

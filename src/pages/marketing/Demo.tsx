@@ -9,9 +9,55 @@ const STEPS = [
   { n: '04', t: 'Decides', b: 'Si encaja, en 14 días estás operando. Si no, te quedas con el deck.' },
 ];
 
+// No backend leads endpoint exists yet — submit composes a mailto: to
+// hola@malliq.cl with the captured fields so the CTA is real, not a stub.
+type DemoFormFields = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: string;
+  company: string;
+  centers: string;
+  tenants: string;
+  needs: string;
+};
+
+const INITIAL_DEMO_FIELDS: DemoFormFields = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  role: '',
+  company: '',
+  centers: '3-5',
+  tenants: '100-300',
+  needs: '',
+};
+
+function buildDemoMailto(fields: DemoFormFields): string {
+  const subject = `Solicitud de demo · ${fields.company || fields.firstName || 'MallIQ'}`;
+  const lines = [
+    `Nombre: ${fields.firstName} ${fields.lastName}`.trim(),
+    fields.email ? `Email: ${fields.email}` : '',
+    fields.phone ? `Teléfono: ${fields.phone}` : '',
+    fields.role ? `Cargo: ${fields.role}` : '',
+    fields.company ? `Empresa: ${fields.company}` : '',
+    `Centros que administra: ${fields.centers}`,
+    `Locatarios totales: ${fields.tenants}`,
+    '',
+    fields.needs ? 'Qué quiere resolver:' : '',
+    fields.needs,
+  ].filter(Boolean);
+  return `mailto:hola@malliq.cl?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
+}
+
 export function Demo() {
   const navigate = useNavigate();
   const [submitted, setSubmitted] = useState(false);
+  const [fields, setFields] = useState<DemoFormFields>(INITIAL_DEMO_FIELDS);
+  const update = <K extends keyof DemoFormFields>(key: K, value: DemoFormFields[K]) =>
+    setFields((current) => ({ ...current, [key]: value }));
 
   return (
     <MkPage>
@@ -75,6 +121,7 @@ export function Demo() {
               style={{ padding: 40, display: 'flex', flexDirection: 'column', gap: 20 }}
               onSubmit={(e) => {
                 e.preventDefault();
+                window.open(buildDemoMailto(fields), '_blank', 'noopener,noreferrer');
                 setSubmitted(true);
               }}
             >
@@ -82,25 +129,46 @@ export function Demo() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="mk-field">
                   <label>Nombre</label>
-                  <input placeholder="Nombre" />
+                  <input
+                    placeholder="Nombre"
+                    value={fields.firstName}
+                    onChange={(e) => update('firstName', e.target.value)}
+                  />
                 </div>
                 <div className="mk-field">
                   <label>Apellido</label>
-                  <input placeholder="Apellido" />
+                  <input
+                    placeholder="Apellido"
+                    value={fields.lastName}
+                    onChange={(e) => update('lastName', e.target.value)}
+                  />
                 </div>
               </div>
               <div className="mk-field">
                 <label>Email corporativo</label>
-                <input type="email" placeholder="nombre@empresa.cl" />
+                <input
+                  type="email"
+                  placeholder="nombre@empresa.cl"
+                  value={fields.email}
+                  onChange={(e) => update('email', e.target.value)}
+                />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="mk-field">
                   <label>Teléfono</label>
-                  <input placeholder="+56 9 ..." />
+                  <input
+                    placeholder="+56 9 ..."
+                    value={fields.phone}
+                    onChange={(e) => update('phone', e.target.value)}
+                  />
                 </div>
                 <div className="mk-field">
                   <label>Cargo</label>
-                  <input placeholder="Director(a) de Activos" />
+                  <input
+                    placeholder="Director(a) de Activos"
+                    value={fields.role}
+                    onChange={(e) => update('role', e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -108,12 +176,16 @@ export function Demo() {
               <div className="mk-eyebrow">Tu portafolio</div>
               <div className="mk-field">
                 <label>Empresa</label>
-                <input placeholder="Tu empresa" />
+                <input
+                  placeholder="Tu empresa"
+                  value={fields.company}
+                  onChange={(e) => update('company', e.target.value)}
+                />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="mk-field">
                   <label>Centros que administras</label>
-                  <select defaultValue="3-5">
+                  <select value={fields.centers} onChange={(e) => update('centers', e.target.value)}>
                     <option>1</option>
                     <option>2</option>
                     <option>3-5</option>
@@ -123,7 +195,7 @@ export function Demo() {
                 </div>
                 <div className="mk-field">
                   <label>Locatarios totales aprox.</label>
-                  <select defaultValue="100-300">
+                  <select value={fields.tenants} onChange={(e) => update('tenants', e.target.value)}>
                     <option>&lt; 100</option>
                     <option>100-300</option>
                     <option>300-1000</option>
@@ -133,7 +205,11 @@ export function Demo() {
               </div>
               <div className="mk-field">
                 <label>Cuéntanos qué te gustaría resolver</label>
-                <textarea placeholder="Por ejemplo: cerramos contabilidad muy lento, queremos visibilidad en tiempo real de salud de locatarios, no tenemos forma de comparar entre nuestros 4 activos..." />
+                <textarea
+                  placeholder="Por ejemplo: cerramos contabilidad muy lento, queremos visibilidad en tiempo real de salud de locatarios, no tenemos forma de comparar entre nuestros 4 activos..."
+                  value={fields.needs}
+                  onChange={(e) => update('needs', e.target.value)}
+                />
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12.5, color: 'var(--fg-3)', paddingTop: 8 }}>

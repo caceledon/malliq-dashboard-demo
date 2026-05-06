@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { ContractEditor } from '@/components/app/ContractEditor';
 import { AutofillChat } from '@/components/AutofillChat';
+import { CrossShoppingPanel } from '@/components/app/CrossShoppingPanel';
 import { SemaforoStrip, TopBar } from '@/components/mallq/ui';
 import { healthBucket, type HealthBucket } from '@/components/mallq/helpers';
 
@@ -254,6 +255,20 @@ export function Locatarios() {
             .map((step) => toEvidenceRecord(Object.entries(step.evidence ?? {})))
         : [];
 
+      // Track 1 v1: persist evidence + source PDF so the editor can deep-link
+      // back to the page each AI extraction came from.
+      if (extracted.sourceDocument) {
+        actions.registerRemoteDocument(extracted.sourceDocument);
+      }
+      const evidenceForContract: Contract['evidence'] | undefined = extracted.evidencePages
+        ? {
+            fields: extracted.evidencePages.fields,
+            rentSteps: extracted.evidencePages.rentSteps,
+            extractedAt: extracted.evidencePages.extractedAt,
+            source: extracted.evidencePages.source,
+          }
+        : undefined;
+
       setDraft((current) => ({
         ...current,
         companyName: extracted.companyName ?? '',
@@ -271,6 +286,8 @@ export function Locatarios() {
         garantiaVencimiento: extracted.garantiaVencimiento ?? '',
         feeIngreso: toDraftNumber(extracted.feeIngreso),
         rentSteps: extractedSteps,
+        sourceDocumentId: extracted.sourceDocumentId ?? current.sourceDocumentId,
+        evidence: evidenceForContract ?? current.evidence,
       }));
       setAutofillPendingFields(
         (extracted.missingFields ?? []).map((field) => autofillFieldLabels[field] ?? field),
@@ -374,6 +391,8 @@ export function Locatarios() {
               icon={<Plus className="h-4 w-4 text-amber-600" />}
             />
           </div>
+
+          <CrossShoppingPanel />
 
           <div className="glass-card overflow-x-auto">
             <table className="w-full min-w-[1400px]">

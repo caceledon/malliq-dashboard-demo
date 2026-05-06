@@ -14,6 +14,8 @@ import { DocumentManager } from '@/components/app/DocumentManager';
 import { ContractPreviewModal } from '@/components/app/ContractPreviewModal';
 import { RentStepGantt } from '@/components/app/RentStepGantt';
 import { TenantHealthRating } from '@/components/app/TenantHealthRating';
+import { RenewalBadge } from '@/components/app/RenewalBadge';
+import { buildRenewalScore } from '@/lib/renewal';
 import { buildRenewalContractTemplate, getContractDisplayValues, getContractLifecycle, monthKey } from '@/lib/domain';
 import { formatDate, formatUF, formatPercent } from '@/lib/format';
 import { useCurrency } from '@/lib/currency';
@@ -26,8 +28,8 @@ import { healthBucket, healthColor } from '@/components/mallq/helpers';
 export function LocatarioDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { state, insights, actions } = useAppState();
-  const { formatCurrency } = useCurrency();
+  const { state, insights, actions, isFeatureEnabled } = useAppState();
+  const { formatCurrency, getUfFor } = useCurrency();
   const { toast } = useToast();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const contract = state.contracts.find((item) => item.id === id);
@@ -102,6 +104,17 @@ export function LocatarioDetail() {
           </>
         }
       />
+
+      {isFeatureEnabled('renewalScoring') ? (
+        <div className="mq-card" style={{ padding: 18, marginBottom: 14 }}>
+          <div className="mq-h-eyebrow">Probabilidad de renovación</div>
+          <div className="mt-2">
+            <RenewalBadge
+              score={buildRenewalScore(contract, { sales: state.sales }, { getUfFor })}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* Health hero strip */}
       <div className="mq-card" style={{ padding: 22, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 24 }}>

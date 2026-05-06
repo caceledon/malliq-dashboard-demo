@@ -35,6 +35,7 @@ const mockState = vi.hoisted(() => ({
     ] as unknown[],
     insights: { tenantSummaries: [] as unknown[] },
     actions: { switchAsset: vi.fn() },
+    isFeatureEnabled: () => false,
   },
 }));
 
@@ -74,6 +75,7 @@ describe('K7 — AssetDetail per-asset route', () => {
       assetSummaries: [ASSET_SUMMARY],
       insights: { tenantSummaries: [] },
       actions: { switchAsset: switchAssetSpy },
+      isFeatureEnabled: () => false,
     };
     renderAt('a-1');
     expect(screen.getByText('Mall Alameda', { exact: false })).toBeInTheDocument();
@@ -87,6 +89,7 @@ describe('K7 — AssetDetail per-asset route', () => {
       assetSummaries: [ASSET_SUMMARY],
       insights: { tenantSummaries: [] },
       actions: { switchAsset: switchAssetSpy },
+      isFeatureEnabled: () => false,
     };
     renderAt('zz-not-loaded');
     expect(screen.getByText(/Activo no encontrado/i)).toBeInTheDocument();
@@ -101,6 +104,7 @@ describe('K7 — AssetDetail per-asset route', () => {
       assetSummaries: [ASSET_SUMMARY, { ...ASSET_SUMMARY, id: 'a-other', name: 'Other' }],
       insights: { tenantSummaries: [] },
       actions: { switchAsset: switchAssetSpy },
+      isFeatureEnabled: () => false,
     };
     renderAt('a-1');
     expect(switchAssetSpy).toHaveBeenCalledWith('a-1');

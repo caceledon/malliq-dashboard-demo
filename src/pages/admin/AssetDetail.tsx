@@ -6,6 +6,7 @@ import { useCurrency } from '@/lib/currency';
 import { Bento, KpiTile, TopBar } from '@/components/mallq/ui';
 import { formatM } from '@/components/mallq/helpers';
 import { InteractiveMap } from '@/components/InteractiveMap';
+import { StackingPlan } from '@/components/app/StackingPlan';
 
 export function AssetDetail() {
   const navigate = useNavigate();
@@ -115,6 +116,7 @@ export function AssetDetail() {
       ) : (
         <div className="space-y-6">
           <InteractiveMap />
+          <StackingPlan />
           <TenantList />
         </div>
       )}

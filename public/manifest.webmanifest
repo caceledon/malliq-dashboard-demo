@@ -1,0 +1,21 @@
+{
+  "name": "MallIQ — Locatario",
+  "short_name": "MallIQ",
+  "description": "Portal locatario de MallIQ. Ventas diarias, contrato vigente y notificaciones del activo.",
+  "start_url": "/#/locatario/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "es-CL",
+  "background_color": "#f7f1e8",
+  "theme_color": "#f7f1e8",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

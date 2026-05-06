@@ -74,6 +74,15 @@ export interface ContractAutofillResult {
   mocked?: boolean;
   source?: 'openai' | 'moonshot' | 'mock_local';
   textSnippet?: string;
+  // Track 1 v1 — page-tagged provenance + persisted source PDF metadata.
+  evidencePages?: {
+    fields: Record<string, { text: string; page?: number }>;
+    rentSteps: Array<Record<string, { text: string; page?: number }>>;
+    extractedAt: string;
+    source: 'openai' | 'moonshot' | 'mock_local';
+  };
+  sourceDocumentId?: string | null;
+  sourceDocument?: DocumentRecord | null;
 }
 
 export interface AutofillAskResponse {
@@ -223,6 +232,102 @@ export async function autofillContractFromPdf(apiBase: string, file: File): Prom
     body,
   });
 
+  return assertJson(response);
+}
+
+export interface AsistenteChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AsistenteChatToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+  result: unknown;
+}
+
+export interface AsistenteChatResult {
+  message: AsistenteChatMessage;
+  toolCalls: AsistenteChatToolCall[];
+  source: 'openai' | 'moonshot' | 'mock_local';
+}
+
+export interface BroadcastSendPayload {
+  severity: 'aviso' | 'incidente' | 'evacuacion';
+  audience: 'all' | 'tenants' | 'staff';
+  title: string;
+  body: string;
+  channels: Array<'web_push' | 'email' | 'sms' | 'whatsapp'>;
+  twoPersonConfirmedBy?: string;
+}
+
+export interface BroadcastSendResult {
+  broadcast: {
+    id: string;
+    severity: BroadcastSendPayload['severity'];
+    audience: BroadcastSendPayload['audience'];
+    title: string;
+    body: string;
+    channels: BroadcastSendPayload['channels'];
+    results: Array<{
+      channel: BroadcastSendPayload['channels'][number];
+      status: 'sent' | 'skipped' | 'unconfigured' | 'error';
+      detail?: string;
+      attemptedAt: string;
+    }>;
+    triggeredBy?: string | null;
+    twoPersonConfirmedBy?: string;
+    triggeredAt: string;
+    acknowledgements: string[];
+  };
+  revision: number;
+  updatedAt: string;
+}
+
+export async function sendBroadcast(
+  apiBase: string,
+  payload: BroadcastSendPayload,
+): Promise<BroadcastSendResult> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/broadcasts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return assertJson(response);
+}
+
+export interface ContractClauseExtractionResult {
+  clauses: Array<{
+    id: string;
+    type: string;
+    text: string;
+    evidence?: { text: string; page?: number };
+    createdAt: string;
+  }>;
+  revision: number;
+  updatedAt: string;
+}
+
+export async function extractContractClauses(
+  apiBase: string,
+  contractId: string,
+): Promise<ContractClauseExtractionResult> {
+  const response = await authFetch(
+    `${resolveApiBase(apiBase)}/contracts/${encodeURIComponent(contractId)}/clauses/extract`,
+    { method: 'POST' },
+  );
+  return assertJson(response);
+}
+
+export async function chatWithAsistente(
+  apiBase: string,
+  messages: AsistenteChatMessage[],
+): Promise<AsistenteChatResult> {
+  const response = await authFetch(`${resolveApiBase(apiBase)}/asistente/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages }),
+  });
   return assertJson(response);
 }
 

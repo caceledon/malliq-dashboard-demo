@@ -121,6 +121,32 @@ describe('K6 — NotificationDrawer', () => {
     expect(liveRegion).not.toBeNull();
   });
 
+  it('sync alerts never bump the unread badge (status, not event)', () => {
+    mockState.current.state.asset = { syncStatus: 'conflict', syncMessage: 'remoto cambió' } as never;
+    const { container, rerender } = render(
+      <MemoryRouter>
+        <NotificationDrawer />
+      </MemoryRouter>,
+    );
+    // sync-conflict is rendered but is treated as state, not an unread event.
+    expect(container.querySelector('button[title="Notificaciones"] > span')).toBeNull();
+
+    // Status flickers to online, then back to conflict — badge stays absent.
+    mockState.current.state.asset = { syncStatus: 'online', syncMessage: '' } as never;
+    rerender(
+      <MemoryRouter>
+        <NotificationDrawer />
+      </MemoryRouter>,
+    );
+    mockState.current.state.asset = { syncStatus: 'conflict', syncMessage: 'remoto cambió' } as never;
+    rerender(
+      <MemoryRouter>
+        <NotificationDrawer />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('button[title="Notificaciones"] > span')).toBeNull();
+  });
+
   it('GCs stale ids from the seen set when alerts disappear', () => {
     localStorage.setItem('malliq:notif:seen-v1', JSON.stringify(['stale-id', 'expiring-c1']));
     mockState.current.insights.alerts = [

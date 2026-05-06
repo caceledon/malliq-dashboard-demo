@@ -592,6 +592,133 @@ describe('buildAlerts', () => {
     expect(alerts.some((a) => a.id === `garantia-${contract.id}`)).toBe(true)
   })
 
+  it('creates occupation-cost alert when costoOcupacionPct > 20', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-occ',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      endDate: '2025-12-31',
+      // 2.0M renta + 0.3M GC sobre 10M de ventas = 23% costo ocupación.
+      fixedRent: 2_000_000,
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 300_000,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const state = {
+      ...emptyAppState(),
+      units: [unit],
+      contracts: [contract],
+      sales: [
+        { id: 's1', contractId: 'c-occ', localIds: ['u1'], storeLabel: 'A', source: 'manual' as const, occurredAt: '2024-06-15', grossAmount: 10_000_000, importedAt: '2024-06-15T00:00:00Z' },
+      ],
+    }
+    const alerts = buildAlerts(state, new Date('2024-06-15'))
+    expect(alerts.some((a) => a.id === `occupation-cost-${contract.id}` && a.type === 'warning')).toBe(true)
+  })
+
+  it('does not create occupation-cost alert when under threshold', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-occ-ok',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      endDate: '2025-12-31',
+      // 2.0M renta + 0.3M GC sobre 20M de ventas = 11.5% — bajo umbral.
+      fixedRent: 2_000_000,
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 300_000,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const state = {
+      ...emptyAppState(),
+      units: [unit],
+      contracts: [contract],
+      sales: [
+        { id: 's1', contractId: 'c-occ-ok', localIds: ['u1'], storeLabel: 'A', source: 'manual' as const, occurredAt: '2024-06-15', grossAmount: 20_000_000, importedAt: '2024-06-15T00:00:00Z' },
+      ],
+    }
+    const alerts = buildAlerts(state, new Date('2024-06-15'))
+    expect(alerts.some((a) => a.id === `occupation-cost-${contract.id}`)).toBe(false)
+  })
+
+  it('does not create occupation-cost alert when there are no sales (denominator undefined)', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-occ-zero',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      endDate: '2025-12-31',
+      fixedRent: 5_000_000,
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const state = { ...emptyAppState(), units: [unit], contracts: [contract] }
+    const alerts = buildAlerts(state, new Date('2024-06-15'))
+    expect(alerts.some((a) => a.id.startsWith('occupation-cost-'))).toBe(false)
+  })
+
   it('creates step-up alert when close to step start', () => {
     const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
     const contract: Contract = {

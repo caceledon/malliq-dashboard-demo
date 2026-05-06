@@ -21,7 +21,7 @@ import { UfOverrideModal } from '@/components/app/UfOverrideModal';
 
 export function Configuracion() {
   const navigate = useNavigate();
-  const { state, actions, assetSummaries, portfolioStats, activeAssetId } = useAppState();
+  const { state, actions, assetSummaries, portfolioStats, activeAssetId, featureFlags } = useAppState();
   const { currency, setCurrency, ufValue, refreshLatestUf, setUfOverride, latestUfDate, ufUpdatedAt, formatCurrency } = useCurrency();
   const { mode: themeMode, setTheme } = useTheme();
   const [assetName, setAssetName] = useState(state.asset?.name ?? '');
@@ -408,6 +408,44 @@ export function Configuracion() {
               <p className="mt-2 text-xs text-[var(--sidebar-fg)]">
                 Referencia: {formatCurrency(1000000)} equivalen a {formatCurrency(1000000, { unit: currency === 'UF' ? 'CLP' : 'UF' })}.
               </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border-color)] p-4 md:col-span-2">
+              <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Etiquetas experimentales</p>
+              <p className="mt-1 text-xs text-[var(--sidebar-fg)]">
+                Activa funciones piloto. Se aplican al portafolio completo y persisten localmente con tu sesión.
+              </p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {[
+                  { key: 'sourceLinkedAbstracts' as const, label: 'Abstracts con fuente', desc: 'Botón "Ver fuente" para abrir el PDF en la página citada.' },
+                  { key: 'asistenteIA' as const, label: 'Asistente IA (Moonshot)', desc: 'Próximamente: chat conversacional con tools sobre el portafolio.' },
+                  { key: 'clausulasLedger' as const, label: 'Cláusulas y derechos', desc: 'Próximamente: extracción y ledger de cláusulas relevantes.' },
+                  { key: 'stackingPlan' as const, label: 'Stacking plan', desc: 'Próximamente: vista grid del activo con timeline.' },
+                  { key: 'renewalScoring' as const, label: 'Score de renovación', desc: 'Próximamente: probabilidad ponderada por contrato.' },
+                  { key: 'casualLicensing' as const, label: 'Licencias corto plazo', desc: 'Próximamente: kioscos, pop-ups, ATMs.' },
+                  { key: 'tenantPwa' as const, label: 'PWA locatario', desc: 'Próximamente: portal instalable + push.' },
+                  { key: 'camReconciliation' as const, label: 'Reconciliación de GC', desc: 'Próximamente: cierre auditable de gastos comunes.' },
+                  { key: 'crossShopping' as const, label: 'Cross-shopping', desc: 'Próximamente: correlación de ventas entre locatarios.' },
+                  { key: 'crisisBroadcast' as const, label: 'Broadcast de crisis', desc: 'Próximamente: alerta multi-canal con confirmación.' },
+                  { key: 'mallqIndex' as const, label: 'MallIQ Index Chile', desc: 'Disponible cuando exista cobertura multi-cliente.' },
+                  { key: 'scenarioModeling' as const, label: 'Simulador de escenarios', desc: 'Próximamente: what-if en el editor de contrato.' },
+                ].map((flag) => (
+                  <label
+                    key={flag.key}
+                    className="flex items-start gap-2 rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={featureFlags[flag.key]}
+                      onChange={(event) => actions.setFeatureFlag(flag.key, event.target.checked)}
+                      style={{ marginTop: 3 }}
+                    />
+                    <span className="flex-1">
+                      <span className="block font-medium">{flag.label}</span>
+                      <span className="text-xs text-[var(--sidebar-fg)]">{flag.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         </div>

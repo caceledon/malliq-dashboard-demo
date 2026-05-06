@@ -10,10 +10,42 @@ export interface AssetWorkspace extends AppState {
   asset: AssetSettings;
 }
 
+// Track-level feature flags. Keys are added when a track ships behind a flag;
+// every flag is opt-in and defaults to the values in DEFAULT_FEATURE_FLAGS.
+export type FeatureFlagKey =
+  | 'sourceLinkedAbstracts'
+  | 'asistenteIA'
+  | 'clausulasLedger'
+  | 'stackingPlan'
+  | 'renewalScoring'
+  | 'casualLicensing'
+  | 'tenantPwa'
+  | 'camReconciliation'
+  | 'crossShopping'
+  | 'crisisBroadcast'
+  | 'mallqIndex'
+  | 'scenarioModeling';
+
+export const DEFAULT_FEATURE_FLAGS: Record<FeatureFlagKey, boolean> = {
+  sourceLinkedAbstracts: true,
+  asistenteIA: false,
+  clausulasLedger: false,
+  stackingPlan: false,
+  renewalScoring: false,
+  casualLicensing: false,
+  tenantPwa: false,
+  camReconciliation: false,
+  crossShopping: false,
+  crisisBroadcast: false,
+  mallqIndex: false,
+  scenarioModeling: false,
+};
+
 export interface PortfolioState {
-  version: 2;
+  version: 3;
   activeAssetId: string | null;
   workspaces: AssetWorkspace[];
+  featureFlags?: Partial<Record<FeatureFlagKey, boolean>>;
 }
 
 export interface PortfolioBackupDocumentPayload extends BackupDocumentPayload {
@@ -65,10 +97,18 @@ export const STORAGE_KEY = 'malliq-functional-state';
 
 export function emptyPortfolioState(): PortfolioState {
   return {
-    version: 2,
+    version: 3,
     activeAssetId: null,
     workspaces: [],
+    featureFlags: { sourceLinkedAbstracts: true },
   };
+}
+
+export function resolveFeatureFlag(
+  portfolio: PortfolioState | null | undefined,
+  key: FeatureFlagKey,
+): boolean {
+  return portfolio?.featureFlags?.[key] ?? DEFAULT_FEATURE_FLAGS[key];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,7 +143,26 @@ function isAssetWorkspace(value: unknown): value is AssetWorkspace {
 }
 
 function isPortfolioState(value: unknown): value is PortfolioState {
-  return isRecord(value) && value.version === 2 && Array.isArray(value.workspaces);
+  // v2 (legacy) and v3 are both accepted; normalizePortfolioState upgrades
+  // shape and stamps version: 3 on the way out.
+  return (
+    isRecord(value) &&
+    (value.version === 2 || value.version === 3) &&
+    Array.isArray(value.workspaces)
+  );
+}
+
+function sanitizeFeatureFlags(
+  raw: unknown,
+): Partial<Record<FeatureFlagKey, boolean>> {
+  if (!isRecord(raw)) return {};
+  const out: Partial<Record<FeatureFlagKey, boolean>> = {};
+  for (const key of Object.keys(DEFAULT_FEATURE_FLAGS) as FeatureFlagKey[]) {
+    if (typeof raw[key] === 'boolean') {
+      out[key] = raw[key] as boolean;
+    }
+  }
+  return out;
 }
 
 export function normalizePortfolioState(portfolio: PortfolioState): PortfolioState {
@@ -112,10 +171,19 @@ export function normalizePortfolioState(portfolio: PortfolioState): PortfolioSta
     ? portfolio.activeAssetId
     : workspaces[0]?.asset.id ?? null;
 
+  const incomingFlags = sanitizeFeatureFlags(portfolio.featureFlags);
+  // v2 → v3 migration: when no flags slot exists, opt the operator into the
+  // tracks that ship default-on (today: sourceLinkedAbstracts).
+  const featureFlags: Partial<Record<FeatureFlagKey, boolean>> = {
+    sourceLinkedAbstracts: true,
+    ...incomingFlags,
+  };
+
   return {
-    version: 2,
+    version: 3,
     activeAssetId,
     workspaces,
+    featureFlags,
   };
 }
 
@@ -125,7 +193,7 @@ export function migrateLegacyAppState(state: AppState): PortfolioState {
   }
 
   return normalizePortfolioState({
-    version: 2,
+    version: 3,
     activeAssetId: state.asset.id,
     workspaces: [
       {

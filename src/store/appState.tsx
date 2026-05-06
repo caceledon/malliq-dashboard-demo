@@ -17,6 +17,9 @@ import {
   emptyAppState,
   type AppState,
   type BackupArchive,
+  type Broadcast,
+  type CamReconciliation,
+  type CasualLicense,
   type Contract,
   type DocumentKind,
   type DocumentRecord,
@@ -32,6 +35,7 @@ import {
 import {
   buildPortfolioAssetSummary,
   buildPortfolioStats,
+  DEFAULT_FEATURE_FLAGS,
   emptyPortfolioState,
   getActiveWorkspace,
   getWorkspaceById,
@@ -39,6 +43,7 @@ import {
   parseStoredPortfolio,
   STORAGE_KEY,
   type AssetWorkspace,
+  type FeatureFlagKey,
   type PortfolioBackupArchive,
   type PortfolioAssetSummary,
   type PortfolioStats,
@@ -97,6 +102,8 @@ interface AppContextValue {
   unitsByCode: Map<string, string>;
   currentTenantId?: string;
   authUser: AuthUser | null;
+  featureFlags: Record<FeatureFlagKey, boolean>;
+  isFeatureEnabled: (key: FeatureFlagKey) => boolean;
   actions: {
     initializeAsset: (payload: AssetSetupInput) => void;
     createAsset: (payload: CreateAssetInput) => string;
@@ -122,6 +129,7 @@ interface AppContextValue {
     deletePosConnection: (profileId: string) => void;
     recordPosSync: (profileId: string, status: 'success' | 'error', message: string) => void;
     uploadDocument: (payload: UploadDocumentInput) => Promise<void>;
+    registerRemoteDocument: (record: DocumentRecord) => void;
     deleteDocument: (documentId: string) => Promise<void>;
     downloadDocument: (documentId: string) => Promise<void>;
     getDocumentBlob: (documentId: string) => Promise<Blob | null>;
@@ -135,6 +143,13 @@ interface AppContextValue {
     pullFromServer: (apiBase?: string) => Promise<BackupArchive>;
     fetchViaServerPosProxy: (payload: { endpoint: string; method: 'GET' | 'POST'; token?: string; requestBody?: string }, apiBase?: string) => Promise<{ status: number; body: string }>;
     ingestFiscalThroughServer: (payload: { rawText?: string; file?: File }, apiBase?: string) => Promise<{ text: string }>;
+    setFeatureFlag: (key: FeatureFlagKey, value: boolean) => void;
+    upsertCasualLicense: (license: CasualLicense) => void;
+    deleteCasualLicense: (licenseId: string) => void;
+    upsertCamReconciliation: (reconciliation: CamReconciliation) => void;
+    deleteCamReconciliation: (reconciliationId: string) => void;
+    appendBroadcast: (broadcast: Broadcast) => void;
+    acknowledgeBroadcast: (broadcastId: string, contractId: string) => void;
   };
 }
 
@@ -341,6 +356,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [portfolio.workspaces],
   );
   const portfolioStats = useMemo(() => buildPortfolioStats(assetSummaries), [assetSummaries]);
+  const featureFlags = useMemo<Record<FeatureFlagKey, boolean>>(() => {
+    const stored = portfolio.featureFlags ?? {};
+    const out = { ...DEFAULT_FEATURE_FLAGS };
+    for (const key of Object.keys(DEFAULT_FEATURE_FLAGS) as FeatureFlagKey[]) {
+      if (typeof stored[key] === 'boolean') {
+        out[key] = stored[key] as boolean;
+      }
+    }
+    return out;
+  }, [portfolio.featureFlags]);
+  const isFeatureEnabled = useMemo(
+    () => (key: FeatureFlagKey) => featureFlags[key],
+    [featureFlags],
+  );
   const configuredApiBase = useMemo(() => resolveApiBase(state.asset?.backendUrl), [state.asset?.backendUrl]);
   const shouldSyncRemotely = Boolean(state.asset?.syncEnabled && state.asset?.backendUrl);
 
@@ -915,6 +944,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         })),
       );
     },
+    registerRemoteDocument(record) {
+      const currentWorkspace = getActiveWorkspace(portfolioRef.current);
+      if (!currentWorkspace) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, currentWorkspace.asset.id, (workspace) => {
+          // Idempotent: if a record with this id already exists, replace it.
+          const exists = workspace.documents.some((d) => d.id === record.id);
+          return {
+            ...workspace,
+            documents: exists
+              ? workspace.documents.map((d) => (d.id === record.id ? record : d))
+              : [record, ...workspace.documents],
+          };
+        }),
+      );
+    },
     async deleteDocument(documentId) {
       const currentWorkspace = getActiveWorkspace(portfolioRef.current);
       const target = currentWorkspace?.documents.find((document) => document.id === documentId);
@@ -1153,6 +1198,91 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     async ingestFiscalThroughServer(payload, apiBase) {
       return ingestFiscalText(apiBase ?? configuredApiBase, payload);
     },
+    setFeatureFlag(key, value) {
+      setPortfolio((current) =>
+        normalizePortfolioState({
+          ...current,
+          featureFlags: { ...(current.featureFlags ?? {}), [key]: value },
+        }),
+      );
+    },
+    upsertCasualLicense(license) {
+      if (!activeAssetIdRef.current) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
+          const list = workspace.casualLicenses ?? [];
+          const exists = list.some((entry) => entry.id === license.id);
+          return {
+            ...workspace,
+            casualLicenses: exists
+              ? list.map((entry) => (entry.id === license.id ? license : entry))
+              : [license, ...list],
+          };
+        }),
+      );
+    },
+    deleteCasualLicense(licenseId) {
+      if (!activeAssetIdRef.current) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
+          ...workspace,
+          casualLicenses: (workspace.casualLicenses ?? []).filter((entry) => entry.id !== licenseId),
+        })),
+      );
+    },
+    upsertCamReconciliation(reconciliation) {
+      if (!activeAssetIdRef.current) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => {
+          const list = workspace.camReconciliations ?? [];
+          const exists = list.some((entry) => entry.id === reconciliation.id);
+          return {
+            ...workspace,
+            camReconciliations: exists
+              ? list.map((entry) => (entry.id === reconciliation.id ? reconciliation : entry))
+              : [reconciliation, ...list],
+          };
+        }),
+      );
+    },
+    deleteCamReconciliation(reconciliationId) {
+      if (!activeAssetIdRef.current) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
+          ...workspace,
+          camReconciliations: (workspace.camReconciliations ?? []).filter(
+            (entry) => entry.id !== reconciliationId,
+          ),
+        })),
+      );
+    },
+    appendBroadcast(broadcast) {
+      if (!activeAssetIdRef.current) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
+          ...workspace,
+          broadcasts: [broadcast, ...(workspace.broadcasts ?? [])],
+        })),
+      );
+    },
+    acknowledgeBroadcast(broadcastId, contractId) {
+      if (!activeAssetIdRef.current) return;
+      setPortfolio((current) =>
+        updateWorkspace(current, activeAssetIdRef.current!, (workspace) => ({
+          ...workspace,
+          broadcasts: (workspace.broadcasts ?? []).map((entry) =>
+            entry.id === broadcastId
+              ? {
+                  ...entry,
+                  acknowledgements: entry.acknowledgements.includes(contractId)
+                    ? entry.acknowledgements
+                    : [...entry.acknowledgements, contractId],
+                }
+              : entry,
+          ),
+        })),
+      );
+    },
   };
   actionsRef.current = actions;
 
@@ -1306,6 +1436,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         unitsByCode,
         currentTenantId,
         authUser,
+        featureFlags,
+        isFeatureEnabled,
         actions,
       }}
     >

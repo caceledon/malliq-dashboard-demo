@@ -26,6 +26,10 @@ const Configuracion = lazy(() => import('@/pages/admin/Configuracion').then((mod
 const Simulador = lazy(() => import('@/pages/admin/Simulador').then((module) => ({ default: module.Simulador })));
 const Asistente = lazy(() => import('@/pages/admin/Asistente').then((module) => ({ default: module.Asistente })));
 const DesignLab = lazy(() => import('@/pages/admin/DesignLab').then((module) => ({ default: module.DesignLab })));
+const CasualLicenses = lazy(() => import('@/pages/admin/CasualLicenses').then((module) => ({ default: module.CasualLicenses })));
+const CamReconciliation = lazy(() => import('@/pages/admin/CamReconciliation').then((module) => ({ default: module.CamReconciliation })));
+const ClausulasLedger = lazy(() => import('@/pages/admin/ClausulasLedger').then((module) => ({ default: module.ClausulasLedger })));
+const Broadcast = lazy(() => import('@/pages/admin/Broadcast').then((module) => ({ default: module.Broadcast })));
 const LocatarioDashboard = lazy(() => import('@/pages/locatario/Dashboard').then((module) => ({ default: module.LocatarioDashboard })));
 const LocatarioContrato = lazy(() => import('@/pages/locatario/Contrato').then((module) => ({ default: module.LocatarioContrato })));
 const LocatarioVentas = lazy(() => import('@/pages/locatario/Ventas').then((module) => ({ default: module.LocatarioVentas })));
@@ -144,6 +148,10 @@ function App() {
                   <Route path="simulador" element={<AdminOnly>{withSuspense(<Simulador />)}</AdminOnly>} />
                   <Route path="asistente" element={<AdminOnly>{withSuspense(<Asistente />)}</AdminOnly>} />
                   <Route path="design-lab" element={<AdminOnly>{withSuspense(<DesignLab />)}</AdminOnly>} />
+                  <Route path="licencias-corto-plazo" element={<AdminOnly>{withSuspense(<CasualLicenses />)}</AdminOnly>} />
+                  <Route path="cam" element={<AdminOnly>{withSuspense(<CamReconciliation />)}</AdminOnly>} />
+                  <Route path="clausulas" element={<AdminOnly>{withSuspense(<ClausulasLedger />)}</AdminOnly>} />
+                  <Route path="broadcast" element={<AdminOnly>{withSuspense(<Broadcast />)}</AdminOnly>} />
                 </Route>
               </Routes>
             </AppShell>

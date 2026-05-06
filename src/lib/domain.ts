@@ -66,6 +66,21 @@ export interface RentStep {
   rentaFijaUfM2: number;
 }
 
+// Track 1 — source-linked contract abstracts. Citations from the autofill PDF
+// stay attached to the contract so each extracted value can be opened back at
+// the page it came from. v1 stores the snippet + page number; bbox lands later.
+export interface EvidenceCitation {
+  text: string;
+  page?: number;
+}
+
+export interface ContractEvidence {
+  fields: Record<string, EvidenceCitation>;
+  rentSteps: Array<Record<string, EvidenceCitation>>;
+  extractedAt: string;
+  source: 'moonshot' | 'openai' | 'mock_local';
+}
+
 export interface Contract {
   id: string;
   companyName: string;
@@ -107,6 +122,15 @@ export interface Contract {
   healthNivelVenta: boolean;
   healthNivelRenta: boolean;
   healthPercepcionAdmin: boolean;
+  // Track 1 — source-linked abstracts. Both optional, populated only when an
+  // autofill ran and the source PDF was persisted as a contrato document.
+  sourceDocumentId?: string;
+  evidence?: ContractEvidence;
+  // Track 3 — second-pass clause extraction. Populated by the clauses
+  // endpoint; absent until the operator runs the analyzer.
+  clauses?: ContractClause[];
+  // Track 5 — cached renewal score; recomputed lazily by the UI.
+  renewalScoreCachedAt?: string;
   createdAt: string;
 }
 
@@ -198,6 +222,99 @@ export interface ImportLog {
   note: string;
 }
 
+// Track 6 — casual / short-term licensing.
+export type CasualLicenseKind = 'kiosko' | 'atm' | 'pop_up' | 'evento' | 'otro';
+
+export interface CasualLicense {
+  id: string;
+  name: string;
+  kind: CasualLicenseKind;
+  category: string;
+  startDate: string; // ISO YYYY-MM-DD
+  endDate: string; // ISO YYYY-MM-DD
+  dailyRate: number;
+  dailyRateCurrency: CurrencyTag;
+  location?: { x: number; y: number };
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// Track 8 — CAM reconciliation entity. Annual or quarterly statement
+// summarising expected charges (from contracts) vs actual line items.
+export interface CamLineItem {
+  id: string;
+  description: string;
+  amountClp: number;
+  invoiceDocumentId?: string;
+}
+
+export interface CamReconciliationTenantBreakdown {
+  contractId: string;
+  storeName: string;
+  shareBasis: 'gla' | 'flat';
+  shareValue: number; // either m² when basis=gla or contract count when basis=flat
+  expectedClp: number;
+  collectedClp: number;
+  deltaClp: number;
+}
+
+export interface CamReconciliation {
+  id: string;
+  periodLabel: string; // e.g. "2026-Q1" or "2026"
+  generatedAt: string;
+  basis: 'gla' | 'flat';
+  lineItems: CamLineItem[];
+  tenants: CamReconciliationTenantBreakdown[];
+  notes?: string;
+}
+
+// Track 10 — crisis broadcast log.
+export type BroadcastSeverity = 'aviso' | 'incidente' | 'evacuacion';
+export type BroadcastChannel = 'web_push' | 'email' | 'sms' | 'whatsapp';
+export type BroadcastAudience = 'all' | 'tenants' | 'staff';
+
+export interface BroadcastChannelResult {
+  channel: BroadcastChannel;
+  status: 'sent' | 'skipped' | 'unconfigured' | 'error';
+  detail?: string;
+  attemptedAt: string;
+}
+
+export interface Broadcast {
+  id: string;
+  severity: BroadcastSeverity;
+  audience: BroadcastAudience;
+  title: string;
+  body: string;
+  channels: BroadcastChannel[];
+  results: BroadcastChannelResult[];
+  triggeredBy?: string;
+  twoPersonConfirmedBy?: string;
+  triggeredAt: string;
+  acknowledgements: string[]; // contract ids that confirmed receipt
+}
+
+// Track 3 — clause classifier output, attached to Contract.clauses.
+export type ContractClauseType =
+  | 'exclusividad'
+  | 'co_arrendamiento'
+  | 'renovacion'
+  | 'kick_out'
+  | 'uso_restringido'
+  | 'gracia'
+  | 'otra';
+
+export interface ContractClause {
+  id: string;
+  type: ContractClauseType;
+  text: string;
+  evidence?: EvidenceCitation;
+  createdAt: string;
+}
+
 export interface AppState {
   asset: AssetSettings | null;
   units: AssetUnit[];
@@ -209,6 +326,10 @@ export interface AppState {
   prospects: Prospect[];
   posConnections: PosConnectionProfile[];
   importLogs: ImportLog[];
+  // Track 6, 8, 10 additions — optional for backwards compat with old archives.
+  casualLicenses?: CasualLicense[];
+  camReconciliations?: CamReconciliation[];
+  broadcasts?: Broadcast[];
 }
 
 export interface TenantSummary {
@@ -849,6 +970,9 @@ export function emptyAppState(): AppState {
     prospects: [],
     posConnections: [],
     importLogs: [],
+    casualLicenses: [],
+    camReconciliations: [],
+    broadcasts: [],
   };
 }
 
@@ -1056,6 +1180,23 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
         createdAt: today.toISOString(),
         contractId: contract.id,
       });
+    }
+
+    // Costo de ocupación > 20% — banderazo rojo. Solo dispara cuando hay ventas
+    // del mes; sin denominador el ratio es indefinido. costoOcupacionPct viene
+    // expresado en porcentaje (20 = 20%), no en fracción.
+    if (currentMonthSales > 0 && lifecycle !== 'vencido') {
+      const snapshot = buildContractCommercialSnapshot(contract, 0, currentMonthSales, today);
+      if (snapshot.costoOcupacionPct > 20) {
+        alerts.push({
+          id: `occupation-cost-${contract.id}`,
+          type: 'warning',
+          title: `Costo de ocupación elevado: ${display.storeName}`,
+          description: `Costo de ocupación ${snapshot.costoOcupacionPct.toFixed(1)}% sobre ventas del mes. Umbral crítico 20%.`,
+          createdAt: today.toISOString(),
+          contractId: contract.id,
+        });
+      }
     }
 
     // Alerta garantía próxima
