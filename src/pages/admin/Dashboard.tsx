@@ -16,6 +16,7 @@ import {
   TenantLogo,
   TopBar,
 } from '@/components/mallq/ui';
+import { InteractiveMap } from '@/components/InteractiveMap';
 import { diffInDays, getContractLifecycle } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
@@ -307,6 +308,14 @@ export function AdminDashboard() {
           />
         </div>
       </Bento>
+
+      {/* FLOOR PLAN — flagship view: every local rendered as a block,
+          colored by contract lifecycle + health, hover/click to drill into
+          the tenant. K7 restored this on a per-asset detail route; embedding
+          it here too because users expect the map on the Cockpit. */}
+      <div style={{ marginBottom: 20 }}>
+        <InteractiveMap />
+      </div>
 
       {/* TWO COLUMN: Top performers + Watchlist */}
       <Bento style={{ marginBottom: 20 }}>
