@@ -29,7 +29,7 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 - **Icons**: `lucide-react`
 - **Backend**: Express 5 + SQLite + JWT + bcrypt + helmet (CSP same-origin) + multer + `express-rate-limit` + `undici` (Agent con DNS-pinning para SSRF guard)
 - **AI / OCR**: `openai` SDK con Moonshot (`kimi-k2.5`) preferido, `tesseract.js`, `pdf-parse v2`
-- **Tests**: Vitest + jsdom + `@testing-library/react` (181 tests · 20 archivos)
+- **Tests**: Vitest + jsdom + `@testing-library/react` (248 tests · 32 archivos)
 - **Producción**: AWS EC2 + Docker Compose + Caddy auto-HTTPS · `do-up.cl`
 
 ## Project Structure
@@ -100,10 +100,14 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 │   │   │   ├── Planeacion.tsx
 │   │   │   ├── Ecosistema.tsx
 │   │   │   ├── Alertas.tsx           # 3 severity tiles + lista
-│   │   │   ├── Configuracion.tsx     # Asset, sync, UF, theme, usuarios, activity
+│   │   │   ├── Configuracion.tsx     # Asset, sync, UF, theme, usuarios, activity, feature flags
 │   │   │   ├── Simulador.tsx         # What-if rent (R1)
-│   │   │   ├── Asistente.tsx         # Chat IA + autofill drop zone (P4d)
-│   │   │   └── DesignLab.tsx         # Surface interno: primitivos + reporte de contraste WCAG AA
+│   │   │   ├── Asistente.tsx         # Chat IA Moonshot tool-calling (Track 2) + autofill drop zone
+│   │   │   ├── DesignLab.tsx         # Surface interno: primitivos + reporte de contraste WCAG AA
+│   │   │   ├── CasualLicenses.tsx    # /admin/licencias-corto-plazo (Track 6)
+│   │   │   ├── CamReconciliation.tsx # /admin/cam (Track 8)
+│   │   │   ├── ClausulasLedger.tsx   # /admin/clausulas (Track 3)
+│   │   │   └── Broadcast.tsx         # /admin/broadcast (Track 10, admin-only)
 │   │   └── locatario/
 │   │       ├── Dashboard.tsx
 │   │       ├── Contrato.tsx
@@ -116,8 +120,11 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 │   ├── uf.js                    # Fetcher mindicador.cl (5s timeout) + ensureUfRange/resolveUfForDate
 │   ├── anomalies.js             # Mirror server-side de anomalies.ts
 │   ├── env.js                   # Carga .env.local + .env
+│   ├── autofill/{richPrompt,postDerivations,pageTagging}.js
+│   ├── asistente/tools.js       # 6 read-only tools usadas por /api/asistente/chat (Track 2)
+│   ├── clauses/extractor.js     # Track 3 — clasificador de cláusulas + page tagger
 │   ├── server.integration.test.ts auth.integration.test.ts uf.test.ts
-│   └── data/                    # SQLite + uploads/ (gitignored)
+│   └── data/                    # SQLite + uploads/ + push-subscriptions.json (gitignored)
 ├── infra/aws/                   # Llaves SSH (gitignored), DEPLOY.md, launch.sh, user-data.sh
 ├── docker-compose.prod.yml Dockerfile Caddyfile
 ├── package.json vite.config.ts tsconfig.app.json eslint.config.js
@@ -289,6 +296,45 @@ healthBucket      = A(≥88) / B(≥76) / C(≥60) / D(≥44) / E(<44)
 
 `baseRentUF` no se multiplica por área. Si `baseRentUF > 0 && fixedRent === 0`, el `ContractEditor` muestra banner de revisión.
 
+### Track 1+ extensions on Contract
+
+```ts
+interface Contract {
+  // ... base ...
+  sourceDocumentId?: string                  // Track 1 — id del documents row con el PDF persistido
+  evidence?: ContractEvidence                // Track 1 — fields/rentSteps con {text, page?}
+  clauses?: ContractClause[]                 // Track 3 — segundo pase clasificador
+  renewalScoreCachedAt?: string              // Track 5 — timestamp del último score (computed por el cliente)
+}
+```
+
+### Otras entidades por track
+
+```ts
+// Track 6 — casual licensing
+casualLicenses?: CasualLicense[]
+  { id, name, kind: 'kiosko'|'atm'|'pop_up'|'evento'|'otro',
+    category, startDate, endDate, dailyRate, dailyRateCurrency,
+    location?, contactName?, contactEmail?, contactPhone?, notes?, createdAt }
+
+// Track 8 — CAM reconciliation
+camReconciliations?: CamReconciliation[]
+  { id, periodLabel, generatedAt, basis: 'gla'|'flat',
+    lineItems: CamLineItem[], tenants: CamReconciliationTenantBreakdown[], notes? }
+
+// Track 10 — crisis broadcast log
+broadcasts?: Broadcast[]
+  { id, severity: 'aviso'|'incidente'|'evacuacion',
+    audience: 'all'|'tenants'|'staff', title, body,
+    channels: ('web_push'|'email'|'sms'|'whatsapp')[],
+    results: BroadcastChannelResult[],
+    triggeredBy?, twoPersonConfirmedBy?, triggeredAt, acknowledgements: string[] }
+```
+
+### Feature flags (`PortfolioState.featureFlags`)
+
+`PortfolioState` está en `version: 3`. Slot opcional `featureFlags?: Partial<Record<FeatureFlagKey, boolean>>` con migración v2→v3 automática (default: `sourceLinkedAbstracts: true`, resto off). Las claves válidas son los 12 tracks: `sourceLinkedAbstracts | asistenteIA | clausulasLedger | stackingPlan | renewalScoring | casualLicensing | tenantPwa | camReconciliation | crossShopping | crisisBroadcast | mallqIndex | scenarioModeling`. Acceso vía `useAppState().isFeatureEnabled(key)` o `useAppState().featureFlags[key]`. Toggle desde `Configuración → Etiquetas experimentales` (admin/member).
+
 ### UF date-keyed
 
 `useCurrency().getUfFor(dateLike)` devuelve la UF de la fecha (con fallback a la previa más cercana, luego a `latestUfDate`, luego a `FALLBACK_UF=39000`). `ensureUfFor` hace fetch async deduplicado contra `/api/uf?date=…`. La UF se cachea en `localStorage` (`malliq-uf-rates-cache`, máx ~5 años).
@@ -339,8 +385,14 @@ healthBucket      = A(≥88) / B(≥76) / C(≥60) / D(≥44) / E(<44)
 | GET | `/api/documents/:id/download` | sesión | |
 | POST | `/api/connectors/pos/proxy` | writer | SSRF blocking |
 | POST | `/api/connectors/fiscal/ingest` | writer | text/file/PDF/imagen |
-| POST | `/api/contracts/autofill` | writer | PDF → JSON normalizado |
+| POST | `/api/contracts/autofill` | writer | PDF → JSON normalizado. Track 1 v1: persiste el PDF como `documents` row y devuelve `evidencePages` (citas con `page`) + `sourceDocument` |
 | POST | `/api/contracts/autofill/ask` | writer | Variante conversacional |
+| POST | `/api/contracts/:id/clauses/extract` | writer | Track 3 — segundo pase clasificador sobre el PDF fuente persistido |
+| POST | `/api/asistente/chat` | writer | Track 2 — chat IA con tool-calling (6 read-only tools) |
+| POST | `/api/broadcasts` | admin | Track 10 — broadcast multi-canal; `evacuacion` exige `twoPersonConfirmedBy` |
+| GET | `/api/notifications/push/vapid-public` | sesión | Track 7 — clave pública VAPID (string vacío si no configurada) |
+| POST | `/api/notifications/push/subscribe` | sesión (cualquier rol) | Track 7 — registra `PushSubscriptionPayload` en `data/push-subscriptions.json` |
+| POST | `/api/notifications/push/unsubscribe` | sesión (cualquier rol) | Track 7 — elimina suscripción por `endpoint` |
 
 ## Code Style
 
@@ -360,7 +412,7 @@ healthBucket      = A(≥88) / B(≥76) / C(≥60) / D(≥44) / E(<44)
 
 ```bash
 npm run lint
-npm run test        # 181 tests · 20 archivos
+npm run test        # 248 tests · 32 archivos
 ```
 
 - **Domain**: `src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`, `src/lib/regressions.test.ts`
@@ -425,3 +477,6 @@ El backend sirve `dist/` si existe + `/api/*` con fallback al `index.html` para 
 | `CONTRACT_AUTOFILL_MODEL` | Default `kimi-k2.5` (Moonshot) or `gpt-4o-mini` (OpenAI) |
 | `MALLIQ_DATA_DIR` | Backend data directory override |
 | `MALLIQ_DB_PATH` | SQLite file path override |
+| `VAPID_PUBLIC_KEY` | Track 7 — clave pública VAPID expuesta vía `/api/notifications/push/vapid-public`; sin ella el flujo de push queda en estado `unconfigured` |
+| `VAPID_PRIVATE_KEY` | Track 7 / 10 — necesaria cuando se conecte el adaptador de envío real (web-push lib u otro). Sin ella, los broadcasts hacia `web_push` retornan `unconfigured` |
+| `MALLIQ_SMTP_URL` | Track 10 — URL del transport email (cuando se conecte el adaptador SMTP) |
