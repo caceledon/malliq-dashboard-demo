@@ -90,7 +90,7 @@ const COMPARISON = [
     cat: 'Operación',
     rows: [
       ['Portal del locatario', '·', '·', '·'],
-      ['Reconciliación CFDI', '·', '·', '·'],
+      ['Reconciliación DTE / SII', '·', '·', '·'],
       ['Alertas custom', '—', '·', '·'],
     ],
   },

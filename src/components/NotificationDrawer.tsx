@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowRight, Bell, Check, ChevronRight, Info, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/store/appState';
@@ -52,7 +52,8 @@ export function NotificationDrawer() {
   const canSeeAdminPages = authUser?.role !== 'locatario';
   const isHydrating = state.asset == null;
 
-  const [seen, setSeen] = useState<Set<string>>(loadSeen);
+  const [storedSeen, setStoredSeen] = useState<Set<string>>(loadSeen);
+  const lastPersistedRef = useRef<string>('');
 
   const goTo = (path: string) => {
     setOpen(false);
@@ -110,6 +111,31 @@ export function NotificationDrawer() {
   }, [state.importLogs]);
 
   const allAlerts = useMemo(() => [...systemAlerts, ...insights.alerts].slice(0, 24), [systemAlerts, insights.alerts]);
+
+  // Derive `seen` from `storedSeen` filtered to currently-live alert ids. This
+  // garbage-collects stale entries on the fly during render — no effect, no
+  // cascading setState. The GC result is persisted lazily inside the effect
+  // below, but only when the live-filtered serialization actually changes.
+  const seen = useMemo(() => {
+    const live = new Set(allAlerts.map((a) => a.id));
+    const trimmed = new Set<string>();
+    for (const id of storedSeen) {
+      if (live.has(id)) trimmed.add(id);
+    }
+    return trimmed;
+  }, [storedSeen, allAlerts]);
+
+  // Persist when the live-filtered set serialization changes — writes to
+  // localStorage only when the GC-trimmed view actually differs from what's
+  // on disk, so the GC of stale ids is durable across reloads without
+  // triggering re-renders.
+  const serialized = useMemo(() => JSON.stringify([...seen].sort()), [seen]);
+  useEffect(() => {
+    if (lastPersistedRef.current === serialized) return;
+    lastPersistedRef.current = serialized;
+    persistSeen(seen);
+  }, [serialized, seen]);
+
   const unreadCount = useMemo(() => allAlerts.filter((a) => !seen.has(a.id)).length, [allAlerts, seen]);
 
   const grouped = useMemo(() => {
@@ -135,35 +161,15 @@ export function NotificationDrawer() {
     return ordered;
   }, [allAlerts]);
 
-  // Drop "seen" entries that no longer correspond to a live alert so the set
-  // doesn't grow unbounded across sessions.
-  useEffect(() => {
-    if (seen.size === 0) return;
-    const liveIds = new Set(allAlerts.map((a) => a.id));
-    let stale = false;
-    const trimmed = new Set<string>();
-    for (const id of seen) {
-      if (liveIds.has(id)) trimmed.add(id);
-      else stale = true;
-    }
-    if (stale) {
-      setSeen(trimmed);
-      persistSeen(trimmed);
-    }
-  }, [allAlerts, seen]);
-
   const markAllRead = () => {
-    const next = new Set(allAlerts.map((a) => a.id));
-    setSeen(next);
-    persistSeen(next);
+    setStoredSeen(new Set(allAlerts.map((a) => a.id)));
   };
 
   const markOneRead = (id: string) => {
-    if (seen.has(id)) return;
-    const next = new Set(seen);
+    if (storedSeen.has(id)) return;
+    const next = new Set(storedSeen);
     next.add(id);
-    setSeen(next);
-    persistSeen(next);
+    setStoredSeen(next);
   };
 
   const getIcon = (type: string) => {

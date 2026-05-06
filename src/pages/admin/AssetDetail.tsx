@@ -10,7 +10,7 @@ import { InteractiveMap } from '@/components/InteractiveMap';
 export function AssetDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { state, activeAssetId, assetSummaries, insights, actions } = useAppState();
+  const { activeAssetId, assetSummaries, insights, actions } = useAppState();
   const { formatCurrency } = useCurrency();
 
   const summary = assetSummaries.find((item) => item.id === id);
@@ -22,6 +22,18 @@ export function AssetDetail() {
       actions.switchAsset(id);
     }
   }, [id, activeAssetId, actions]);
+
+  const kpis = useMemo(() => {
+    if (!summary) return null;
+    const occupancy = summary.totalUnits > 0 ? (summary.occupiedUnits / summary.totalUnits) * 100 : 0;
+    return {
+      units: `${summary.occupiedUnits}/${summary.totalUnits}`,
+      occupancy: `${occupancy.toFixed(0)}%`,
+      sales: formatM(summary.monthlySales),
+      rent: formatCurrency(summary.monthlyRent),
+      alerts: String(summary.alertCount),
+    };
+  }, [summary, formatCurrency]);
 
   // Asset id in URL doesn't match any loaded workspace.
   if (id && !summary) {
@@ -47,18 +59,6 @@ export function AssetDetail() {
   // Insights are computed against the active workspace; show a loading shell
   // until switchAsset has propagated.
   const stillSwitching = id !== activeAssetId;
-
-  const kpis = useMemo(() => {
-    if (!summary) return null;
-    const occupancy = summary.totalUnits > 0 ? (summary.occupiedUnits / summary.totalUnits) * 100 : 0;
-    return {
-      units: `${summary.occupiedUnits}/${summary.totalUnits}`,
-      occupancy: `${occupancy.toFixed(0)}%`,
-      sales: formatM(summary.monthlySales),
-      rent: formatCurrency(summary.monthlyRent),
-      alerts: String(summary.alertCount),
-    };
-  }, [summary, formatCurrency]);
 
   return (
     <div className="page-enter p-4 md:p-6" style={{ paddingTop: 0 }}>
