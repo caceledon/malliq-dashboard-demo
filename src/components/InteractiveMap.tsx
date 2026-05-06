@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, useLayoutEffect, MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '@/lib/currency';
 import { contractDateRangesOverlap, getContractDisplayValues, getContractLifecycle, type AssetUnit, type Contract } from '@/lib/domain';
