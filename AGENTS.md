@@ -11,23 +11,25 @@
 3. **Portal del locatario** (`/locatario/*`) — vista pinneada al contrato del usuario.
 4. **Backend Express + SQLite** con JWT, helmet/CSP, autofill IA y conectores fiscales.
 
-UI y copy en **español**. Código de dominio también en español (`locatarios`, `contratos`, `ventas`).
+UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `contratos`, `ventas`).
+
+> **Mercado**: producto chileno para el mercado chileno. CLP/UF, RUT, `America/Santiago`, `+56`, `do-up.cl`, SII/DTE. No hay presencia en México, Colombia ni otros mercados — un test de lint en `src/test/contentLint.test.ts` falla CI si aparecen fixtures no chilenos en el marketing tree.
 
 > **Nomenclatura**: el término "Mall" fue refactorizado globalmente a **"Activo"** (`Asset`).
 
 ## Technology Stack
 
 - **Frontend**: React 19 + TypeScript 5.9 + Vite 8
-- **Styling**: Tailwind 4 + CSS variables editoriales (cream/ink/mint/violet/amber/coral/sky)
+- **Styling**: Tailwind 4 + CSS variables editoriales (cream/ink/accent/mint/violet/amber/coral/sky)
 - **Tipografía**: Inter (UI) · *Instrument Serif* (display) · JetBrains Mono (numbers); todas autohospedadas vía `@fontsource`
-- **Routing**: `react-router-dom` 7 con `HashRouter`. Marketing y cockpit son árboles separados.
-- **State**: React Context en `src/store/appState.tsx`; `useCurrency`, `useTheme`, `useToast`. No hay Redux/Zustand.
-- **Storage cliente**: `localStorage` (estado, prefs, UF cache) + `idb` (IndexedDB para blobs)
-- **Charts**: `recharts` + componentes SVG editoriales nativos (`Spark`, `MallPlan`, `ContractTimeline`, `ForecastChart`, `CategoryDonut`, `CategoryHeatmap`, `ExpiryRiver`)
+- **Routing**: `react-router-dom` 7 con `HashRouter`. Marketing y cockpit son árboles separados; marketing tree (incluido `Landing`) totalmente lazy-loaded.
+- **State**: React Context en `src/store/appState.tsx`; `useCurrency`, `useTheme`, `useToast`, `useReducedMotion`. No hay Redux/Zustand.
+- **Storage cliente**: `localStorage` (estado, prefs, UF cache, seen-alert ids) + `idb` (IndexedDB para blobs)
+- **Charts**: `recharts` + componentes SVG editoriales nativos (`Spark`, `MallPlan`, `InteractiveMap`, `ContractTimeline`, `ForecastChart`, `CategoryDonut`, `CategoryHeatmap`, `ExpiryRiver`)
 - **Icons**: `lucide-react`
-- **Backend**: Express 5 + SQLite + JWT + bcrypt + helmet (CSP same-origin) + multer + `express-rate-limit`
+- **Backend**: Express 5 + SQLite + JWT + bcrypt + helmet (CSP same-origin) + multer + `express-rate-limit` + `undici` (Agent con DNS-pinning para SSRF guard)
 - **AI / OCR**: `openai` SDK con Moonshot (`kimi-k2.5`) preferido, `tesseract.js`, `pdf-parse v2`
-- **Tests**: Vitest + jsdom + `@testing-library/react` (150 tests · 13 archivos)
+- **Tests**: Vitest + jsdom + `@testing-library/react` (181 tests · 20 archivos)
 - **Producción**: AWS EC2 + Docker Compose + Caddy auto-HTTPS · `do-up.cl`
 
 ## Project Structure
@@ -65,13 +67,15 @@ UI y copy en **español**. Código de dominio también en español (`locatarios`
 │   │   │   ├── TenantUsersSection.tsx   # Crear locatarios + CSV bulk import
 │   │   │   ├── UfOverrideModal.tsx      # Override manual fecha+valor
 │   │   │   ├── ActivityLogSection.tsx
-│   │   │   ├── ContractEditor.tsx ContractPreviewModal.tsx
+│   │   │   ├── ContractEditor.tsx       # Editor con scroll-preservation (K8): useLayoutEffect compensa el shift cuando los paneles del autofill se montan/crecen sobre el form anchor.
+│   │   │   ├── ContractPreviewModal.tsx
 │   │   │   ├── DocumentManager.tsx SalesIngestionCenter.tsx
 │   │   │   ├── SetupWizard.tsx TenantHealthRating.tsx
 │   │   │   └── …
 │   │   ├── AuthGate.tsx          # Probe /api/health → render login form si authRequired y sin token
 │   │   ├── RoleGuards.tsx        # AdminOnly / LocatarioOnly
-│   │   ├── NotificationDrawer.tsx CommandPalette.tsx ShortcutsHelp.tsx
+│   │   ├── NotificationDrawer.tsx       # Agrupa alerts por categoría (sync/ingesta/vencimientos/caída/riesgo/configuración), skeleton de hidratación, error block para la última ingesta fallida, seen ids en localStorage con GC.
+│   │   ├── CommandPalette.tsx ShortcutsHelp.tsx
 │   │   ├── Toast.tsx UndoToast.tsx ConfirmDialog.tsx
 │   │   ├── GatewayStatus.tsx InteractiveMap.tsx SkeletonLoader.tsx
 │   ├── pages/
@@ -86,8 +90,9 @@ UI y copy en **español**. Código de dominio también en español (`locatarios`
 │   │   │   ├── Manifiesto.tsx        # /manifiesto
 │   │   │   └── Demo.tsx              # /demo
 │   │   ├── admin/
-│   │   │   ├── Dashboard.tsx         # Cockpit bento
-│   │   │   ├── Portafolio.tsx        # Multi-activo
+│   │   │   ├── Dashboard.tsx         # Cockpit bento + plano dinámico embebido (InteractiveMap)
+│   │   │   ├── Portafolio.tsx        # Multi-activo · filas clicables → /admin/activos/:id
+│   │   │   ├── AssetDetail.tsx       # Detalle per-activo · KPIs + InteractiveMap + listado de locatarios
 │   │   │   ├── Locatarios.tsx        # SemaforoStrip + tabla
 │   │   │   ├── LocatarioDetail.tsx   # HealthRing + ComponentBars hero
 │   │   │   ├── RentasContratos.tsx   # ContractTimeline river
@@ -97,7 +102,8 @@ UI y copy en **español**. Código de dominio también en español (`locatarios`
 │   │   │   ├── Alertas.tsx           # 3 severity tiles + lista
 │   │   │   ├── Configuracion.tsx     # Asset, sync, UF, theme, usuarios, activity
 │   │   │   ├── Simulador.tsx         # What-if rent (R1)
-│   │   │   └── Asistente.tsx         # Chat IA + autofill drop zone (P4d)
+│   │   │   ├── Asistente.tsx         # Chat IA + autofill drop zone (P4d)
+│   │   │   └── DesignLab.tsx         # Surface interno: primitivos + reporte de contraste WCAG AA
 │   │   └── locatario/
 │   │       ├── Dashboard.tsx
 │   │       ├── Contrato.tsx
@@ -112,10 +118,10 @@ UI y copy en **español**. Código de dominio también en español (`locatarios`
 │   ├── env.js                   # Carga .env.local + .env
 │   ├── server.integration.test.ts auth.integration.test.ts uf.test.ts
 │   └── data/                    # SQLite + uploads/ (gitignored)
-├── infra/aws/                   # Llaves SSH (gitignored)
-├── docker-compose.prod.yml Dockerfile
-├── deploy.ps1                   # Script GitHub Pages legacy
+├── infra/aws/                   # Llaves SSH (gitignored), DEPLOY.md, launch.sh, user-data.sh
+├── docker-compose.prod.yml Dockerfile Caddyfile
 ├── package.json vite.config.ts tsconfig.app.json eslint.config.js
+├── scripts/optimize-logos.mjs   # Re-genera src/assets/*.webp desde los PNG fuente
 └── README.md AGENTS.md
 ```
 
@@ -138,21 +144,23 @@ npm start              # production: node server/index.js (sirve dist/ + /api/*)
 
 `src/App.tsx` separa **marketing público** (sin providers, sin auth) de **AppShell** (con `AuthGate + ThemeProvider + CurrencyProvider + ToastProvider + AppStateProvider + UndoToastProvider + ActiveAssetThemeSync`).
 
+Todas las páginas marketing (incluida `Landing`) están en chunks lazy: los usuarios autenticados no pagan ese código en el primer paint del cockpit.
+
 ```jsx
 <HashRouter>
   <Routes>
-    {/* PÚBLICO */}
-    <Route path="/" element={<Landing/>} />
-    <Route path="/producto" element={<Producto/>} />
-    <Route path="/operadores" element={<Operadores/>} />
-    <Route path="/locatarios-info" element={<LocatariosInfo/>} />
-    <Route path="/pricing" element={<Pricing/>} />
-    <Route path="/manifiesto" element={<Manifiesto/>} />
-    <Route path="/demo" element={<Demo/>} />
+    {/* PÚBLICO — todo lazy */}
+    <Route path="/" element={withMarketingSuspense(<Landing/>)} />
+    <Route path="/producto" element={withMarketingSuspense(<Producto/>)} />
+    <Route path="/operadores" element={withMarketingSuspense(<Operadores/>)} />
+    <Route path="/locatarios-info" element={withMarketingSuspense(<LocatariosInfo/>)} />
+    <Route path="/pricing" element={withMarketingSuspense(<Pricing/>)} />
+    <Route path="/manifiesto" element={withMarketingSuspense(<Manifiesto/>)} />
+    <Route path="/demo" element={withMarketingSuspense(<Demo/>)} />
 
     {/* AUTHED — necesita providers para que getAuthUser() funcione */}
     <Route path="/login" element={<AppShell><PortalSelector/></AppShell>} />
-    <Route path="/admin/*" element={<AppShell><AppLayout/>+sub-routes</AppShell>} />
+    <Route path="/admin/*" element={<AppShell><AppLayout/>+sub-routes (incluye /activos/:id, /design-lab)</AppShell>} />
     <Route path="/locatario/*" element={<AppShell><AppLayout/>+sub-routes</AppShell>} />
   </Routes>
 </HashRouter>
@@ -170,13 +178,23 @@ Los CTAs del marketing apuntan a `/login` (entrar) y `/demo` (formulario).
 - `--hairline, --hairline-strong`
 
 **Accents**:
-- `--mint, --mint-deep, --mint-soft` — primario y salud-positiva
-- `--violet, --violet-deep, --violet-soft` — IA / datos
-- `--amber + --amber-soft` — warning
-- `--coral + --coral-soft` — critical
-- `--sky + --sky-soft` — info
+- `--accent, --accent-deep, --accent-soft` — Claude coral; CTA primaria de énfasis (`mq-btn.accent`, `mk-btn.accent`, `mk-btn.primary:hover`, `mk-btn.ghost:hover`, focus rings).
+- `--mint, --mint-deep, --mint-soft` — salud-positiva.
+- `--violet, --violet-deep, --violet-soft` — IA / datos.
+- `--amber + --amber-soft` — warning.
+- `--coral + --coral-soft` — critical (separado de `--accent`; mismo tono pero menos saturado).
+- `--sky + --sky-soft` — info.
 
 **Health ramp** A→E (`--health-a/-b/-c/-d/-e`) con umbrales 88 / 76 / 60 / 44 (`healthBucket(score)`).
+
+**Motion curves** (fuente única):
+- `--ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1)` — entradas + transiciones de chart.
+- `--ease-standard: cubic-bezier(0.2, 0, 0, 1)`.
+- `--ease-out: ease-out`.
+
+`prefers-reduced-motion: reduce` colapsa la duración de las animaciones de entrada (`.fade-in`, `.page-enter`, `.slide-in-right`, etc.). Para SVG SMIL (`<animate>`), la regla CSS no aplica — los componentes consultan `useReducedMotion()` desde `src/lib/useReducedMotion.ts` y omiten los `<animate>` cuando el usuario lo solicita.
+
+**Glassmorphism**: todas las superficies con `backdrop-filter` (sidebar, topbar, `.glass-card`, `.mq-card.glass`) tienen un piso de opacidad ≥ 88% — preserva WCAG AA del texto en `--ink-2` contra el surface en light + dark.
 
 **Tipografía**:
 - `--font-sans: Inter`
@@ -329,24 +347,38 @@ healthBucket      = A(≥88) / B(≥76) / C(≥60) / D(≥44) / E(<44)
 - **TypeScript strict**, `noUnusedLocals: true`, `noUnusedParameters: true`.
 - ES modules everywhere (`"type": "module"`).
 - Imports usan alias `@/` para `src/`.
-- Funcionales con hooks. Páginas grandes lazy-loaded en `App.tsx`.
+- Funcionales con hooks. Páginas grandes lazy-loaded en `App.tsx` (incluido `Landing`).
 - Tailwind utility-first. Clases custom en `src/index.css` (`mq-*`) y `src/styles/marketing.css` (`mk-*` aislado).
 - Naming en español para entidades de dominio.
 - No usar `formatPeso` en código nuevo — `useCurrency()` es la fuente de verdad.
+- Animaciones: consumir `var(--ease-emphasized | --ease-standard | --ease-out)` en vez de literales `cubic-bezier(...)`. SVG SMIL detrás de `useReducedMotion()`.
+- CTA primaria de énfasis: `--accent` (Claude coral). Mint reservado para health-positive states.
+- Glass surfaces con `backdrop-filter` requieren piso de opacidad ≥ 88% (audit en `src/test` cubre `glass-card` y top-level surfaces).
+- React 19: no llamar `setState` directamente dentro de `useEffect` (la regla `react-hooks/set-state-in-effect` falla CI). Si necesitas GC de state derivado, hazlo durante render via `useMemo` y persiste vía `useEffect` que solo escriba a almacenamiento externo.
 
 ## Testing
 
 ```bash
 npm run lint
-npm run test        # 150 tests · 13 archivos
+npm run test        # 181 tests · 20 archivos
 ```
 
-- **Domain**: `src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`
+- **Domain**: `src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`, `src/lib/regressions.test.ts`
+- **Importers / auth**: `src/lib/importers.test.ts`, `src/lib/auth.test.ts`
 - **UI**: `src/components/mallq/ui.test.tsx` (Delta + HealthRing 5-color ramp; LifeChip; TenantLogo; Donut; Kpi)
 - **Layout**: `src/components/layout/Navbar.test.tsx`
 - **Guards**: `src/components/RoleGuards.test.tsx`
 - **Page**: `src/pages/admin/Dashboard.test.tsx`
 - **Backend integration**: `server/server.integration.test.ts`, `server/auth.integration.test.ts`, `server/uf.test.ts`
+- **Regresiones K1–K8** (cada una falla cuando el fix correspondiente se revierte):
+  - `src/test/contentLint.test.ts` — locale lint (México/CDMX/MXN/+52/`malliq.mx`/SAT/CFDI/personas inventadas → CI red).
+  - `src/test/marketingLinks.test.ts` — todo `<Link to>`/`<a href>` resuelve a ruta conocida, mailto, tel o https externo.
+  - `src/test/logoLayout.test.tsx` — `MkLogo` mantiene `width`/`height` HTML attrs + `flex-shrink:0` + `object-fit:contain`.
+  - `src/components/NotificationDrawer.test.tsx` — skeleton/grouping/error/badge/aria-modal/GC.
+  - `src/pages/admin/AssetDetail.test.tsx` — montaje, fallback 404, `switchAsset` redirect.
+  - `src/components/app/ContractEditor.test.tsx` — scroll preservation matemática (harness aislado de la UI completa).
+
+> Nota: `tsconfig.app.json` excluye `**/*.test.{ts,tsx}` y `src/test/setup.ts` del build; vitest typechequea los tests con su propio pipeline.
 
 ## Security
 

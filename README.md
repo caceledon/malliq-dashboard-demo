@@ -2,10 +2,13 @@
 
 MallIQ es una SPA editorial para operación comercial, contractual y financiera de centros comerciales. Combina un sitio público de marketing, un cockpit administrativo y un portal de locatario, todo sobre React 19 + Express 5 + SQLite con autenticación JWT y autofill contractual con IA.
 
+> **Mercado**: producto chileno para el mercado chileno. Locale primario `es-CL`, moneda CLP/UF, timezone `America/Santiago`. No hay presencia en México, Colombia ni otros mercados.
+
 ## Resumen
 
-- **Sitio público** (`/`, `/producto`, `/operadores`, `/locatarios-info`, `/pricing`, `/manifiesto`, `/demo`) — landing editorial boutique en cream + ink + mint, tipografía *Instrument Serif*. Sin auth.
-- **Cockpit administrativo** (`/admin/*`) — dashboard bento con KPIs, mapa de calor, semáforo de salud, comparador de portafolio, cola de renovaciones y simulador de renta.
+- **Sitio público** (`/`, `/producto`, `/operadores`, `/locatarios-info`, `/pricing`, `/manifiesto`, `/demo`) — landing editorial boutique en cream + ink + accent (Claude coral), tipografía *Instrument Serif*. Sin auth.
+- **Cockpit administrativo** (`/admin/*`) — dashboard bento con KPIs, plano dinámico del activo (`InteractiveMap`), mapa de calor, semáforo de salud, comparador de portafolio, cola de renovaciones y simulador de renta.
+- **Detalle de activo** (`/admin/activos/:id`) — vista per-activo con plano + KPIs + listado de locatarios, accesible al hacer click en una fila del portafolio.
 - **Portal del locatario** (`/locatario/*`) — vista pinneada al contrato del usuario logueado.
 - **Asistente IA** (`/admin/asistente`) — chat con contexto del portafolio y autofill de contratos desde PDF.
 - Multi-activo con cambio de contexto en caliente; respaldo local + remoto; sincronización auto cada 15 s.
@@ -17,15 +20,15 @@ MallIQ es una SPA editorial para operación comercial, contractual y financiera 
 | Capa | Tecnología |
 |------|------------|
 | Frontend | React 19 + TypeScript 5.9 + Vite 8 |
-| Estilos | Tailwind 4 + CSS variables editoriales (cream/ink/mint/violet) |
+| Estilos | Tailwind 4 + CSS variables editoriales (cream/ink/accent/mint/violet) |
 | Tipografía | Inter (UI) · *Instrument Serif* (display) · JetBrains Mono (numbers) — autohospedadas vía `@fontsource` |
-| Routing | `react-router-dom` con `HashRouter`, rutas públicas vs autenticadas separadas |
-| Estado | React Context en `src/store/appState.tsx`; `useCurrency`/`useTheme` |
+| Routing | `react-router-dom` con `HashRouter`, rutas públicas vs autenticadas separadas; marketing tree lazy-loaded |
+| Estado | React Context en `src/store/appState.tsx`; `useCurrency`/`useTheme`/`useReducedMotion` |
 | Persistencia cliente | `localStorage` + `idb` |
-| Backend | Express 5 + SQLite (`sqlite3` + `sqlite`) + JWT + bcrypt + helmet (CSP same-origin) |
+| Backend | Express 5 + SQLite (`sqlite3` + `sqlite`) + JWT + bcrypt + helmet (CSP same-origin) + `undici` (DNS-pinned dispatcher para SSRF guard) |
 | IA / OCR | SDK `openai`, Moonshot `kimi-k2.5`, `tesseract.js`, `pdf-parse v2` |
-| Gráficos | `recharts` + SVG editorial nativo (`Spark`, `MallPlan`, `ContractTimeline`, `ForecastChart`) |
-| Tests | Vitest + jsdom (150 tests · 13 archivos) |
+| Gráficos | `recharts` + SVG editorial nativo (`Spark`, `MallPlan`, `InteractiveMap`, `ContractTimeline`, `ForecastChart`) |
+| Tests | Vitest + jsdom (181 tests · 20 archivos) |
 | Despliegue prod | AWS EC2 + Docker Compose + Caddy auto-HTTPS · `do-up.cl` |
 
 ## Desarrollo local
@@ -88,18 +91,20 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 
 | Ruta | Página |
 |------|--------|
-| `/admin/dashboard` | Cockpit editorial · 5 KpiTile + comparador de activos + alerts feed + heatmap + expiry river + AI task |
-| `/admin/activos` | Portafolio de activos · creación, métricas cruzadas |
+| `/admin/dashboard` | Cockpit editorial · 5 KpiTile + comparador de activos + alerts feed + heatmap + expiry river + AI task + plano dinámico del activo (`InteractiveMap`) |
+| `/admin/activos` | Portafolio de activos · creación, métricas cruzadas, filas clicables |
+| `/admin/activos/:id` | Detalle per-activo · KPIs + plano + listado de locatarios del activo |
 | `/admin/locatarios` | Tabla con SemaforoStrip A→E + filtro/búsqueda |
 | `/admin/locatarios/:id` | Ficha de locatario · HealthRing + 5 ComponentBars + sales chart + RentSteps |
-| `/admin/rentas` | ContractTimeline (river coloreado por salud) + tabla + autofill |
+| `/admin/rentas` | ContractTimeline (river coloreado por salud) + tabla + autofill con scroll preservado en `ContractEditor` |
 | `/admin/cargas` | Carga de ventas (manual / OCR / fiscal / POS) |
-| `/admin/planeacion` | Presupuesto + forecast con escenarios |
+| `/admin/planeacion` | Presupuesto + forecast P10/P50/P90 con escenarios |
 | `/admin/alertas` | 3 severity tiles (coral/amber/sky) + lista priorizada |
 | `/admin/simulador` | Simulador "what-if" de renta — dos escenarios lado a lado |
 | `/admin/ecosistema` | Prospectos + proveedores |
 | `/admin/asistente` | Chat IA con contexto del portafolio + drop zone de autofill PDF |
 | `/admin/configuracion` | Activo, sync, UF override, tema (light/dark/auto), usuarios, activity log |
+| `/admin/design-lab` | Surface interno: muestra cada primitivo del sistema de diseño contra los tokens vigentes + reporte de contraste WCAG AA |
 
 ### Portal del locatario (`locatario` con `tenant_contract_id`)
 
@@ -115,19 +120,22 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 
 ## Sistema de diseño
 
-- **Paleta**: cream + ink (charcoal cool/warm), mint (primario + salud-positiva), violet (IA/datos), amber (warning), coral (critical), sky (info).
+- **Paleta**: cream + ink (charcoal warm), `--accent` (Claude coral, primary CTAs), mint (salud-positiva), violet (IA/datos), amber (warning), coral (critical), sky (info).
 - **Health ramp** A→E (`--health-a..e`) con umbrales 88/76/60/44.
 - **Tipografía**: Inter para UI, *Instrument Serif* para titulares editoriales (`mq-h1/h2/h3`, `mq-display`), JetBrains Mono para números tabulares.
+- **Motion tokens**: `--ease-emphasized`, `--ease-standard`, `--ease-out` — fuente única de las curvas. `prefers-reduced-motion` colapsa la duración de las animaciones de entrada y los componentes que renderizan SVG SMIL (`<animate>`) consultan `useReducedMotion()` para omitirlos.
+- **Glassmorphism**: piso de opacidad 88% en todas las superficies con `backdrop-filter` (sidebar, topbar, `.glass-card`, `.mq-card.glass`) — preserva contraste WCAG AA del texto contra el surface en light + dark.
 - **Utility classes** (en `src/index.css`):
   - `mq-card`, `mq-card.elevated/.outlined/.glass`
   - `mq-h1/-h2/-h3/-display/-italic/-eyebrow/-h-eyebrow`
   - `mq-num-xl/-l/-num/-s/-mono`
   - `mq-pill` + variantes `.mint/.violet/.amber/.coral/.sky`
+  - `mq-btn` + variantes `.primary/.accent/.mint/.violet/.umber/.ghost` (`accent` aplica `--accent` para énfasis primario)
   - `mq-bento` (12-col grid) + `span-3/4/5/6/7/8/9/12`
   - `[data-density="cozy|compact"]` para retunear paddings
-- **Marketing** (`src/styles/marketing.css`): clases `mk-*` aisladas. La regla `.mk { … }` fuerza tokens cream y aísla del tema del cockpit.
+- **Marketing** (`src/styles/marketing.css`): clases `mk-*` aisladas. La regla `.mk { … }` fuerza tokens cream y aísla del tema del cockpit. `mk-btn.primary:hover` y `mk-btn.ghost:hover` aterrizan en `--accent`; `mk-btn.accent` aplica accent puro.
 - **Componentes compartidos** (`src/components/mallq/ui.tsx`):
-  `TopBar, Pill, Spark, BarStack, KpiTile, MiniKpi, HealthBar, SemaforoStrip, ComponentBar, AiTask, InsightCard, Term, Stat, CategoryHeatmap, ExpiryRiver, ContractTimeline, ForecastChart, FootfallChart, CategoryDonut, MallPlan, RentSteps, ArrearsTimeline, Bento, HealthRing, Donut, Sparkline, AreaChart, TenantLogo, LifeChip, SigChip, Delta, Kpi`.
+  `TopBar, Pill, Spark, BarStack, KpiTile, MiniKpi, HealthBar, SemaforoStrip, ComponentBar, AiTask, InsightCard, Term, Stat, CategoryHeatmap, ExpiryRiver, ContractTimeline, ForecastChart, FootfallChart, CategoryDonut, MallPlan, RentSteps, ArrearsTimeline, Bento, HealthRing, Donut, Sparkline, AreaChart, TenantLogo, LifeChip, SigChip, Delta, Kpi`. El plano dinámico per-activo es `InteractiveMap` en `src/components/InteractiveMap.tsx` (consume `useAppState` directamente).
 
 ## Arquitectura funcional
 
@@ -241,25 +249,25 @@ src/
     layout/{AppLayout,Sidebar,Navbar}.tsx
     marketing/Shell.tsx
     mallq/{ui.tsx,helpers.ts}
-    app/{TenantUsersSection,UfOverrideModal,ActivityLogSection,...}.tsx
-    {AuthGate,RoleGuards,Toast,ConfirmDialog,...}.tsx
+    app/{TenantUsersSection,UfOverrideModal,ActivityLogSection,ContractEditor,...}.tsx
+    {AuthGate,RoleGuards,Toast,ConfirmDialog,InteractiveMap,NotificationDrawer,...}.tsx
   pages/
     PortalSelector.tsx
     NotFound.tsx
     marketing/{Landing,Producto,Operadores,Locatarios,Pricing,Manifiesto,Demo}.tsx
-    admin/{Dashboard,Portafolio,Locatarios,LocatarioDetail,RentasContratos,
+    admin/{Dashboard,Portafolio,AssetDetail,Locatarios,LocatarioDetail,RentasContratos,
            CargasDatos,Planeacion,Ecosistema,Alertas,Configuracion,
-           Simulador,Asistente}.tsx
+           Simulador,Asistente,DesignLab}.tsx
     locatario/{Dashboard,Contrato,Ventas,PendingBinding}.tsx
-  lib/{domain,portfolio,api,currency,theme,anomalies,...}.ts
+  lib/{domain,portfolio,api,currency,theme,anomalies,useReducedMotion,...}.ts
   store/appState.tsx
   styles/marketing.css
   index.css
+  test/{contentLint,marketingLinks,logoLayout,setup}.ts(x)
 server/
   index.js auth.js db.js uf.js anomalies.js env.js
   *.test.ts
-infra/aws/                # llaves de despliegue (gitignored)
-deploy.ps1
+infra/aws/                # llaves de despliegue (gitignored), DEPLOY.md
 docker-compose.prod.yml
 README.md AGENTS.md
 ```
@@ -273,13 +281,21 @@ npm run test:watch
 npm run build
 ```
 
-Cobertura actual:
+Cobertura actual (181 tests · 20 archivos):
 
-- Dominio (`src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`)
+- Dominio (`src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`, `src/lib/regressions.test.ts`)
+- Importers / auth (`src/lib/importers.test.ts`, `src/lib/auth.test.ts`)
 - Componentes UI (`src/components/mallq/ui.test.tsx`, `src/components/layout/Navbar.test.tsx`)
 - Guards (`src/components/RoleGuards.test.tsx`)
 - Dashboard (`src/pages/admin/Dashboard.test.tsx`)
 - Backend integración (`server/server.integration.test.ts`, `server/auth.integration.test.ts`, `server/uf.test.ts`)
+- Regresiones K1–K8:
+  - `src/test/contentLint.test.ts` — lint de locale: falla CI si aparecen referencias a México / CDMX / MXN / `+52` / `malliq.mx` / SAT / CFDI / nombres de personas inventadas / inversionistas inventados en marketing.
+  - `src/test/marketingLinks.test.ts` — todo `<Link to>` y `<a href>` del árbol marketing resuelve a una ruta conocida, `mailto:`, `tel:` o URL externa `https://`.
+  - `src/test/logoLayout.test.tsx` — `MkLogo` mantiene `width`/`height` HTML attrs, `flex-shrink:0` y `object-fit:contain` (regresión de deformación bajo flex).
+  - `src/components/NotificationDrawer.test.tsx` — skeleton de hidratación, agrupación por categoría, error block de ingesta fallida, badge unread + `marcar leídas`, `aria-modal`/`aria-live`, GC de seen ids huérfanos.
+  - `src/pages/admin/AssetDetail.test.tsx` — montaje del plano, fallback 404 para id inválido, `switchAsset` al navegar directo.
+  - `src/components/app/ContractEditor.test.tsx` — preserva `scrollTop` cuando los paneles del autofill aparecen/crecen sobre el form anchor.
 
 ## Despliegue
 
@@ -303,9 +319,13 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Convenciones
 
-- UI y copy en español; nomenclatura de dominio también en español (`Locatarios`, `Contratos`, `Ventas`).
+- UI y copy en **es-CL**; nomenclatura de dominio también en español (`Locatarios`, `Contratos`, `Ventas`).
+- Producto chileno: CLP/UF, RUT, `America/Santiago`, `+56`, `do-up.cl`, SII/DTE. No introducir referencias a otros mercados sin retirar el lint de `src/test/contentLint.test.ts`.
 - El término funcional vigente es **Activo**, no "Mall".
 - Usar `useCurrency()` para todo lo monetario (no `formatPeso` en código nuevo).
 - Display editorial usa la familia `var(--font-display)` (Instrument Serif). Números tabulares usan `var(--font-mono)` (JetBrains Mono).
-- Mint = primario, violet = IA/datos, amber = warning, coral = critical, sky = info.
-- Marketing y cockpit son árboles de proveedores **separados** (ver `src/App.tsx`). Las páginas `mk-*` no comparten estado con el cockpit.
+- **Accent (`--accent`, Claude coral)** = CTA primaria de énfasis; mint = salud-positiva; violet = IA/datos; amber = warning; coral = critical; sky = info.
+- Animaciones consumen `var(--ease-emphasized | --ease-standard | --ease-out)` — no escribir `cubic-bezier(...)` literal en código nuevo. SVG SMIL gateado con `useReducedMotion()`.
+- Glassmorphism con `backdrop-filter` requiere piso de opacidad ≥ 88% para mantener WCAG AA del texto.
+- Marketing y cockpit son árboles de proveedores **separados** (ver `src/App.tsx`). Las páginas `mk-*` no comparten estado con el cockpit. Marketing está totalmente lazy-loaded (incluido `Landing`).
+- Entidad legal en footer (`MALLIQ SPA`): placeholder pendiente de confirmación del owner.
