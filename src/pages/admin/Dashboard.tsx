@@ -17,6 +17,7 @@ import {
   TopBar,
 } from '@/components/mallq/ui';
 import { InteractiveMap } from '@/components/InteractiveMap';
+import { Modal } from '@/components/ui/Modal';
 import { diffInDays } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
 import type { PortfolioAssetSummary } from '@/lib/portfolio';
@@ -612,7 +613,6 @@ function RenewalRow({
 }
 
 function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  if (!open) return null;
   const checks = [
     { label: 'Paga al día', detail: 'El locatario está al día con renta y gastos comunes.' },
     { label: 'Entrega ventas al día', detail: 'Reporta ventas mensualmente sin atrasos.' },
@@ -631,6 +631,7 @@ function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => vo
   const bucketLabels: Record<string, string> = { A: '≥ 88', B: '76–87', C: '60–75', D: '44–59', E: '< 44' };
   void healthBucket;
   return (
+    <Modal open={open} onClose={onClose}>
     <div
       onClick={onClose}
       style={{
@@ -713,6 +714,7 @@ function HealthLegendModal({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
       </div>
     </div>
+    </Modal>
   );
 }
 

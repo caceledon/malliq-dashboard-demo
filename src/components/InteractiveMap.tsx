@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '@/lib/currency';
 import { contractDateRangesOverlap, getContractDisplayValues, getContractLifecycle, type AssetUnit, type Contract } from '@/lib/domain';
@@ -388,60 +389,68 @@ export function InteractiveMap() {
             </g>
           </svg>
 
-          {/* Tooltip Overlay — position written directly via tooltipRef in
-              the useLayoutEffect above. Initial style hides the node
-              before the first measurement lands. */}
-          <div
-            ref={tooltipRef}
-            className="pointer-events-none fixed z-[9999] rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/95 p-3 text-xs shadow-pop backdrop-blur-md transition-opacity duration-200"
-            style={{ left: 0, top: 0, transform: 'translate(0, -50%)', opacity: 0 }}
-          >
-            {hoveredUnitId && (() => {
-              const unit = state.units.find((item) => item.id === hoveredUnitId);
-              if (!unit) return null;
-
-              const unitContracts = getUnitContracts(unit.id, state.contracts);
-              const contract = getPrimaryUnitContract(unitContracts);
-              const display = contract ? getContractDisplayValues(contract) : undefined;
-              const summary = contract ? insights.tenantSummaries.find((item) => item.id === contract.id) : undefined;
-              const conflictingStores = conflictingContractsByUnit[unit.id] || [];
-
-              return (
-                <>
-                  <p className="text-[14px] font-bold text-[var(--fg)]">
-                    {conflictingStores.length > 1
-                      ? `Conflicto: ${conflictingStores.join(', ')}`
-                      : display?.storeName ?? unit.manualDisplayName ?? unit.label}
-                  </p>
-                  <div className="mb-2 mt-1 border-b border-[var(--border-color)] pb-2">
-                    <span className="font-medium text-[var(--sidebar-fg)]">
-                      {unit.code} · {unit.areaM2} m²
-                    </span>
-                    {!contract && unit.manualCategory ? (
-                      <span className="ml-2 rounded-md bg-[var(--hover-bg)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider">
-                        {unit.manualCategory}
-                      </span>
-                    ) : null}
-                  </div>
-                  {conflictingStores.length > 1 ? (
-                    <p className="font-semibold text-[var(--coral)] mb-2">Hay contratos superpuestos.</p>
-                  ) : null}
-                  <div className="space-y-1">
-                    <p className="font-medium text-[var(--fg)]">
-                      <span className="text-[var(--sidebar-fg)]">Ventas:</span> {summary ? formatCurrency(summary.salesCurrent) : 'Sin datos'}
-                    </p>
-                    {summary ? (
-                      <p className="font-medium text-[var(--fg)]">
-                        <span className="text-[var(--sidebar-fg)]">Renta:</span> {formatCurrency(summary.rentTotal)}
-                      </p>
-                    ) : null}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
         </div>
       )}
+      {/* Tooltip Overlay — portaled to document.body so its position:fixed
+          coordinates resolve against the viewport. Without the portal, the
+          tooltip lives inside `.glass-card` (which sets backdrop-filter and
+          therefore becomes the containing block for fixed descendants), and
+          the JS-computed viewport coords would render against the card's
+          box, putting the tooltip in the wrong place. */}
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={tooltipRef}
+              className="pointer-events-none fixed z-[9999] rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/95 p-3 text-xs shadow-pop backdrop-blur-md transition-opacity duration-200"
+              style={{ left: 0, top: 0, transform: 'translate(0, -50%)', opacity: 0 }}
+            >
+              {hoveredUnitId && (() => {
+                const unit = state.units.find((item) => item.id === hoveredUnitId);
+                if (!unit) return null;
+
+                const unitContracts = getUnitContracts(unit.id, state.contracts);
+                const contract = getPrimaryUnitContract(unitContracts);
+                const display = contract ? getContractDisplayValues(contract) : undefined;
+                const summary = contract ? insights.tenantSummaries.find((item) => item.id === contract.id) : undefined;
+                const conflictingStores = conflictingContractsByUnit[unit.id] || [];
+
+                return (
+                  <>
+                    <p className="text-[14px] font-bold text-[var(--fg)]">
+                      {conflictingStores.length > 1
+                        ? `Conflicto: ${conflictingStores.join(', ')}`
+                        : display?.storeName ?? unit.manualDisplayName ?? unit.label}
+                    </p>
+                    <div className="mb-2 mt-1 border-b border-[var(--border-color)] pb-2">
+                      <span className="font-medium text-[var(--sidebar-fg)]">
+                        {unit.code} · {unit.areaM2} m²
+                      </span>
+                      {!contract && unit.manualCategory ? (
+                        <span className="ml-2 rounded-md bg-[var(--hover-bg)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider">
+                          {unit.manualCategory}
+                        </span>
+                      ) : null}
+                    </div>
+                    {conflictingStores.length > 1 ? (
+                      <p className="font-semibold text-[var(--coral)] mb-2">Hay contratos superpuestos.</p>
+                    ) : null}
+                    <div className="space-y-1">
+                      <p className="font-medium text-[var(--fg)]">
+                        <span className="text-[var(--sidebar-fg)]">Ventas:</span> {summary ? formatCurrency(summary.salesCurrent) : 'Sin datos'}
+                      </p>
+                      {summary ? (
+                        <p className="font-medium text-[var(--fg)]">
+                          <span className="text-[var(--sidebar-fg)]">Renta:</span> {formatCurrency(summary.rentTotal)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

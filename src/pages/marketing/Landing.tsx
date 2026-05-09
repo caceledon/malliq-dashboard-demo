@@ -210,7 +210,7 @@ export function Landing() {
             </div>
             <div style={{ paddingLeft: 24 }}>
               <div className="num">
-                <span style={{ fontSize: 22, color: 'var(--fg-3)' }}>UF</span> XXX
+                <span style={{ fontSize: 22, color: 'var(--fg-3)' }}>UF</span> 2.4M
               </div>
               <div className="mk-eyebrow" style={{ marginTop: 8 }}>
                 Renta gestionada / año

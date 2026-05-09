@@ -75,6 +75,18 @@ export function Modal({
     if (!open) return;
     if (lockScroll) lockBody();
 
+    // Capture the element that had focus at the moment the modal opens
+    // so we can return focus to it on close. For most callers this is
+    // the trigger button (e.g. the bell, a "Delete" action). Modals that
+    // use a child `autoFocus` prop will see the autofocused input here
+    // instead, since native autoFocus fires during DOM commit before
+    // useEffect runs — those modals will lose focus to the body on
+    // close (no worse than the previous behavior). Migrating those
+    // callers to programmatic focus via requestAnimationFrame would
+    // give them the same trigger-restore behavior as the rest.
+    const previouslyFocused =
+      typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+
     const onKey = (event: KeyboardEvent) => {
       if (closeOnEscape && event.key === 'Escape') onClose();
     };
@@ -83,6 +95,22 @@ export function Modal({
     return () => {
       if (closeOnEscape) window.removeEventListener('keydown', onKey);
       if (lockScroll) unlockBody();
+
+      // Restore focus on close. Guard with `body.contains(...)` because
+      // the previously-focused element may have unmounted while the
+      // modal was open (e.g. a route nav).
+      if (
+        previouslyFocused &&
+        typeof document !== 'undefined' &&
+        document.body.contains(previouslyFocused) &&
+        typeof previouslyFocused.focus === 'function'
+      ) {
+        try {
+          previouslyFocused.focus({ preventScroll: true });
+        } catch {
+          // Detached / non-focusable nodes can throw — silently ignore.
+        }
+      }
     };
   }, [open, closeOnEscape, lockScroll, onClose]);
 
