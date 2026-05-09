@@ -211,6 +211,34 @@
   --info-soft: var(--sky-soft);
 }
 
+/* ============================================================
+   Z-INDEX SCALE — canonical tiers
+   ============================================================
+   New overlays should pick a value from this list rather than
+   inventing one. Modals are portaled to <body> via the Modal
+   primitive (src/components/ui/Modal.tsx) which means their
+   z-index resolves at the document root, not under any nested
+   stacking context.
+
+   tier         z-index   used by
+   ----         -------   ----------------------------------------
+   sticky       30        .mq-topbar (Navbar)
+   sidebar      40-50     Sidebar mobile backdrop / aside
+   fab          50        GatewayStatus pill, in-flow chips
+   drawer       100       NotificationDrawer, GatewayStatus modal,
+                          ContractPreviewModal, Navbar UF modal
+   wizard       120       SetupWizard, ContractEvidenceModal
+   modal        150       ConfirmDialog, UfOverrideModal,
+                          AutofillSplitReview, Dashboard
+                          HealthLegendModal
+   palette      200       CommandPalette, ShortcutsHelp, Toast
+   undo-toast   220       UndoToast (must outrank palette so the
+                          undo affordance survives an open palette)
+   tooltip      9999      InteractiveMap hover tooltip
+                          (pointer-events:none, OK to outrank
+                          everything — never blocks input)
+   ============================================================ */
+
 * { box-sizing: border-box; }
 
 html {

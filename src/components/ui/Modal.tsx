@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 // Refcounted body scroll lock. Multiple modals open simultaneously share one
@@ -33,6 +33,32 @@ function unlockBody() {
   }
 }
 
+// Open-modal stack so Esc / Tab handlers only fire on the *topmost* modal.
+// Without this, opening a ConfirmDialog over the NotificationDrawer would
+// close both at once on Esc — annoying when the inner is a dependent
+// confirmation. Each Modal pushes its id when it opens and pops on close.
+const modalStack: number[] = [];
+let nextModalId = 1;
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function getFocusables(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    // offsetParent is null for elements with display:none ancestors. We don't
+    // want to count those — Tab would still skip them and we'd cycle to a
+    // hidden node. Visibility-by-CSS (`visibility:hidden`) is rare enough in
+    // this codebase to ignore.
+    (el) => el.offsetParent !== null,
+  );
+}
+
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -43,6 +69,12 @@ export interface ModalProps {
   closeOnEscape?: boolean;
   /** Locks `<body>` scroll while open. Default: true. */
   lockScroll?: boolean;
+  /**
+   * Cycles Tab / Shift+Tab inside the modal so background controls stay
+   * unreachable. Auto-focuses the first focusable on open if nothing inside
+   * is already focused. Default: true.
+   */
+  trapFocus?: boolean;
   children: ReactNode;
 }
 
@@ -54,13 +86,18 @@ export interface ModalProps {
  * z-index resolves at the document root, not under the parent's z-cap.
  *
  * Children render their own backdrop and card layout (use the
- * `.overlay-backdrop` utility for the dim layer). The wrapper is intentionally
- * structureless — no role/aria — because callers attach role="dialog" +
- * aria-modal + aria-label to their own card element.
+ * `.overlay-backdrop` utility for the dim layer). The portal wrapper is a
+ * structureless `<div>` with no styling — it exists only as a Tab-trap
+ * boundary and a focusables query root, and contributes nothing to layout
+ * (its only children are `position: fixed`, so the wrapper itself collapses).
  *
  * Lifecycle handled here:
- *  - Escape key → onClose (when closeOnEscape).
+ *  - Escape key → onClose (when closeOnEscape) — only fires on topmost modal.
+ *  - Tab / Shift+Tab → cycles within the modal (when trapFocus).
+ *  - Auto-focus first focusable on open (when trapFocus and nothing inside
+ *    is already focused).
  *  - Body scroll lock with refcount (when lockScroll).
+ *  - Focus restore to the trigger element on close.
  *  - Conditional mount: returns null when `open === false` so children never
  *    have to do their own `if (!open) return null`.
  */
@@ -69,31 +106,81 @@ export function Modal({
   onClose,
   closeOnEscape = true,
   lockScroll = true,
+  trapFocus = true,
   children,
 }: ModalProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
     if (lockScroll) lockBody();
 
-    // Capture the element that had focus at the moment the modal opens
-    // so we can return focus to it on close. For most callers this is
-    // the trigger button (e.g. the bell, a "Delete" action). Modals that
-    // use a child `autoFocus` prop will see the autofocused input here
-    // instead, since native autoFocus fires during DOM commit before
-    // useEffect runs — those modals will lose focus to the body on
-    // close (no worse than the previous behavior). Migrating those
-    // callers to programmatic focus via requestAnimationFrame would
-    // give them the same trigger-restore behavior as the rest.
+    const id = nextModalId++;
+    modalStack.push(id);
+
+    // Capture the element that had focus when the modal opens so we can
+    // return focus to it on close. For most callers this is the trigger
+    // button. Modals that use a child `autoFocus` prop will see the
+    // autofocused input here instead — those silently no-op the restore
+    // (the input is detached by close time and fails the `body.contains`
+    // guard below).
     const previouslyFocused =
       typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
 
+    // Auto-focus the first focusable on open if nothing inside the modal
+    // is already focused (so we don't fight callers that use autoFocus or
+    // their own ref-based focus). Use rAF so any synchronous DOM mutations
+    // settle first.
+    if (trapFocus && typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        const root = containerRef.current;
+        if (!root) return;
+        if (root.contains(document.activeElement)) return;
+        getFocusables(root)[0]?.focus({ preventScroll: true });
+      });
+    }
+
     const onKey = (event: KeyboardEvent) => {
-      if (closeOnEscape && event.key === 'Escape') onClose();
+      // Only the topmost modal handles keyboard. Stack discipline lets us
+      // open a confirm dialog over a drawer and have Esc close just the
+      // confirm without cascading.
+      if (modalStack[modalStack.length - 1] !== id) return;
+
+      if (event.key === 'Escape' && closeOnEscape) {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+
+      if (event.key === 'Tab' && trapFocus) {
+        const root = containerRef.current;
+        if (!root) return;
+        const focusables = getFocusables(root);
+        if (focusables.length === 0) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (active && !root.contains(active)) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        } else if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      }
     };
-    if (closeOnEscape) window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey);
 
     return () => {
-      if (closeOnEscape) window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey);
+      const idx = modalStack.indexOf(id);
+      if (idx >= 0) modalStack.splice(idx, 1);
       if (lockScroll) unlockBody();
 
       // Restore focus on close. Guard with `body.contains(...)` because
@@ -112,9 +199,14 @@ export function Modal({
         }
       }
     };
-  }, [open, closeOnEscape, lockScroll, onClose]);
+  }, [open, closeOnEscape, lockScroll, trapFocus, onClose]);
 
   if (!open || typeof document === 'undefined') return null;
 
-  return createPortal(<>{children}</>, document.body);
+  return createPortal(
+    <div ref={containerRef} data-modal-portal="">
+      {children}
+    </div>,
+    document.body,
+  );
 }
