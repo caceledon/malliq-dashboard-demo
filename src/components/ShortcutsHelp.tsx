@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import type { ShortcutEntry } from '@/hooks/useKeyboardShortcuts';
 
 export function ShortcutsHelp({
@@ -10,12 +11,11 @@ export function ShortcutsHelp({
   onClose: () => void;
   shortcuts: ShortcutEntry[];
 }) {
-  if (!open) return null;
-
   const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/i.test(navigator.platform);
   const paletteLabel = IS_MAC ? '⌘K' : 'Ctrl K';
 
   return (
+    <Modal open={open} onClose={onClose}>
     <div
       role="dialog"
       aria-modal="true"
@@ -58,6 +58,7 @@ export function ShortcutsHelp({
         </div>
       </div>
     </div>
+    </Modal>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Modal } from '@/components/ui/Modal';
 
 /**
  * Revisión split-screen del resultado de Autofill LLM.
@@ -20,6 +21,8 @@ export type AutofillCampo = {
 };
 
 type Props = {
+  /** When false the review is unmounted entirely (no portal kept). Defaults to true for callers that gate at render time. */
+  open?: boolean;
   pdfUrl: string;
   campos: AutofillCampo[];
   onAplicar: (corregidos: AutofillCampo[]) => void;
@@ -41,7 +44,7 @@ const ETIQUETAS: Record<string, string> = {
   feeIngreso: 'Fee de ingreso',
 };
 
-export function AutofillSplitReview({ pdfUrl, campos, onAplicar, onCancelar }: Props) {
+export function AutofillSplitReview({ open = true, pdfUrl, campos, onAplicar, onCancelar }: Props) {
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [foco, setFoco] = useState<number>(0);
 
@@ -75,7 +78,11 @@ export function AutofillSplitReview({ pdfUrl, campos, onAplicar, onCancelar }: P
   }, [valores]);
 
   return (
+    <Modal open={open} onClose={onCancelar}>
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Revisión de autofill"
       className="fixed inset-0 z-[150] grid"
       style={{
         gridTemplateColumns: 'minmax(0, 1.15fr) minmax(420px, 0.85fr)',
@@ -168,6 +175,7 @@ export function AutofillSplitReview({ pdfUrl, campos, onAplicar, onCancelar }: P
         </footer>
       </section>
     </div>
+    </Modal>
   );
 }
 

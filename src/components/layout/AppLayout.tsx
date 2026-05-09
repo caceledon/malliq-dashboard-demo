@@ -104,7 +104,7 @@ function AppLayoutInner({
     <div className="relative flex min-h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-      <div className="relative z-10 flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <Navbar onMenuClick={() => setMobileOpen(true)} onOpenCommandPalette={openPalette} />
         <main className="flex-1 overflow-x-hidden">
           <div className="mx-auto w-full max-w-[1440px]">

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, X } from 'lucide-react';
 
 interface UndoToastState {
@@ -46,48 +47,56 @@ export function UndoToastProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => clearTimer(), []);
 
+  // Portal to document.body — same rationale as ToastProvider: ensures the
+  // fixed-position container resolves against the viewport.
+  const toastRoot =
+    toast && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="mq-card"
+            role="status"
+            aria-live="polite"
+            style={{
+              position: 'fixed',
+              bottom: 24,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 220,
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              minWidth: 320,
+              maxWidth: '92vw',
+              boxShadow: 'var(--shadow-pop)',
+              animation: 'toastEnter 180ms ease-out',
+            }}
+          >
+            <CheckCircle2 size={16} style={{ color: 'var(--ok)', flex: 'none' }} />
+            <div style={{ flex: 1, fontSize: 13, color: 'var(--ink-1)' }}>{toast.message}</div>
+            <button
+              type="button"
+              className="mq-btn sm"
+              onClick={() => {
+                toast.onUndo();
+                dismiss();
+              }}
+              style={{ fontWeight: 600 }}
+            >
+              Deshacer
+            </button>
+            <button type="button" className="iconbtn" onClick={dismiss} title="Cerrar">
+              <X size={14} />
+            </button>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <UndoToastContext.Provider value={{ showUndo, dismiss }}>
       {children}
-      {toast ? (
-        <div
-          className="mq-card"
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 220,
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            minWidth: 320,
-            maxWidth: '92vw',
-            boxShadow: 'var(--shadow-pop)',
-            animation: 'toastEnter 180ms ease-out',
-          }}
-        >
-          <CheckCircle2 size={16} style={{ color: 'var(--ok)', flex: 'none' }} />
-          <div style={{ flex: 1, fontSize: 13, color: 'var(--ink-1)' }}>{toast.message}</div>
-          <button
-            type="button"
-            className="mq-btn sm"
-            onClick={() => {
-              toast.onUndo();
-              dismiss();
-            }}
-            style={{ fontWeight: 600 }}
-          >
-            Deshacer
-          </button>
-          <button type="button" className="iconbtn" onClick={dismiss} title="Cerrar">
-            <X size={14} />
-          </button>
-        </div>
-      ) : null}
+      {toastRoot}
     </UndoToastContext.Provider>
   );
 }

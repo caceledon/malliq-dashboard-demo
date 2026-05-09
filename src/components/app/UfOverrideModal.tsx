@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Coins } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 
 interface UfOverrideModalProps {
   open: boolean;
@@ -26,10 +27,6 @@ export function UfOverrideModal({ open, defaultDate, onConfirm, onCancel }: UfOv
   }, [open, defaultDate]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  if (!open) {
-    return null;
-  }
-
   const submit = () => {
     const numeric = Number(valueRaw.replace(/\./g, '').replace(',', '.'));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -44,11 +41,18 @@ export function UfOverrideModal({ open, defaultDate, onConfirm, onCancel }: UfOv
   };
 
   return (
-    <div className="overlay-backdrop fixed inset-0 z-[150] flex items-center justify-center px-4" onClick={onCancel}>
+    <Modal open={open} onClose={onCancel}>
       <div
-        className="scale-in w-full max-w-md rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)] p-6 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+        className="overlay-backdrop fixed inset-0 z-[150] flex items-center justify-center px-4"
+        onClick={onCancel}
       >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Override manual de UF"
+          className="scale-in w-full max-w-md rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)] p-6 shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
         <div className="flex items-start gap-4">
           <div className="rounded-2xl bg-amber-100 p-3 dark:bg-amber-950/40">
             <Coins className="h-6 w-6 text-amber-600" />
@@ -98,7 +102,8 @@ export function UfOverrideModal({ open, defaultDate, onConfirm, onCancel }: UfOv
             Guardar override
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

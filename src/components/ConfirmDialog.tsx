@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -21,10 +22,6 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  if (!open) {
-    return null;
-  }
-
   const confirmButtonClass =
     variant === 'danger'
       ? 'bg-red-600 text-white hover:bg-red-700'
@@ -47,35 +44,43 @@ export function ConfirmDialog({
         : 'text-blue-600';
 
   return (
-    <div className="overlay-backdrop fixed inset-0 z-[150] flex items-center justify-center px-4" onClick={onCancel}>
+    <Modal open={open} onClose={onCancel}>
       <div
-        className="scale-in w-full max-w-md rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)] p-6 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+        className="overlay-backdrop fixed inset-0 z-[150] flex items-center justify-center px-4"
+        onClick={onCancel}
       >
-        <div className="flex items-start gap-4">
-          <div className={`rounded-2xl p-3 ${iconBgClass}`}>
-            <AlertTriangle className={`h-6 w-6 ${iconColor}`} />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className="scale-in w-full max-w-md rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)] p-6 shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start gap-4">
+            <div className={`rounded-2xl p-3 ${iconBgClass}`}>
+              <AlertTriangle className={`h-6 w-6 ${iconColor}`} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--sidebar-fg)]">{message}</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-bold">{title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-[var(--sidebar-fg)]">{message}</p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              onClick={onCancel}
+              className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
+            >
+              {cancelLabel}
+            </button>
+            <button
+              onClick={onConfirm}
+              className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${confirmButtonClass}`}
+            >
+              {confirmLabel}
+            </button>
           </div>
-        </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--hover-bg)]"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            onClick={onConfirm}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${confirmButtonClass}`}
-          >
-            {confirmLabel}
-          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

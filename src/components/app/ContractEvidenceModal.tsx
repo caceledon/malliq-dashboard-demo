@@ -2,10 +2,11 @@
 // page the AI cited via the standard #page=N URL fragment supported by every
 // major browser PDF viewer. Falls back to a "descargar" link when the page
 // number is unknown.
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { useAppState } from '@/store/appState';
 import { resolveApiBase } from '@/lib/api';
+import { Modal } from '@/components/ui/Modal';
 
 export interface ContractEvidenceModalProps {
   open: boolean;
@@ -26,15 +27,6 @@ export function ContractEvidenceModal({
 }: ContractEvidenceModalProps) {
   const { state } = useAppState();
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
   const apiBase = state.asset?.backendUrl ?? resolveApiBase();
   const previewUrl = useMemo(() => {
     if (!sourceDocumentId) return null;
@@ -42,9 +34,8 @@ export function ContractEvidenceModal({
     return page ? `${url}#page=${page}` : url;
   }, [apiBase, sourceDocumentId, page]);
 
-  if (!open) return null;
-
   return (
+    <Modal open={open} onClose={onClose}>
     <div
       className="fixed inset-0 z-[120]"
       role="dialog"
@@ -129,5 +120,6 @@ export function ContractEvidenceModal({
         </div>
       </div>
     </div>
+    </Modal>
   );
 }

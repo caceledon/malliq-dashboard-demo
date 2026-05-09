@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { useAppState } from '@/store/appState';
+import { Modal } from '@/components/ui/Modal';
 
 interface Props {
   documentId: string | null;
@@ -39,21 +40,20 @@ export function ContractPreviewModal({ documentId, fileName, onClose }: Props) {
     };
   }, [documentId, actions]);
 
-  if (!documentId) return null;
-
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.55)',
-        display: 'grid',
-        placeItems: 'center',
-        zIndex: 100,
-        padding: 24,
-      }}
-    >
+    <Modal open={Boolean(documentId)} onClose={onClose}>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.55)',
+          display: 'grid',
+          placeItems: 'center',
+          zIndex: 100,
+          padding: 24,
+        }}
+      >
       <div
         role="dialog"
         aria-modal="true"
@@ -107,6 +107,7 @@ export function ContractPreviewModal({ documentId, fileName, onClose }: Props) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </Modal>
   );
 }

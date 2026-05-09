@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, LogOut, Menu, Moon, Printer, Search, Sparkles, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
+import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/lib/theme';
 import { useCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
@@ -204,7 +205,7 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
         </div>
       ) : null}
 
-      {ufEditOpen ? (
+      <Modal open={ufEditOpen} onClose={() => setUfEditOpen(false)}>
         <div
           onClick={() => setUfEditOpen(false)}
           style={{
@@ -218,6 +219,9 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Actualizar valor UF"
             onClick={(event) => event.stopPropagation()}
             className="mq-card"
             style={{ width: 360, maxWidth: '100%', padding: 20 }}
@@ -273,7 +277,7 @@ export function Navbar({ onMenuClick, onOpenCommandPalette }: NavbarProps) {
             </div>
           </div>
         </div>
-      ) : null}
+      </Modal>
     </nav>
   );
 }

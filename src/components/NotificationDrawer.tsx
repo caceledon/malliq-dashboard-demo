@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowRight, Bell, Check, ChevronRight, Info, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/store/appState';
+import { Modal } from '@/components/ui/Modal';
 import type { AlertItem } from '@/lib/domain';
 
 const SYNC_ALERT_IDS = new Set(['sync-conflict', 'sync-offline', 'sync-running']);
@@ -228,7 +229,7 @@ export function NotificationDrawer() {
         ) : null}
       </button>
 
-      {open ? (
+      <Modal open={open} onClose={() => setOpen(false)}>
         <div className="fixed inset-0 z-[100]" onClick={() => setOpen(false)}>
           <div className="overlay-backdrop absolute inset-0" />
           <aside
@@ -467,7 +468,7 @@ export function NotificationDrawer() {
             </div>
           </aside>
         </div>
-      ) : null}
+      </Modal>
     </>
   );
 }

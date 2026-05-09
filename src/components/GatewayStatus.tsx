@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Cable, Signal, X } from 'lucide-react';
 import { useAppState } from '@/store/appState';
+import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
 
 export function GatewayStatus() {
@@ -19,9 +20,15 @@ export function GatewayStatus() {
         <span className="text-sm font-medium">{active}/{total} conectores listos</span>
       </button>
 
-      {open ? (
+      <Modal open={open} onClose={() => setOpen(false)}>
         <div className="overlay-backdrop fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={() => setOpen(false)}>
-          <div className="glass-card w-full max-w-2xl" onClick={(event) => event.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Estado de conectores"
+            className="glass-card w-full max-w-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[var(--border-color)] p-5">
               <div className="flex items-center gap-2">
                 <Cable className="h-5 w-5 text-blue-600" />
@@ -73,7 +80,7 @@ export function GatewayStatus() {
             </div>
           </div>
         </div>
-      ) : null}
+      </Modal>
     </>
   );
 }

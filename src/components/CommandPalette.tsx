@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 
 /**
  * Paleta de comandos tipo Linear/Raycast.
@@ -72,14 +73,13 @@ export function CommandPalette({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, filtrados, cursor, onClose]);
 
-  if (!open) return null;
-
   const agrupado = filtrados.reduce<Record<string, CommandItem[]>>((acc, item) => {
     (acc[item.grupo] ||= []).push(item);
     return acc;
   }, {});
 
   return (
+    <Modal open={open} onClose={onClose}>
     <div
       role="dialog"
       aria-modal="true"
@@ -235,5 +235,6 @@ export function CommandPalette({
         </div>
       </div>
     </div>
+    </Modal>
   );
 }
