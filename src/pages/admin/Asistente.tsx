@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Bot, FileText, Send, Sparkles, Upload } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Bot, FileText, Loader2, Send, Sparkles, Upload } from 'lucide-react';
 import { autofillContractFromPdf, chatWithAsistente, resolveApiBase, type AsistenteChatMessage } from '@/lib/api';
 import { InsightCard, TopBar } from '@/components/mallq/ui';
 import { useAppState } from '@/store/appState';
@@ -36,7 +36,18 @@ export function Asistente() {
   ]);
   const [draft, setDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const node = messagesRef.current;
+    if (!node) return;
+    if (typeof node.scrollTo === 'function') {
+      node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
+    } else {
+      node.scrollTop = node.scrollHeight;
+    }
+  }, [messages.length, busy]);
 
   const apiBase = state.asset?.backendUrl ?? resolveApiBase();
 
@@ -158,8 +169,28 @@ export function Asistente() {
       <div className="mq-bento">
         {/* Chat column (8) */}
         <div className="mq-card span-8" style={{ padding: 0, display: 'flex', flexDirection: 'column', minHeight: 560 }}>
-          <div style={{ flex: 1, padding: 22, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div ref={messagesRef} style={{ flex: 1, padding: 22, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
             {messages.map((m) => (m.role === 'bot' ? <BotMsg key={m.id} text={m.text} /> : <UserMsg key={m.id} text={m.text} />))}
+            {busy ? (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--ink-3)', fontSize: 12.5 }}>
+                <span
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 999,
+                    background: 'var(--violet-soft)',
+                    color: 'var(--violet-deep)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                >
+                  <Bot size={16} />
+                </span>
+                <span aria-live="polite">Procesando…</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Quick prompts */}
@@ -208,18 +239,35 @@ export function Asistente() {
         {/* Side panel (4) */}
         <div className="span-4" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Autofill drop zone */}
-          <div
+          <button
+            type="button"
             className="mq-card ai-halo"
-            style={{ padding: 18, cursor: busy ? 'wait' : 'pointer', textAlign: 'center' }}
+            style={{
+              padding: 18,
+              cursor: busy ? 'wait' : 'pointer',
+              textAlign: 'center',
+              border: 0,
+              width: '100%',
+              opacity: busy ? 0.85 : 1,
+            }}
             onClick={() => !busy && fileInputRef.current?.click()}
+            disabled={busy}
+            aria-busy={busy}
+            aria-label={busy ? 'Procesando contrato' : 'Subir contrato para autofill'}
           >
-            <Upload size={28} style={{ color: 'var(--violet)', marginBottom: 8 }} />
-            <div className="mq-h2">Autofill de contrato</div>
+            {busy ? (
+              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--violet)', marginBottom: 8 }} />
+            ) : (
+              <Upload size={28} style={{ color: 'var(--violet)', marginBottom: 8 }} />
+            )}
+            <div className="mq-h2">{busy ? 'Procesando…' : 'Autofill de contrato'}</div>
             <p style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6 }}>
-              Suelta un PDF y el asistente extrae partes, plazo, renta y garantías al editor.
+              {busy
+                ? 'Extrayendo partes, plazo, renta y garantías. Puede demorar 10–30 s.'
+                : 'Suelta un PDF y el asistente extrae partes, plazo, renta y garantías al editor.'}
             </p>
             <input ref={fileInputRef} type="file" accept="application/pdf" hidden onChange={onAutofill} />
-          </div>
+          </button>
 
           {/* Indexing stats */}
           <div className="mq-card" style={{ padding: 18 }}>

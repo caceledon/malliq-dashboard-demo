@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import { Building2, FileSignature, Sparkles, Loader2, FileSearch } from 'lucide-react';
 import {
   buildContractCommercialSnapshot,
@@ -106,6 +106,12 @@ export function ContractEditor({
   // analysis lands).
   const formAnchorRef = useRef<HTMLDivElement>(null);
   const lastAnchorOffsetRef = useRef<number | null>(null);
+  // Track the previous value of `isAutofilling` so we can detect the
+  // true→false transition (autofill returned) and surface the freshly
+  // mounted diff/evidence panels by scrolling the editor's internal
+  // scroll back to the top. The K8 useLayoutEffect would otherwise pin
+  // the form anchor in place, leaving the new panels offscreen above.
+  const wasAutofillingRef = useRef(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [evidenceModal, setEvidenceModal] = useState<{
     fieldLabel: string;
@@ -135,6 +141,21 @@ export function ContractEditor({
     }
     lastAnchorOffsetRef.current = anchorOffset;
   });
+
+  useEffect(() => {
+    if (wasAutofillingRef.current && !isAutofilling) {
+      const container = containerRef.current;
+      if (container) {
+        const supportsSmooth = typeof window !== 'undefined' && 'scrollBehavior' in document.documentElement.style;
+        if (supportsSmooth && typeof container.scrollTo === 'function') {
+          container.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          container.scrollTop = 0;
+        }
+      }
+    }
+    wasAutofillingRef.current = isAutofilling;
+  }, [isAutofilling]);
 
   const selectedArea = draft.localIds.reduce((sum, unitId) => {
     const unit = units.find((item) => item.id === unitId);
