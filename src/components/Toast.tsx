@@ -35,29 +35,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((current) => current.filter((item) => item.id !== id));
   }, []);
 
-  const icon = (type: ToastType) => {
+  const accentVar = (type: ToastType): string => {
     switch (type) {
       case 'success':
-        return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+        return 'var(--mint-deep)';
       case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
+        return 'var(--accent)';
       case 'warning':
-        return <AlertCircle className="h-5 w-5 text-amber-500" />;
+        return 'var(--amber)';
       default:
-        return <Info className="h-5 w-5 text-blue-500" />;
+        return 'var(--sky)';
     }
   };
 
-  const borderColor = (type: ToastType) => {
+  const icon = (type: ToastType) => {
+    const color = accentVar(type);
     switch (type) {
       case 'success':
-        return 'border-l-emerald-500';
+        return <CheckCircle2 className="h-5 w-5" style={{ color }} />;
       case 'error':
-        return 'border-l-red-500';
       case 'warning':
-        return 'border-l-amber-500';
+        return <AlertCircle className="h-5 w-5" style={{ color }} />;
       default:
-        return 'border-l-blue-500';
+        return <Info className="h-5 w-5" style={{ color }} />;
     }
   };
 
@@ -75,7 +75,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {toasts.map((item) => (
             <div
               key={item.id}
-              className={`toast-enter flex items-start gap-3 rounded-2xl border border-[var(--border-color)] ${borderColor(item.type)} border-l-4 bg-[var(--card-bg)] p-4 shadow-xl`}
+              className="toast-enter flex items-start gap-3 rounded-2xl border border-[var(--border-color)] border-l-4 bg-[var(--card-bg)] p-4 shadow-xl"
+              style={{ borderLeftColor: accentVar(item.type) }}
             >
               <div className="mt-0.5 shrink-0">{icon(item.type)}</div>
               <div className="min-w-0 flex-1">

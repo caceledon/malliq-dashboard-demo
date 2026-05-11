@@ -178,12 +178,13 @@ export function ContractEditor({
       style={{ overflowAnchor: 'auto', scrollbarGutter: 'stable' }}
       className="glass-card relative min-w-0 self-start max-w-3xl overflow-x-hidden overflow-y-auto p-6 2xl:sticky 2xl:top-4 2xl:max-h-[calc(100vh-2rem)] 2xl:max-w-none 2xl:w-[clamp(520px,34vw,680px)] 2xl:min-w-[520px]"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Editor de contrato</h2>
-          <p className="hidden text-xs text-[var(--sidebar-fg)] sm:block">Sube un contrato PDF y autocompleta con Inteligencia Artificial.</p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="t-eyebrow">Editor</p>
+          <h2 className="mq-h2 mt-1 text-lg sm:text-xl">Contrato</h2>
+          <p className="mt-1 hidden text-xs text-[var(--ink-3)] sm:block">Sube un PDF y autocompleta con IA.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <input
             type="file"
             ref={fileInputRef}
@@ -192,60 +193,59 @@ export function ContractEditor({
             onChange={handleAutofill}
           />
           <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isAutofilling}
-            title="Autocompletar Contrato Subiendo PDF"
-            className="flex items-center gap-2 rounded-xl bg-purple-600/10 px-3 py-2 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-600/20 disabled:opacity-50 dark:bg-purple-500/10 dark:text-purple-400 dark:hover:bg-purple-500/20"
+            title="Autocompletar contrato subiendo PDF"
+            className="mq-btn violet sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isAutofilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="hidden sm:inline">Autocompletar IA</span>
+            {isAutofilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{isAutofilling ? 'Procesando…' : 'Autocompletar IA'}</span>
           </button>
-          <button
-            onClick={onNew}
-            className="rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm transition-colors hover:bg-[var(--hover-bg)]"
-          >
+          <button type="button" onClick={onNew} className="mq-btn sm">
             Nuevo
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-5 space-y-3">
+        {isAutofilling ? <AutofillSkeleton /> : null}
         {editorMessage ? (
-          <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-3 text-sm text-[var(--sidebar-fg)]">
+          <div className="rounded-2xl border border-[var(--hairline)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--ink-2)]">
             {editorMessage}
           </div>
         ) : null}
         <ContractDiffPanel prior={priorContract} next={draft} onDismiss={onClearPriorContract} />
 
         {(draft.baseRentUF || 0) > 0 && (draft.fixedRent || 0) === 0 ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-            <p className="font-semibold">Revisa la renta fija mensual</p>
-            <p className="mt-1 text-xs opacity-80">
-              El modelo cambió: la renta fija ya no se calcula como UF/m² × superficie. Ingresa el monto pactado en
-              "Renta fija mensual" (UF o CLP) y deja UF/m² solo como referencia.
-            </p>
-          </div>
+          <AutofillNotice tone="amber" eyebrow="Revisión" title="Revisa la renta fija mensual">
+            El modelo cambió: la renta fija ya no se calcula como UF/m² × superficie. Ingresa el monto pactado en
+            "Renta fija mensual" (UF o CLP) y deja UF/m² solo como referencia.
+          </AutofillNotice>
         ) : null}
         {autofillPendingFields.length > 0 ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-            <p className="font-semibold">Campos pendientes de revisión manual</p>
-            <p className="mt-1 text-xs opacity-80">La extracción literal no encontró evidencia suficiente para estos datos.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <AutofillNotice
+            tone="amber"
+            eyebrow="Pendientes"
+            title="Campos sin evidencia"
+            hint="La extracción literal no encontró respaldo suficiente para estos datos."
+          >
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {autofillPendingFields.map((field) => (
-                <span
-                  key={field}
-                  className="rounded-full border border-amber-300/80 bg-white/70 px-2.5 py-1 text-xs font-medium dark:border-amber-800 dark:bg-slate-950/40"
-                >
-                  {field}
+                <span key={field} className="mq-pill amber" style={{ fontSize: 10.5 }}>
+                  {autofillFieldLabels[field] ?? field}
                 </span>
               ))}
             </div>
-          </div>
+          </AutofillNotice>
         ) : null}
         {Object.keys(autofillEvidence.fields).length > 0 || autofillEvidence.rentSteps.some((step) => Object.keys(step).length > 0) ? (
-          <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sm text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
-            <p className="font-semibold">Evidencia del último autofill IA</p>
-            <p className="mt-1 text-xs opacity-80">Fragmentos literales del PDF usados para respaldar los campos extraídos.</p>
+          <AutofillNotice
+            tone="sky"
+            eyebrow="Evidencia"
+            title="Fragmentos del PDF fuente"
+            hint="Texto literal usado para respaldar los campos extraídos por IA."
+          >
             {Object.keys(autofillEvidence.fields).length > 0 ? (
               <div className="mt-3 space-y-2">
                 {Object.entries(autofillEvidence.fields).map(([field, snippet]) => {
@@ -269,13 +269,13 @@ export function ContractEditor({
             ) : null}
             {autofillEvidence.rentSteps.some((step) => Object.keys(step).length > 0) ? (
               <div className="mt-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Escalonados</p>
+                <p className="t-eyebrow">Escalonados</p>
                 {autofillEvidence.rentSteps.map((stepEvidence, index) => (
                   <div
                     key={`step-evidence-${index + 1}`}
-                    className="rounded-xl border border-sky-200/80 bg-white/75 p-3 dark:border-sky-900/60 dark:bg-slate-950/40"
+                    className="rounded-xl border border-[var(--hairline)] bg-[var(--surface)]/80 p-3"
                   >
-                    <p className="text-xs font-semibold">Escalonado {index + 1}</p>
+                    <p className="text-xs font-semibold text-[var(--ink-1)]">Escalonado {index + 1}</p>
                     <div className="mt-2 space-y-2">
                       {Object.entries(stepEvidence).map(([field, snippet]) => {
                         const label =
@@ -307,7 +307,7 @@ export function ContractEditor({
                 ))}
               </div>
             ) : null}
-          </div>
+          </AutofillNotice>
         ) : null}
         <div ref={formAnchorRef} aria-hidden="true" data-form-anchor="contract-editor" />
         <div className="grid gap-3 md:grid-cols-2">
@@ -499,8 +499,8 @@ export function ContractEditor({
           />
         </div>
 
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-[var(--sidebar-fg)]">Garantía y fee</p>
+        <div className="space-y-3 border-t border-[var(--hairline)] pt-4">
+          <p className="t-eyebrow">Garantía y fee</p>
           <div className="grid gap-3 md:grid-cols-3">
             <MoneyField
               label="Garantía monto"
@@ -529,8 +529,8 @@ export function ContractEditor({
           </div>
         </div>
 
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-[var(--sidebar-fg)]">Escalonado de renta (step-up)</p>
+        <div className="space-y-3 border-t border-[var(--hairline)] pt-4">
+          <p className="t-eyebrow">Escalonado de renta (step-up)</p>
           <div className="space-y-2">
             {draft.rentSteps.map((step, index) => (
               <div key={step.id} className="grid gap-2 rounded-xl border border-[var(--border-color)] p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
@@ -611,8 +611,8 @@ export function ContractEditor({
           </div>
         </div>
 
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-[var(--sidebar-fg)]">Salud del locatario</p>
+        <div className="space-y-3 border-t border-[var(--hairline)] pt-4">
+          <p className="t-eyebrow">Salud del locatario</p>
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -689,11 +689,12 @@ export function ContractEditor({
           />
         </Field>
 
-        <div className="rounded-2xl border border-[var(--border-color)] p-4">
+        <div className="rounded-2xl border border-[var(--hairline)] bg-[var(--surface-2)] p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold">Autorrelleno de ficha comercial</p>
-              <p className="text-xs text-[var(--sidebar-fg)]">Usa automáticamente los datos del contrato para mapa, listado, alertas y dashboard.</p>
+              <p className="t-eyebrow">Ficha comercial</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--ink-1)]">Autorrelleno automático</p>
+              <p className="mt-0.5 text-xs text-[var(--ink-3)]">Usa los datos del contrato para mapa, listado, alertas y dashboard.</p>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -738,13 +739,13 @@ export function ContractEditor({
             </div>
           ) : null}
 
-          <div className="mt-4 rounded-2xl bg-[var(--hover-bg)] p-4">
-            <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Vista que se mostrará en la app</p>
-            <p className="mt-2 text-sm font-semibold">{effectivePreview.storeName}</p>
-            <p className="text-xs text-[var(--sidebar-fg)]">
-              {effectivePreview.companyName} · {effectivePreview.category} · {selectedArea} m2
+          <div className="mt-4 rounded-2xl border border-[var(--hairline)] bg-[var(--surface)] p-4">
+            <p className="t-eyebrow">Vista en la app</p>
+            <p className="mt-1.5 text-sm font-semibold text-[var(--ink-1)]">{effectivePreview.storeName}</p>
+            <p className="t-num mt-0.5 text-xs text-[var(--ink-3)]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {effectivePreview.companyName} · {effectivePreview.category} · {selectedArea} m²
             </p>
-            {draft.manualOverrideNotes ? <p className="mt-2 text-xs text-[var(--sidebar-fg)]">{draft.manualOverrideNotes}</p> : null}
+            {draft.manualOverrideNotes ? <p className="mt-2 text-xs text-[var(--ink-3)]">{draft.manualOverrideNotes}</p> : null}
           </div>
         </div>
 
@@ -759,22 +760,25 @@ export function ContractEditor({
           <p className="text-xs text-[var(--sidebar-fg)]">Completa razón social, nombre tienda, categoría y al menos un local antes de guardar.</p>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2 pt-2">
           <button
+            type="button"
             onClick={() => {
               if (saveBlocked) return;
               onSave();
-              toast('success', 'Contrato guardado exitosamente', draft.storeName || draft.companyName || undefined);
+              toast('success', 'Contrato guardado', draft.storeName || draft.companyName || undefined);
             }}
             disabled={saveBlocked}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="mq-btn mint disabled:cursor-not-allowed disabled:opacity-50"
           >
+            <FileSignature className="h-3.5 w-3.5" />
             Guardar contrato
           </button>
           {contracts.some((contract) => contract.id === draft.id) ? (
             <button
+              type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600"
+              className="mq-btn ghost text-[var(--accent)] hover:bg-[var(--coral-soft)] hover:text-[var(--accent-deep)]"
             >
               Eliminar
             </button>
@@ -883,22 +887,22 @@ function EvidenceRow({
   onOpenSource?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-sky-200/80 bg-white/75 p-3 dark:border-sky-900/60 dark:bg-slate-950/40">
+    <div className="rounded-xl border border-[var(--hairline)] bg-[var(--surface)]/80 p-3">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-sky-900 dark:text-sky-100">{label}</p>
+        <p className="text-xs font-semibold text-[var(--ink-1)]">{label}</p>
         {onOpenSource ? (
           <button
             type="button"
             onClick={onOpenSource}
             title={page ? `Abrir el PDF en la página ${page}` : 'Abrir el PDF fuente'}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-200 bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-sky-900 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-slate-950/40 dark:text-sky-100 dark:hover:bg-slate-900"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--hairline)] bg-[var(--surface-2)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-2)] hover:bg-[var(--paper-3)] hover:text-[var(--ink-1)]"
           >
             <FileSearch className="h-3 w-3" />
             Ver fuente{page ? ` · p. ${page}` : ''}
           </button>
         ) : null}
       </div>
-      <p className="mt-1 text-xs leading-relaxed text-[var(--sidebar-fg)]">"{snippet}"</p>
+      <p className="mt-1 text-xs leading-relaxed text-[var(--ink-3)]">"{snippet}"</p>
     </div>
   );
 }
@@ -965,76 +969,135 @@ function ContractDiffPanel({
   const diffs = buildContractDiff(prior, next);
   if (diffs.length === 0) return null;
   return (
-    <div
-      className="rounded-2xl border"
-      style={{
-        borderColor: 'color-mix(in oklab, var(--violet-soft) 70%, var(--hairline))',
-        background: 'color-mix(in oklab, var(--violet-soft) 35%, var(--surface))',
-        padding: 16,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <div className="t-eyebrow">Qué cambió en este autofill</div>
-          <p className="mt-1 text-xs" style={{ color: 'var(--ink-2)' }}>
-            Revisa los {diffs.length} {diffs.length === 1 ? 'campo' : 'campos'} antes de guardar.
-          </p>
-        </div>
-        {onDismiss ? (
+    <AutofillNotice
+      tone="violet"
+      eyebrow="Cambios"
+      title={`${diffs.length} ${diffs.length === 1 ? 'campo' : 'campos'} actualizados por IA`}
+      hint="Revísalos antes de guardar."
+      trailing={
+        onDismiss ? (
           <button
             type="button"
             onClick={onDismiss}
-            className="text-xs"
-            style={{ color: 'var(--ink-3)', background: 'none', border: 0, cursor: 'pointer' }}
+            className="rounded-md px-2 py-1 text-xs font-medium text-[var(--ink-3)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)]"
           >
             Cerrar
           </button>
-        ) : null}
-      </div>
-      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        ) : null
+      }
+    >
+      <div className="mt-3 space-y-1.5">
         {diffs.map((diff) => (
           <div
             key={diff.key}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '160px minmax(0, 1fr) 18px minmax(0, 1fr)',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 10px',
-              background: 'var(--surface)',
-              border: '1px solid var(--hairline)',
-              borderRadius: 10,
-              fontSize: 12.5,
-            }}
+            className="grid items-center gap-2 rounded-lg border border-[var(--hairline)] bg-[var(--surface)] px-2.5 py-1.5"
+            style={{ gridTemplateColumns: '140px minmax(0, 1fr) 14px minmax(0, 1fr)', fontSize: 12.5 }}
           >
-            <span style={{ color: 'var(--ink-3)' }}>{diff.label}</span>
+            <span className="text-[var(--ink-3)]">{diff.label}</span>
             <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--ink-3)',
-                textDecoration: 'line-through',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
+              className="t-num text-[var(--ink-4)] line-through"
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}
             >
               {formatDiffValue(diff.before, diff.kind)}
             </span>
-            <span style={{ color: 'var(--violet-deep)', textAlign: 'center' }}>→</span>
+            <span className="text-center text-[var(--violet-deep)]">→</span>
             <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--ink-1)',
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
+              className="t-num font-semibold text-[var(--ink-1)]"
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5 }}
             >
               {formatDiffValue(diff.after, diff.kind)}
             </span>
           </div>
         ))}
+      </div>
+    </AutofillNotice>
+  );
+}
+
+// Shared visual language for the three autofill-related panels (diff, pending,
+// evidence). All three need consistent radius / padding / header pattern but
+// keep their tone-specific accent for semantic clarity:
+//   - violet  → "this is what the AI changed" (informative, the editorial AI accent)
+//   - amber   → "review these manually" (warning)
+//   - sky     → "here's where it came from" (supportive evidence)
+function AutofillNotice({
+  tone,
+  eyebrow,
+  title,
+  hint,
+  trailing,
+  children,
+}: {
+  tone: 'violet' | 'amber' | 'sky';
+  eyebrow: string;
+  title: string;
+  hint?: string;
+  trailing?: ReactNode;
+  children?: ReactNode;
+}) {
+  const palette = {
+    violet: {
+      border: 'color-mix(in oklab, var(--violet-soft) 70%, var(--hairline))',
+      bg: 'color-mix(in oklab, var(--violet-soft) 30%, var(--surface))',
+      eyebrowColor: 'var(--violet-deep)',
+    },
+    amber: {
+      border: 'color-mix(in oklab, var(--amber-soft) 75%, var(--hairline))',
+      bg: 'color-mix(in oklab, var(--amber-soft) 28%, var(--surface))',
+      eyebrowColor: 'oklch(0.50 0.13 70)',
+    },
+    sky: {
+      border: 'color-mix(in oklab, var(--sky-soft) 70%, var(--hairline))',
+      bg: 'color-mix(in oklab, var(--sky-soft) 25%, var(--surface))',
+      eyebrowColor: 'oklch(0.42 0.12 240)',
+    },
+  }[tone];
+  return (
+    <section
+      className="rounded-2xl border px-4 py-3.5"
+      style={{ borderColor: palette.border, background: palette.bg }}
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="t-eyebrow" style={{ color: palette.eyebrowColor }}>
+            {eyebrow}
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold text-[var(--ink-1)]">{title}</h3>
+          {hint ? <p className="mt-0.5 text-xs text-[var(--ink-3)]">{hint}</p> : null}
+        </div>
+        {trailing}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+// Skeleton shown while autofill is running so the user has a sense of
+// what's about to land. Three stripes hint at the diff / pending / evidence
+// panels that will mount on success.
+function AutofillSkeleton() {
+  return (
+    <div
+      className="rounded-2xl border px-4 py-3.5"
+      style={{
+        borderColor: 'color-mix(in oklab, var(--violet-soft) 60%, var(--hairline))',
+        background: 'color-mix(in oklab, var(--violet-soft) 20%, var(--surface))',
+      }}
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--violet-deep)]" />
+        <p className="t-eyebrow" style={{ color: 'var(--violet-deep)' }}>
+          Procesando con IA
+        </p>
+      </div>
+      <p className="mt-0.5 text-sm font-semibold text-[var(--ink-1)]">Leyendo PDF…</p>
+      <p className="mt-0.5 text-xs text-[var(--ink-3)]">Extrayendo cláusulas, plazos, renta y garantías. Puede demorar 10-30s.</p>
+      <div className="mt-3 space-y-1.5">
+        <div className="skeleton h-7" />
+        <div className="skeleton h-7" />
+        <div className="skeleton h-7" />
       </div>
     </div>
   );

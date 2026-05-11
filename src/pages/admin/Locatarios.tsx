@@ -509,8 +509,27 @@ export function Locatarios() {
                 })}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={15} className="px-4 py-8 text-center text-sm text-[var(--sidebar-fg)]">
-                      No hay contratos que coincidan con la búsqueda.
+                    <td colSpan={15} className="px-4 py-12">
+                      <div className="flex flex-col items-center justify-center gap-3 text-center">
+                        <div
+                          className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                          style={{ background: 'var(--violet-soft)', color: 'var(--violet-deep)' }}
+                        >
+                          <FileSignature className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink-1)]">
+                            {state.contracts.length === 0
+                              ? 'Aún no hay contratos en este activo'
+                              : 'Sin resultados para tu búsqueda'}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-3)]">
+                            {state.contracts.length === 0
+                              ? 'Sube un PDF y la IA extrae partes, plazo, renta y garantías.'
+                              : 'Prueba con otra tienda, empresa o rubro.'}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ) : null}
