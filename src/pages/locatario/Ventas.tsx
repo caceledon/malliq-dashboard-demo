@@ -139,7 +139,7 @@ export function LocatarioVentas() {
           </div>
         </div>
         {/* Desktop table */}
-        <div className="mt-4 hidden overflow-hidden rounded-2xl border border-[var(--border-color)] md:block">
+        <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-[var(--border-color)] md:block">
           <table className="w-full min-w-[760px]">
             <thead className="bg-[var(--hover-bg)]">
               <tr>

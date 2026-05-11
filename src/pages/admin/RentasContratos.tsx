@@ -241,7 +241,7 @@ export function RentasContratos() {
         </div>
       </div>
 
-      <div className="glass-card overflow-hidden">
+      <div className="glass-card overflow-x-auto">
         <table className="w-full min-w-[1080px]">
           <thead className="bg-[var(--hover-bg)]">
             <tr>
