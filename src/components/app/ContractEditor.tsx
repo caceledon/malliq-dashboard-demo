@@ -997,7 +997,7 @@ function ContractDiffPanel({
             key={diff.key}
             style={{
               display: 'grid',
-              gridTemplateColumns: '160px 1fr 18px 1fr',
+              gridTemplateColumns: '160px minmax(0, 1fr) 18px minmax(0, 1fr)',
               alignItems: 'center',
               gap: 8,
               padding: '8px 10px',
