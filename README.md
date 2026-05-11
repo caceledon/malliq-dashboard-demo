@@ -140,6 +140,11 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
   - `mq-btn` + variantes `.primary/.accent/.mint/.violet/.umber/.ghost` (`accent` aplica `--accent` para énfasis primario)
   - `mq-bento` (12-col grid) + `span-3/4/5/6/7/8/9/12`
   - `[data-density="cozy|compact"]` para retunear paddings
+  - `.skeleton` con shimmer (gradient 200% + animación `skeleton-shimmer`) para placeholders de carga.
+- **Patrones reutilizables** (locales a `src/components/app/ContractEditor.tsx`):
+  - `AutofillNotice` — primitive compartido para los tres paneles del autofill (cambios/pendientes/evidencia). Toma `tone="violet|amber|sky"` y un header `eyebrow + title + hint`. Mantiene el acento semántico (informativo / warning / supportivo) sobre estructura idéntica: `rounded-2xl`, `border + color-mix(in oklab, soft 30%, surface)` background, mismo padding y tipografía.
+  - `AutofillSkeleton` — montado mientras `isAutofilling=true`. Loader + tres `.skeleton` stripes anticipan los paneles que van a aparecer. Marca `aria-busy` + `aria-live="polite"`.
+- **Toast colors tokenizados**: el border-left y los iconos consumen `--mint-deep | --accent | --amber | --sky` (antes hardcoded `border-l-emerald-500` etc.), así dark mode mantiene la asociación color-significado del resto del sistema.
 - **Marketing** (`src/styles/marketing.css`): clases `mk-*` aisladas. La regla `.mk { … }` fuerza tokens cream y aísla del tema del cockpit. `mk-btn.primary:hover` y `mk-btn.ghost:hover` aterrizan en `--accent`; `mk-btn.accent` aplica accent puro.
 - **Componentes compartidos** (`src/components/mallq/ui.tsx`):
   `TopBar, Pill, Spark, BarStack, KpiTile, MiniKpi, HealthBar, SemaforoStrip, ComponentBar, AiTask, InsightCard, Term, Stat, CategoryHeatmap, ExpiryRiver, ContractTimeline, ForecastChart, FootfallChart, CategoryDonut, MallPlan, RentSteps, ArrearsTimeline, Bento, HealthRing, Donut, Sparkline, AreaChart, TenantLogo, LifeChip, SigChip, Delta, Kpi`. El plano dinámico per-activo es `InteractiveMap` en `src/components/InteractiveMap.tsx` (consume `useAppState` directamente).
@@ -201,6 +206,19 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 - Preferencia: Moonshot → OpenAI → mock local (con `source: 'mock_local'`).
 - Backend normaliza fechas, montos, escalonados.
 - **Track 1 v1**: cada extracción IA persiste el PDF en `documents/` y devuelve `evidencePages` con el número de página donde apareció cada cita; el `ContractEditor` muestra "Ver fuente · p. N" sobre cada campo y abre `/api/documents/<id>/download#page=N`. Mock local no persiste (no hay provenance que defender).
+- **UX del flujo**: mientras corre el job se monta `AutofillSkeleton` (loader violeta + tres `.skeleton` stripes con `aria-live=polite`). Al volver, los tres paneles (cambios / pendientes / evidencia) usan el primitive `AutofillNotice` con tonos violet / amber / sky para mantener la asociación color → semántica. El `ContractEditor` resetea su scroll interno al top sólo en la transición `isAutofilling: true → false` para que los paneles recién montados queden visibles sin pelearse con el `useLayoutEffect` de scroll-preservation (K8).
+
+### Layout del editor (responsive)
+
+- `xl` (≥1280 px) hereda single-column: tabla arriba, `ContractEditor` debajo con `max-w-3xl` (768 px) — el editor no se estira a todo el viewport.
+- `2xl` (≥1536 px) activa side-by-side: tabla a la izquierda (1fr) + editor a la derecha (sticky `top-4`, `max-h-[calc(100vh-2rem)]`, `width: clamp(520, 34vw, 680)`). El `<AutofillChat>` debajo del editor comparte el mismo `max-w-3xl 2xl:max-w-none` para que ambos respeten el ancho del editor.
+- El grid contenedor lleva `grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_auto]` para evitar que la tabla `min-w-[1400px]` arrastre la columna del editor al modo single-col.
+- El diff panel interno usa `gridTemplateColumns: '160px minmax(0,1fr) 18px minmax(0,1fr)'` — sin el `minmax(0,...)` cada celda con `whiteSpace:nowrap` inflaba el min-content del editor más allá del cap.
+
+### Service worker
+
+- `public/sw.js` cache-first para `/`, `/index.html`, `/favicon.svg`, `/manifest.webmanifest`.
+- `CACHE_NAME = 'malliq-shell-v2'`. Bump del nombre al refactor → cualquier SW registrado descarta su cache vieja en el `activate` (`caches.delete(key)` para keys ≠ vigente).
 
 ### Carga de ventas
 

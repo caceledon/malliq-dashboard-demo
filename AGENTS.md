@@ -67,7 +67,7 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 │   │   │   ├── TenantUsersSection.tsx   # Crear locatarios + CSV bulk import
 │   │   │   ├── UfOverrideModal.tsx      # Override manual fecha+valor
 │   │   │   ├── ActivityLogSection.tsx
-│   │   │   ├── ContractEditor.tsx       # Editor con scroll-preservation (K8): useLayoutEffect compensa el shift cuando los paneles del autofill se montan/crecen sobre el form anchor.
+│   │   │   ├── ContractEditor.tsx       # Editor con scroll-preservation (K8) + AutofillNotice (primitive unificado para los 3 paneles del autofill: cambios/pendientes/evidencia, tonos violet/amber/sky) + AutofillSkeleton mientras `isAutofilling`. Responsive: single-col + max-w-3xl bajo 2xl, sticky side-by-side desde 2xl. Buttons tokenizados (`mq-btn mint` para Guardar, `mq-btn ghost` con `--accent` para Eliminar, `mq-btn violet sm` para Autocompletar IA). Sección headers usan `t-eyebrow` con `border-t border-[var(--hairline)] pt-4`.
 │   │   │   ├── ContractPreviewModal.tsx
 │   │   │   ├── DocumentManager.tsx SalesIngestionCenter.tsx
 │   │   │   ├── SetupWizard.tsx TenantHealthRating.tsx
@@ -76,7 +76,7 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 │   │   ├── RoleGuards.tsx        # AdminOnly / LocatarioOnly
 │   │   ├── NotificationDrawer.tsx       # Agrupa alerts por categoría (sync/ingesta/vencimientos/caída/riesgo/configuración), skeleton de hidratación, error block para la última ingesta fallida, seen ids en localStorage con GC.
 │   │   ├── CommandPalette.tsx ShortcutsHelp.tsx
-│   │   ├── Toast.tsx UndoToast.tsx ConfirmDialog.tsx
+│   │   ├── Toast.tsx UndoToast.tsx ConfirmDialog.tsx   # Toast border-left + icon usan tokens (--mint-deep | --accent | --amber | --sky), no Tailwind hardcoded.
 │   │   ├── GatewayStatus.tsx InteractiveMap.tsx SkeletonLoader.tsx
 │   ├── pages/
 │   │   ├── PortalSelector.tsx        # /login (editorial split con tres portales)
@@ -93,7 +93,7 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 │   │   │   ├── Dashboard.tsx         # Cockpit bento + plano dinámico embebido (InteractiveMap)
 │   │   │   ├── Portafolio.tsx        # Multi-activo · filas clicables → /admin/activos/:id
 │   │   │   ├── AssetDetail.tsx       # Detalle per-activo · KPIs + InteractiveMap + listado de locatarios
-│   │   │   ├── Locatarios.tsx        # SemaforoStrip + tabla
+│   │   │   ├── Locatarios.tsx        # SemaforoStrip + tabla + ContractEditor responsivo (single-col bajo 2xl, side-by-side ≥2xl). El grid usa `grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_auto]` para que la tabla `min-w-[1400px]` no arrastre el ancho del editor en single-col. Empty state propio cuando `state.contracts.length === 0` o el filtro no matchea.
 │   │   │   ├── LocatarioDetail.tsx   # HealthRing + ComponentBars hero
 │   │   │   ├── RentasContratos.tsx   # ContractTimeline river
 │   │   │   ├── CargasDatos.tsx
