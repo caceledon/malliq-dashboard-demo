@@ -380,7 +380,7 @@ export function Locatarios() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-3">
             <SummaryBox label="Contratos" value={String(state.contracts.length)} icon={<FileSignature className="h-4 w-4 text-blue-600" />} />
