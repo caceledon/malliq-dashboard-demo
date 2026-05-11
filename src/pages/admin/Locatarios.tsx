@@ -519,7 +519,7 @@ export function Locatarios() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex max-w-3xl flex-col gap-4 2xl:max-w-none">
           <ContractEditor
             draft={draft}
             onChange={setDraft}
