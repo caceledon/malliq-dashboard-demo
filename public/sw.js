@@ -3,7 +3,7 @@
 // Strategy: cache-first for the app shell (root + manifest + favicon), and
 // network-passthrough for everything else. Critical web push notifications are
 // rendered via the `push` event handler.
-const CACHE_NAME = 'malliq-shell-v1';
+const CACHE_NAME = 'malliq-shell-v2';
 const SHELL_ASSETS = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

@@ -176,7 +176,7 @@ export function ContractEditor({
     <div
       ref={containerRef}
       style={{ overflowAnchor: 'auto', scrollbarGutter: 'stable' }}
-      className="glass-card relative min-w-0 self-start overflow-x-hidden overflow-y-auto p-6 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[clamp(560px,38vw,720px)] xl:min-w-[560px]"
+      className="glass-card relative min-w-0 self-start overflow-x-hidden overflow-y-auto p-6 2xl:sticky 2xl:top-4 2xl:max-h-[calc(100vh-2rem)] 2xl:w-[clamp(520px,34vw,680px)] 2xl:min-w-[520px]"
     >
       <div className="flex items-center justify-between gap-3">
         <div>
