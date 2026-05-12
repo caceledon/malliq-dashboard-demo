@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, Bot, ChevronRight, FileText, Sparkles, Upload, X } from 'lucide-react';
+import { Bot, FileText, Sparkles, Upload, X } from 'lucide-react';
 import { fetchDailyDigest, resolveApiBase, type DailyDigest } from '@/lib/api';
 import {
   AiTask,
@@ -12,7 +12,6 @@ import {
   KpiTile,
   LifeChip,
   Pill,
-  Spark,
   TenantLogo,
   TopBar,
 } from '@/components/mallq/ui';
@@ -20,8 +19,6 @@ import { InteractiveMap } from '@/components/InteractiveMap';
 import { Modal } from '@/components/ui/Modal';
 import { diffInDays } from '@/lib/domain';
 import type { AlertItem, TenantSummary } from '@/lib/domain';
-import type { PortfolioAssetSummary } from '@/lib/portfolio';
-import { useCurrency } from '@/lib/currency';
 import { useAppState } from '@/store/appState';
 import { healthBucket, formatM } from '@/components/mallq/helpers';
 
@@ -48,8 +45,7 @@ function todayLabel(): string {
 
 export function AdminDashboard() {
   const navigate = useNavigate();
-  const { insights, state, assetSummaries, portfolioStats, activeAssetId, actions } = useAppState();
-  const { formatCurrency } = useCurrency();
+  const { insights, state } = useAppState();
   const [healthLegendOpen, setHealthLegendOpen] = useState(false);
 
   const topTenants = useMemo(
@@ -143,7 +139,7 @@ export function AdminDashboard() {
             </span>
           </>
         }
-        sub={`${insights.tenantSummaries.length} locatarios · ${state.units.length} locales · ${assetSummaries.length} activo${assetSummaries.length === 1 ? '' : 's'}`}
+        sub={`${insights.tenantSummaries.length} locatarios · ${state.units.length} locales en ${state.asset?.name ?? 'este activo'}`}
         right={
           <>
             <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/cargas')}>
@@ -180,11 +176,11 @@ export function AdminDashboard() {
         />
         <KpiTile
           span={2}
-          eyebrow="Renta proyectada"
-          value={formatM(insights.monthlyRent)}
+          eyebrow="Ingreso mín. garantizado"
+          value={formatM(insights.monthlyMinGuaranteed)}
           spark={rentTrend.length > 0 ? rentTrend : [0, 0]}
           color="var(--sky)"
-          foot="Fija + variable + GC"
+          foot={`Renta total proyectada ${formatM(insights.monthlyRent)}`}
         />
         <KpiTile
           span={2}
@@ -192,7 +188,7 @@ export function AdminDashboard() {
           value={formatM(avgSalesPerM2)}
           spark={salesTrend.length > 0 ? salesTrend : [0, 0]}
           color="var(--amber)"
-          foot="Promedio portafolio"
+          foot="Promedio del activo"
         />
         <KpiTile
           span={2}
@@ -204,41 +200,10 @@ export function AdminDashboard() {
         />
       </Bento>
 
-      {/* MIDDLE: Asset comparison (8) + alerts (4) — comparison hidden when no assets */}
+      {/* MIDDLE: Activity feed (full width). Portfolio comparison lives in
+          /admin/activos so the Cockpit stays scoped to the selected asset. */}
       <Bento style={{ marginBottom: 20 }}>
-        {assetSummaries.length > 0 ? (
-          <div className="mq-card span-8" style={{ padding: 0 }}>
-            <div className="mq-card-hd">
-              <div>
-                <div className="mq-h-eyebrow">Comparador · portafolio</div>
-                <div className="mq-h2" style={{ marginTop: 6 }}>
-                  {portfolioStats.assetCount} activo{portfolioStats.assetCount === 1 ? '' : 's'} ·{' '}
-                  {formatCurrency(portfolioStats.monthlySales)}
-                </div>
-              </div>
-              <button type="button" className="mq-btn sm" onClick={() => navigate('/admin/activos')}>
-                Detalle <ArrowUpRight size={13} />
-              </button>
-            </div>
-            <div style={{ padding: '4px 12px 14px' }}>
-              {assetSummaries.map((asset, i) => (
-                <AssetRow
-                  key={asset.id}
-                  asset={asset}
-                  active={asset.id === activeAssetId}
-                  index={i}
-                  trend={salesTrend}
-                  onClick={() => {
-                    if (asset.id === activeAssetId) navigate('/admin/activos');
-                    else actions.switchAsset(asset.id);
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className={`mq-card ${assetSummaries.length > 0 ? 'span-4' : 'span-12'}`} style={{ padding: 0 }}>
+        <div className="mq-card span-12" style={{ padding: 0 }}>
           <div className="mq-card-hd">
             <div>
               <div className="mq-h-eyebrow">Actividad · hoy</div>
@@ -381,86 +346,6 @@ export function AdminDashboard() {
       </div>
 
       <HealthLegendModal open={healthLegendOpen} onClose={() => setHealthLegendOpen(false)} />
-    </div>
-  );
-}
-
-function AssetRow({
-  asset,
-  active,
-  index,
-  trend,
-  onClick,
-}: {
-  asset: PortfolioAssetSummary;
-  active: boolean;
-  index: number;
-  trend: number[];
-  onClick: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        padding: '12px 14px',
-        display: 'grid',
-        gridTemplateColumns: '36px 1.5fr 1fr 1fr 80px 22px',
-        gap: 12,
-        alignItems: 'center',
-        cursor: 'pointer',
-        borderTop: index === 0 ? 0 : '1px solid var(--hairline)',
-        background: active ? 'var(--surface-2)' : 'transparent',
-        borderRadius: index === 0 ? 0 : 0,
-      }}
-    >
-      <span
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 9,
-          display: 'grid',
-          placeItems: 'center',
-          fontFamily: 'var(--font-display)',
-          fontSize: 14,
-          fontWeight: 600,
-          color: 'var(--ink-1)',
-          background: active
-            ? 'conic-gradient(from 220deg at 50% 50%, var(--mint-soft), var(--violet-soft))'
-            : 'var(--surface-3)',
-        }}
-      >
-        {(asset.name || 'A').charAt(0).toUpperCase()}
-      </span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink-1)' }} className="truncate">
-          {asset.name}
-        </div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
-          {asset.city ?? '—'} · {asset.totalUnits} locales
-        </div>
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ height: 4, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-          <div
-            style={{
-              height: '100%',
-              width: `${Math.min(100, asset.occupancyPct).toFixed(1)}%`,
-              background: 'var(--mint-deep)',
-            }}
-          />
-        </div>
-        <div className="mq-mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
-          {asset.occupancyPct.toFixed(1)}% ocupación
-        </div>
-      </div>
-      <Spark values={trend} color="var(--violet)" height={28} fill />
-      <div style={{ textAlign: 'right' }}>
-        <div className="mq-mono" style={{ fontSize: 12.5, color: 'var(--ink-1)', fontWeight: 600 }}>
-          {formatM(asset.monthlySales)}
-        </div>
-        <div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>ventas mes</div>
-      </div>
-      <ChevronRight size={16} style={{ color: 'var(--ink-3)' }} />
     </div>
   );
 }

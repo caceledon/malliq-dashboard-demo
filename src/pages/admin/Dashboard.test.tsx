@@ -40,7 +40,7 @@ describe('AdminDashboard', () => {
     expect(screen.getAllByText(/Ocupación/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Ventas \/ m²/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Ventas del mes/i)).toBeInTheDocument();
-    expect(screen.getByText(/Renta proyectada/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ingreso mín\. garantizado/i)).toBeInTheDocument();
     expect(screen.getByText(/Salud promedio/i)).toBeInTheDocument();
     // 5 KPI tiles rendered in the grid
     expect(container.querySelectorAll('.kpi').length).toBe(5);

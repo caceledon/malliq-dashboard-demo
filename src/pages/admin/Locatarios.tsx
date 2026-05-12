@@ -22,6 +22,9 @@ import { SemaforoStrip, TopBar } from '@/components/mallq/ui';
 import { healthBucket, type HealthBucket } from '@/components/mallq/helpers';
 
 function createDraftContract(overrides: Partial<Contract> = {}): Contract {
+  // Numeric fields start as NaN so the editor renders an empty input. They are
+  // sanitized to 0 via normalizeDraftContract right before save, so the stored
+  // contract is still well-formed.
   return {
     id: createId('contract'),
     companyName: '',
@@ -30,11 +33,11 @@ function createDraftContract(overrides: Partial<Contract> = {}): Contract {
     localIds: [],
     startDate: '',
     endDate: '',
-    fixedRent: 0,
-    variableRentPct: 0,
-    baseRentUF: 0,
-    commonExpenses: 0,
-    fondoPromocion: 0,
+    fixedRent: Number.NaN,
+    variableRentPct: Number.NaN,
+    baseRentUF: Number.NaN,
+    commonExpenses: Number.NaN,
+    fondoPromocion: Number.NaN,
     salesParticipationPct: 0,
     escalation: 'IPC anual',
     conditions: '',
@@ -45,9 +48,10 @@ function createDraftContract(overrides: Partial<Contract> = {}): Contract {
     manualStoreName: '',
     manualCategory: '',
     manualOverrideNotes: '',
-    garantiaMonto: 0,
+    garantiaMonto: Number.NaN,
     garantiaVencimiento: '',
-    feeIngreso: 0,
+    feeIngreso: Number.NaN,
+    noticePeriodDays: Number.NaN,
     rentSteps: [],
     healthPagoAlDia: true,
     healthEntregaVentas: true,
@@ -68,6 +72,9 @@ function sanitizeDraftNumber(value: number): number {
 }
 
 function normalizeDraftContract(draft: Contract): Contract {
+  const noticePeriodDays = Number.isFinite(draft.noticePeriodDays as number)
+    ? (draft.noticePeriodDays as number)
+    : undefined;
   return {
     ...draft,
     fixedRent: sanitizeDraftNumber(draft.fixedRent),
@@ -77,6 +84,7 @@ function normalizeDraftContract(draft: Contract): Contract {
     fondoPromocion: sanitizeDraftNumber(draft.fondoPromocion),
     garantiaMonto: sanitizeDraftNumber(draft.garantiaMonto),
     feeIngreso: sanitizeDraftNumber(draft.feeIngreso),
+    noticePeriodDays,
     rentSteps: draft.rentSteps.map((step) => ({
       ...step,
       rentaFijaUfM2: sanitizeDraftNumber(step.rentaFijaUfM2),
@@ -320,7 +328,8 @@ export function Locatarios() {
       ...normalizedDraft,
       salesParticipationPct: normalizedDraft.variableRentPct,
     });
-    setEditorMessage('Contrato guardado correctamente.');
+    setDraft(createDraftContract());
+    setEditorMessage('Contrato guardado correctamente. Formulario listo para un nuevo ingreso.');
     setAutofillPendingFields([]);
     setAutofillEvidence(emptyAutofillEvidence);
     setAutofillTextSnippet(null);

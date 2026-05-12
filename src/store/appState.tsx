@@ -266,11 +266,18 @@ function normalizeImportedWorkspace(workspace: AssetWorkspace): AssetWorkspace {
 }
 
 function buildEmptyWorkspace(payload: AssetSetupInput): AssetWorkspace {
+  // New assets default to cloud sync against the same-origin /api backend so a
+  // user that opens the app on a different computer sees the same data. The
+  // explicit spread of payload.asset comes last so callers can still opt out
+  // (e.g. a test fixture or an import workflow that already chose its own
+  // settings) without us silently overriding their choice.
   return {
     ...emptyAppState(),
     asset: {
       id: createId('asset'),
       createdAt: new Date().toISOString(),
+      backendUrl: '/api',
+      syncEnabled: true,
       ...payload.asset,
     },
     units: payload.units.map((unit) => ({

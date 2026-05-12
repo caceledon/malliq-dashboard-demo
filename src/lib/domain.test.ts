@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildContractCommercialSnapshot,
+  buildDashboardInsights,
   calculateCostoOcupacion,
 
   calculateVentaPorM2,
@@ -719,6 +720,85 @@ describe('buildAlerts', () => {
     expect(alerts.some((a) => a.id.startsWith('occupation-cost-'))).toBe(false)
   })
 
+  it('creates notice-period alert when daysToEnd is within noticePeriodDays', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-notice',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      // 45 days from 2024-06-15 → inside the 60-day notice window.
+      endDate: '2024-07-30',
+      fixedRent: 1_000_000,
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      noticePeriodDays: 60,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const state = { ...emptyAppState(), units: [unit], contracts: [contract] }
+    const alerts = buildAlerts(state, new Date('2024-06-15'))
+    expect(alerts.some((a) => a.id === `notice-${contract.id}` && a.type === 'warning')).toBe(true)
+  })
+
+  it('does not create notice-period alert when daysToEnd is beyond noticePeriodDays', () => {
+    const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
+    const contract: Contract = {
+      id: 'c-notice-out',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      // > 60 days from 2024-06-15 (well beyond the window) — only the
+      // por_vencer alert (≤180d) should appear, not the notice-period one.
+      endDate: '2024-11-30',
+      fixedRent: 1_000_000,
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      noticePeriodDays: 60,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const state = { ...emptyAppState(), units: [unit], contracts: [contract] }
+    const alerts = buildAlerts(state, new Date('2024-06-15'))
+    expect(alerts.some((a) => a.id === `notice-${contract.id}`)).toBe(false)
+  })
+
   it('creates step-up alert when close to step start', () => {
     const unit: AssetUnit = { id: 'u1', code: 'L1', label: 'Local 1', areaM2: 50, level: 'P1' }
     const contract: Contract = {
@@ -849,6 +929,69 @@ describe('buildContractOverlapConflicts', () => {
     const state = { ...emptyAppState(), units: [unit], contracts: [c1, c2] }
     const conflicts = buildContractOverlapConflicts(state)
     expect(conflicts).toHaveLength(0)
+  })
+})
+
+describe('buildDashboardInsights', () => {
+  it('exposes monthlyMinGuaranteed as the sum of active rentFixed', () => {
+    const units: AssetUnit[] = [
+      { id: 'u1', code: 'L1', label: 'L1', areaM2: 50, level: 'P1' },
+      { id: 'u2', code: 'L2', label: 'L2', areaM2: 40, level: 'P1' },
+    ]
+    const baseContract: Contract = {
+      id: 'c-mg-1',
+      companyName: 'A',
+      storeName: 'A',
+      category: 'Retail',
+      localIds: ['u1'],
+      startDate: '2024-01-01',
+      endDate: '2025-12-31',
+      fixedRent: 1_500_000,
+      fixedRentCurrency: 'CLP',
+      variableRentPct: 0,
+      baseRentUF: 0,
+      commonExpenses: 0,
+      fondoPromocion: 0,
+      salesParticipationPct: 0,
+      escalation: '',
+      conditions: '',
+      signatureStatus: 'firmado',
+      annexCount: 0,
+      autoFillUnits: true,
+      garantiaMonto: 0,
+      garantiaVencimiento: '',
+      feeIngreso: 0,
+      rentSteps: [],
+      healthPagoAlDia: true,
+      healthEntregaVentas: true,
+      healthNivelVenta: false,
+      healthNivelRenta: false,
+      healthPercepcionAdmin: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const second: Contract = {
+      ...baseContract,
+      id: 'c-mg-2',
+      localIds: ['u2'],
+      fixedRent: 2_300_000,
+    }
+    // An expired contract should NOT be summed into the guaranteed income.
+    const expired: Contract = {
+      ...baseContract,
+      id: 'c-mg-expired',
+      localIds: [],
+      endDate: '2023-12-31',
+      fixedRent: 9_999_999,
+    }
+    const state = {
+      ...emptyAppState(),
+      units,
+      contracts: [baseContract, second, expired],
+    }
+    const insights = buildDashboardInsights(state, new Date('2024-06-15'))
+    expect(insights.monthlyMinGuaranteed).toBe(1_500_000 + 2_300_000)
+    // Sanity: at least the two active contracts surface in the summary.
+    expect(insights.tenantSummaries).toHaveLength(3)
   })
 })
 

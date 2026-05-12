@@ -109,6 +109,10 @@ export interface Contract {
   garantiaMonto: number;
   garantiaVencimiento: string;
   feeIngreso: number;
+  // Días de aviso previo al término del contrato que el operador debe respetar
+  // para gatillar el flujo de no-renovación. Opcional: contratos cargados antes
+  // del bug fix no tienen este dato y caen a la alerta genérica de 180 días.
+  noticePeriodDays?: number;
   rentSteps: RentStep[];
   // Currency tags per amount field. Default 'CLP'. Numeric value is stored in the tagged unit.
   fixedRentCurrency?: CurrencyTag;
@@ -430,6 +434,9 @@ export interface DashboardInsights {
   monthlySales: number;
   averageSalesPerM2: number;
   monthlyRent: number;
+  // Suma de rentas fijas (mínimos garantizados) de contratos vigentes, en CLP
+  // del mes en curso. No incluye renta variable.
+  monthlyMinGuaranteed: number;
   signedContracts: number;
   pendingSignatureContracts: number;
   budgetCompletionPct: number;
@@ -792,6 +799,7 @@ export function buildRenewalContractTemplate(contract: Contract): Partial<Contra
     garantiaMonto: contract.garantiaMonto,
     garantiaVencimiento: contract.garantiaVencimiento,
     feeIngreso: contract.feeIngreso,
+    noticePeriodDays: contract.noticePeriodDays,
     rentSteps: contract.rentSteps ? [...contract.rentSteps] : [],
     healthPagoAlDia: contract.healthPagoAlDia,
     healthEntregaVentas: contract.healthEntregaVentas,
@@ -1160,6 +1168,21 @@ export function buildAlerts(state: AppState, referenceDate = new Date()): AlertI
       });
     }
 
+    // Plazo de aviso pactado: gatilla un recordatorio cuando estamos dentro de
+    // la ventana en la que el operador debe notificar al locatario el término.
+    if (contract.noticePeriodDays && contract.noticePeriodDays > 0 && lifecycle !== 'vencido') {
+      if (daysToEnd >= 0 && daysToEnd <= contract.noticePeriodDays) {
+        alerts.push({
+          id: `notice-${contract.id}`,
+          type: 'warning',
+          title: `Aviso de término próximo: ${display.storeName}`,
+          description: `Quedan ${daysToEnd} días — dentro del plazo de aviso pactado (${contract.noticePeriodDays} días).`,
+          createdAt: today.toISOString(),
+          contractId: contract.id,
+        });
+      }
+    }
+
     if (lifecycle === 'vencido') {
       alerts.push({
         id: `expired-${contract.id}`,
@@ -1319,6 +1342,7 @@ export function buildDashboardInsights(
     .reduce((sum, entry) => sum + entry.grossAmount, 0);
   const occupiedArea = activeTenantSummaries.reduce((sum, item) => sum + item.areaM2, 0);
   const monthlyRent = activeTenantSummaries.reduce((sum, item) => sum + item.rentTotal, 0);
+  const monthlyMinGuaranteed = activeTenantSummaries.reduce((sum, item) => sum + item.rentFixed, 0);
   const currentBudget = state.planning
     .filter((entry) => entry.type === 'budget' && entry.month === currentMonth)
     .reduce((sum, entry) => sum + entry.salesAmount, 0);
@@ -1339,6 +1363,7 @@ export function buildDashboardInsights(
     monthlySales,
     averageSalesPerM2: occupiedArea > 0 ? Math.round(monthlySales / occupiedArea) : 0,
     monthlyRent,
+    monthlyMinGuaranteed,
     signedContracts: activeContracts.filter((contract) => contract.signatureStatus === 'firmado').length,
     pendingSignatureContracts: activeContracts.filter((contract) => contract.signatureStatus !== 'firmado').length,
     budgetCompletionPct: currentBudget > 0 ? Math.round((monthlySales / currentBudget) * 1000) / 10 : 0,

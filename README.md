@@ -7,11 +7,11 @@ MallIQ es una SPA editorial para operación comercial, contractual y financiera 
 ## Resumen
 
 - **Sitio público** (`/`, `/producto`, `/operadores`, `/locatarios-info`, `/pricing`, `/manifiesto`, `/demo`) — landing editorial boutique en cream + ink + accent (Claude coral), tipografía *Instrument Serif*. Sin auth.
-- **Cockpit administrativo** (`/admin/*`) — dashboard bento con KPIs, plano dinámico del activo (`InteractiveMap`), mapa de calor, semáforo de salud, comparador de portafolio, cola de renovaciones y simulador de renta.
+- **Cockpit administrativo** (`/admin/*`) — dashboard bento del activo seleccionado: KPIs (incl. **Ingreso mínimo garantizado** = suma de rentas fijas activas), plano dinámico del activo (`InteractiveMap`), mapa de calor, semáforo de salud, cola de renovaciones y simulador de renta. El comparador de portafolio vive en `/admin/activos`.
 - **Detalle de activo** (`/admin/activos/:id`) — vista per-activo con plano + KPIs + listado de locatarios, accesible al hacer click en una fila del portafolio.
 - **Portal del locatario** (`/locatario/*`) — vista pinneada al contrato del usuario logueado.
 - **Asistente IA** (`/admin/asistente`) — chat con contexto del portafolio y autofill de contratos desde PDF.
-- Multi-activo con cambio de contexto en caliente; respaldo local + remoto; sincronización auto cada 15 s.
+- Multi-activo con cambio de contexto en caliente; respaldo local + remoto; sincronización auto cada 15 s. Activos nuevos arrancan con `backendUrl='/api'` y `syncEnabled=true` para que el contrato ingresado desde un computador sea visible desde otro.
 - UF cacheada por fecha contra mindicador.cl (`/api/uf/latest`, `/api/uf?date=...`, `/api/uf/range`).
 - Tres roles: `admin`, `member`, `locatario`. JWT con bcrypt.
 
@@ -28,7 +28,7 @@ MallIQ es una SPA editorial para operación comercial, contractual y financiera 
 | Backend | Express 5 + SQLite (`sqlite3` + `sqlite`) + JWT + bcrypt + helmet (CSP same-origin) + `undici` (DNS-pinned dispatcher para SSRF guard) |
 | IA / OCR | SDK `openai`, Moonshot `kimi-k2.5`, `tesseract.js`, `pdf-parse v2` |
 | Gráficos | `recharts` + SVG editorial nativo (`Spark`, `MallPlan`, `InteractiveMap`, `ContractTimeline`, `ForecastChart`) |
-| Tests | Vitest + jsdom (248 tests · 32 archivos) |
+| Tests | Vitest + jsdom (251 tests · 32 archivos) |
 | Despliegue prod | AWS EC2 + Docker Compose + Caddy auto-HTTPS · `do-up.cl` |
 
 ## Desarrollo local
@@ -94,7 +94,7 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 
 | Ruta | Página |
 |------|--------|
-| `/admin/dashboard` | Cockpit editorial · 5 KpiTile + comparador de activos + alerts feed + heatmap + expiry river + AI task + plano dinámico del activo (`InteractiveMap`) |
+| `/admin/dashboard` | Cockpit editorial del activo seleccionado · 5 KpiTile (Ocupación, Ventas, Ingreso mín. garantizado, Ventas/m², Salud) + alerts feed + heatmap + expiry river + AI task + plano dinámico del activo (`InteractiveMap`). El comparador entre activos vive en `/admin/activos`. |
 | `/admin/activos` | Portafolio de activos · creación, métricas cruzadas, filas clicables |
 | `/admin/activos/:id` | Detalle per-activo · KPIs + plano + listado de locatarios del activo |
 | `/admin/locatarios` | Tabla con SemaforoStrip A→E + filtro/búsqueda |
@@ -180,8 +180,10 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 ### Sincronización remota
 
 - Activos con `syncEnabled` + `backendUrl` sincronizan contra `/api/archive`.
+- Activos nuevos arrancan con `backendUrl='/api'` y `syncEnabled=true` (definido en `buildEmptyWorkspace`) — el operador puede desactivarlo desde Configuración, pero la opción por default es "datos compartidos" para que el contrato ingresado desde un computador aparezca también desde otro. Mientras el server `npm start` corra en el mismo origen que sirve el SPA, `/api` resuelve sin más configuración.
 - Auto-push tras 1.5 s de inactividad; auto-poll cada 15 s.
 - Conflictos por mismatch de revisión devuelven 409; `forcePushToServer` los rompe.
+- Si un activo legacy no tiene `syncEnabled`, Configuración muestra un banner ámbar avisando que los datos viven sólo en ese computador.
 
 ### UF (Unidad de Fomento) por fecha
 
@@ -205,6 +207,7 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 - `POST /api/contracts/autofill` (PDF, requiere rol writer).
 - Preferencia: Moonshot → OpenAI → mock local (con `source: 'mock_local'`).
 - Backend normaliza fechas, montos, escalonados.
+- **OCR fallback (PDFs escaneados)**: si la capa de texto del PDF está vacía o es trivialmente corta (< 40 chars/página) — típico en contratos escaneados sin OCR — el server rasteriza cada página con `pdf-to-png-converter` y la pasa por `tesseract.js` (`spa+eng`) antes de mandarla al modelo. Tarda 20-40 s por contrato escaneado pero quita el error 422 que aparecía al subir PDFs imagen.
 - **Track 1 v1**: cada extracción IA persiste el PDF en `documents/` y devuelve `evidencePages` con el número de página donde apareció cada cita; el `ContractEditor` muestra "Ver fuente · p. N" sobre cada campo y abre `/api/documents/<id>/download#page=N`. Mock local no persiste (no hay provenance que defender).
 - **UX del flujo**: mientras corre el job se monta `AutofillSkeleton` (loader violeta + tres `.skeleton` stripes con `aria-live=polite`). Al volver, los tres paneles (cambios / pendientes / evidencia) usan el primitive `AutofillNotice` con tonos violet / amber / sky para mantener la asociación color → semántica. El `ContractEditor` resetea su scroll interno al top sólo en la transición `isAutofilling: true → false` para que los paneles recién montados queden visibles sin pelearse con el `useLayoutEffect` de scroll-preservation (K8).
 
@@ -238,13 +241,16 @@ MALLIQ_JWT_SECRET=cambiame-en-produccion
 Campos clave del contrato:
 
 - `companyName, storeName, category, localIds, startDate, endDate`
-- `fixedRent` (+ `fixedRentCurrency`: UF | CLP), `variableRentPct`, `baseRentUF` (informativo)
+- `fixedRent` (+ `fixedRentCurrency`: UF | CLP) — **input principal**, monto pactado mensual
+- `variableRentPct` — % sobre ventas
+- `baseRentUF` — referencia comercial **derivada** (no input editable). El editor la muestra calculada como `fixedRent / (selectedArea × ufValue)` cuando hay superficie y renta.
 - `commonExpenses` (+ `commonExpensesCurrency`)
 - `fondoPromocion` (+ `fondoPromocionCurrency`)
 - `garantiaMonto` (+ `garantiaMontoCurrency`), `garantiaVencimiento`
 - `feeIngreso` (+ `feeIngresoCurrency`)
-- `rentSteps[]`
-- 5 health checks: `healthPagoAlDia, healthEntregaVentas, healthNivelVenta, healthNivelRenta, healthPercepcionAdmin`
+- `noticePeriodDays?` — días de aviso previo al término. Si está y queda dentro de la ventana, se emite la alerta `notice-${contract.id}`.
+- `rentSteps[]` — escalonado de renta; mientras existan al menos uno, el input "Renta fija mensual" queda deshabilitado en el editor (la renta vigente sale del escalonado activo).
+- 5 health checks: `healthPagoAlDia, healthEntregaVentas, healthNivelVenta, healthNivelRenta, healthPercepcionAdmin`. La UI de evaluación con estrellas sólo se muestra una vez que el contrato existe en `state.contracts` (se evalúa en operación, no al ingresarlo).
 
 Cálculos vigentes:
 
@@ -253,6 +259,7 @@ Cálculos vigentes:
 - Renta total: fija + variable (CLP).
 - Costo de ocupación %: `(renta total + GC + fondo) / ventas`.
 - Salud: `healthScorePct` = checks marcados × 20 (0/20/40/60/80/100). Buckets A (≥88) / B (≥76) / C (≥60) / D (≥44) / E (resto).
+- **Ingreso mínimo garantizado** (`insights.monthlyMinGuaranteed`): suma de `rentFixed` de contratos vigentes, en CLP del mes en curso. Es la pata "garantizada" del ingreso esperado, sin variable.
 
 ## Roles y multi-tenant
 
@@ -338,7 +345,7 @@ npm run test:watch
 npm run build
 ```
 
-Cobertura actual (248 tests · 32 archivos):
+Cobertura actual (251 tests · 32 archivos):
 
 - Dominio (`src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`, `src/lib/regressions.test.ts`)
 - Importers / auth (`src/lib/importers.test.ts`, `src/lib/auth.test.ts`)

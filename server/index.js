@@ -1363,15 +1363,47 @@ function buildPinnedDispatcher({ address, family }) {
 const MAX_PDF_PAGES = 50;
 const MAX_AUTOFILL_SNIPPET_CHARS = 32000;
 
+// Heuristic: a PDF is "scanned" (i.e. has no selectable text) when the
+// extracted text layer is either empty or trivially short relative to the
+// number of pages. ~40 chars/page is the threshold — a typical text-bearing
+// contract page has far more than that.
+function isLikelyScannedPdf(text, pageCount) {
+  const trimmed = String(text || '').trim();
+  if (trimmed.length === 0) return true;
+  const expectedMin = Math.max(1, pageCount) * 40;
+  return trimmed.length < expectedMin;
+}
+
+async function ocrPdfBuffer(buffer) {
+  const { pdfToPng } = await import('pdf-to-png-converter');
+  // viewportScale 2.0 keeps rendering reasonably crisp without exploding RAM.
+  // pdf-to-png-converter writes nothing to disk when outputFolder is omitted.
+  const pngPages = await pdfToPng(buffer, { viewportScale: 2.0 });
+  const Tesseract = await import('tesseract.js');
+  const pages = [];
+  for (let i = 0; i < pngPages.length; i += 1) {
+    const result = await Tesseract.recognize(pngPages[i].content, 'spa+eng');
+    pages.push({ num: i + 1, text: String(result?.data?.text || '') });
+  }
+  const text = pages
+    .map((p) => p.text)
+    .join('\n')
+    .trim();
+  return { text, pages };
+}
+
 // Track 1 v1 — also returns per-page text so the autofill route can map
 // each evidence snippet back to a page. The legacy joined text is kept for
-// the existing AI prompt and downstream snippet logic.
+// the existing AI prompt and downstream snippet logic. When the PDF text
+// layer is empty or near-empty (scanned PDF without OCR), we transparently
+// rasterize and run Tesseract so the AI flow still sees usable text.
 async function extractUploadedPdfWithPages(file) {
   const buffer = await fs.readFile(file.path);
   const parser = new PDFParse({ data: buffer });
   try {
     const info = await parser.getInfo();
-    if (info?.total > MAX_PDF_PAGES) {
+    const totalPages = Number(info?.total) || 0;
+    if (totalPages > MAX_PDF_PAGES) {
       const error = new Error(`PDF excede el máximo de ${MAX_PDF_PAGES} páginas.`);
       error.code = 'PDF_TOO_LARGE';
       throw error;
@@ -1380,10 +1412,22 @@ async function extractUploadedPdfWithPages(file) {
     const pages = Array.isArray(pdfData?.pages)
       ? pdfData.pages.map((p) => ({ num: Number(p.num) || 0, text: String(p.text || '') }))
       : [];
-    return {
-      text: String(pdfData?.text || '').trim(),
-      pages,
-    };
+    const text = String(pdfData?.text || '').trim();
+
+    if (isLikelyScannedPdf(text, pages.length || totalPages)) {
+      try {
+        const ocrResult = await ocrPdfBuffer(buffer);
+        if (ocrResult.text.length > text.length) {
+          return ocrResult;
+        }
+      } catch (ocrError) {
+        // Fall back to whatever text we did have if OCR fails — the caller
+        // already handles the 422 case for empty text.
+        console.warn('OCR fallback failed for scanned PDF:', ocrError);
+      }
+    }
+
+    return { text, pages };
   } finally {
     await parser.destroy().catch(() => {});
   }

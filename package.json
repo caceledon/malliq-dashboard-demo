@@ -31,6 +31,7 @@
     "multer": "^2.1.1",
     "openai": "^6.34.0",
     "pdf-parse": "^2.4.5",
+    "pdf-to-png-converter": "^4.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.2",

@@ -93,7 +93,7 @@ export function ContractEditor({
   priorContract = null,
   onClearPriorContract,
 }: ContractEditorProps) {
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, ufValue } = useCurrency();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -162,6 +162,26 @@ export function ContractEditor({
     return sum + (unit?.areaM2 ?? 0);
   }, 0);
 
+  const hasRentSteps = Array.isArray(draft.rentSteps) && draft.rentSteps.length > 0;
+  const isExistingContract = contracts.some((contract) => contract.id === draft.id);
+
+  // Derived UF/m² indicator. The plan moved baseRentUF out of the input grid:
+  // the rent is now entered as a monthly fixed amount (UF or CLP), and the
+  // UF/m² ratio is a calculated commercial reference. Only show it when both
+  // area and rent are present so it doesn't display "—".
+  const derivedRentUfPerM2 = (() => {
+    if (selectedArea <= 0) return null;
+    const rawRent = Number.isFinite(draft.fixedRent) ? draft.fixedRent : 0;
+    if (rawRent <= 0) return null;
+    if ((draft.fixedRentCurrency ?? 'CLP') === 'UF') {
+      return rawRent / selectedArea;
+    }
+    if (ufValue > 0) {
+      return rawRent / (ufValue * selectedArea);
+    }
+    return null;
+  })();
+
   const commercialPreview = buildContractCommercialSnapshot(previewDraft, selectedArea, currentMonthSales);
   const effectivePreview = getContractDisplayValues(previewDraft);
 
@@ -217,12 +237,6 @@ export function ContractEditor({
         ) : null}
         <ContractDiffPanel prior={priorContract} next={draft} onDismiss={onClearPriorContract} />
 
-        {(draft.baseRentUF || 0) > 0 && (draft.fixedRent || 0) === 0 ? (
-          <AutofillNotice tone="amber" eyebrow="Revisión" title="Revisa la renta fija mensual">
-            El modelo cambió: la renta fija ya no se calcula como UF/m² × superficie. Ingresa el monto pactado en
-            "Renta fija mensual" (UF o CLP) y deja UF/m² solo como referencia.
-          </AutofillNotice>
-        ) : null}
         {autofillPendingFields.length > 0 ? (
           <AutofillNotice
             tone="amber"
@@ -434,10 +448,15 @@ export function ContractEditor({
           Ventas del mes para locales seleccionados: {formatCurrency(currentMonthSales)}. UF activa:{' '}
           {commercialPreview.effectiveBaseRentUF.toLocaleString('es-CL', { maximumFractionDigits: 2 })}. Costo total de ocupación estimado:{' '}
           {formatCurrency(commercialPreview.totalOccupancyCost)}.
+          {derivedRentUfPerM2 !== null ? (
+            <>
+              {' '}Referencia UF/m² (calculada): <strong>{derivedRentUfPerM2.toFixed(2)}</strong> UF/m².
+            </>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4 text-xs text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-100">
-          La renta total se calcula como <strong>monto fijo mensual + % de ventas</strong>. La referencia UF/m² es un dato comercial informativo y no se multiplica por superficie. Cada monto puede expresarse en UF o CLP con el selector al costado.
+          La renta total se calcula como <strong>monto fijo mensual + % de ventas</strong>. La referencia UF/m² es un dato comercial informativo que se deriva de la renta fija y la superficie, no un input. Cada monto puede expresarse en UF o CLP con el selector al costado.
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -457,11 +476,14 @@ export function ContractEditor({
               className="input-field"
             />
           </Field>
-          <Field label="Referencia UF/m² (informativo)">
+          <Field label="Días de aviso previo al término">
             <input
               type="number"
-              value={formatNumericInputValue(draft.baseRentUF)}
-              onChange={(event) => onChange({ ...draft, baseRentUF: parseNumericInputValue(event.target.value) })}
+              value={formatNumericInputValue(draft.noticePeriodDays ?? Number.NaN)}
+              onChange={(event) =>
+                onChange({ ...draft, noticePeriodDays: parseNumericInputValue(event.target.value) })
+              }
+              placeholder="ej: 60"
               className="input-field"
             />
           </Field>
@@ -469,22 +491,29 @@ export function ContractEditor({
             label="Renta fija mensual"
             value={draft.fixedRent}
             currency={draft.fixedRentCurrency ?? 'CLP'}
+            disabled={hasRentSteps}
             onChange={(value, currency) =>
               onChange({ ...draft, fixedRent: value, fixedRentCurrency: currency })
             }
           />
           <Field label="% venta / renta variable">
-            <input
-              type="number"
-              value={formatNumericInputValue(draft.variableRentPct)}
-              onChange={(event) => onChange({ ...draft, variableRentPct: parseNumericInputValue(event.target.value) })}
-              className="input-field"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={formatNumericInputValue(draft.variableRentPct)}
+                onChange={(event) =>
+                  onChange({ ...draft, variableRentPct: parseNumericInputValue(event.target.value) })
+                }
+                className="input-field flex-1"
+              />
+              <span className="text-sm text-[var(--ink-3)]">%</span>
+            </div>
           </Field>
           <MoneyField
             label="Gastos comunes"
             value={draft.commonExpenses}
             currency={draft.commonExpensesCurrency ?? 'CLP'}
+            wide
             onChange={(value, currency) =>
               onChange({ ...draft, commonExpenses: value, commonExpensesCurrency: currency })
             }
@@ -493,11 +522,17 @@ export function ContractEditor({
             label="Fondo de promoción"
             value={draft.fondoPromocion}
             currency={draft.fondoPromocionCurrency ?? 'CLP'}
+            wide
             onChange={(value, currency) =>
               onChange({ ...draft, fondoPromocion: value, fondoPromocionCurrency: currency })
             }
           />
         </div>
+        {hasRentSteps ? (
+          <p className="text-xs text-[var(--ink-3)]">
+            La renta fija mensual está deshabilitada porque hay escalonados activos. La renta se toma del escalonado vigente.
+          </p>
+        ) : null}
 
         <div className="space-y-3 border-t border-[var(--hairline)] pt-4">
           <p className="t-eyebrow">Garantía y fee</p>
@@ -611,62 +646,67 @@ export function ContractEditor({
           </div>
         </div>
 
-        <div className="space-y-3 border-t border-[var(--hairline)] pt-4">
-          <p className="t-eyebrow">Salud del locatario</p>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draft.healthPagoAlDia}
-                onChange={(event) => onChange({ ...draft, healthPagoAlDia: event.target.checked })}
-              />
-              Paga al día
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draft.healthEntregaVentas}
-                onChange={(event) => onChange({ ...draft, healthEntregaVentas: event.target.checked })}
-              />
-              Entrega ventas al día
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draft.healthNivelVenta}
-                onChange={(event) => onChange({ ...draft, healthNivelVenta: event.target.checked })}
-              />
-              Nivel de venta aceptable
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draft.healthNivelRenta}
-                onChange={(event) => onChange({ ...draft, healthNivelRenta: event.target.checked })}
-              />
-              Nivel de renta aceptable
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draft.healthPercepcionAdmin}
-                onChange={(event) => onChange({ ...draft, healthPercepcionAdmin: event.target.checked })}
-              />
-              Percepción personal admin
-            </label>
+        {isExistingContract ? (
+          <div className="space-y-3 border-t border-[var(--hairline)] pt-4">
+            <p className="t-eyebrow">Salud del locatario</p>
+            <p className="text-xs text-[var(--ink-3)]">
+              Evaluación operativa del locatario. Disponible una vez que el contrato esté ingresado y en funcionamiento.
+            </p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.healthPagoAlDia}
+                  onChange={(event) => onChange({ ...draft, healthPagoAlDia: event.target.checked })}
+                />
+                Paga al día
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.healthEntregaVentas}
+                  onChange={(event) => onChange({ ...draft, healthEntregaVentas: event.target.checked })}
+                />
+                Entrega ventas al día
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.healthNivelVenta}
+                  onChange={(event) => onChange({ ...draft, healthNivelVenta: event.target.checked })}
+                />
+                Nivel de venta aceptable
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.healthNivelRenta}
+                  onChange={(event) => onChange({ ...draft, healthNivelRenta: event.target.checked })}
+                />
+                Nivel de renta aceptable
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.healthPercepcionAdmin}
+                  onChange={(event) => onChange({ ...draft, healthPercepcionAdmin: event.target.checked })}
+                />
+                Percepción personal admin
+              </label>
+            </div>
+            <TenantHealthRating
+              score={
+                [
+                  draft.healthPagoAlDia,
+                  draft.healthEntregaVentas,
+                  draft.healthNivelVenta,
+                  draft.healthNivelRenta,
+                  draft.healthPercepcionAdmin,
+                ].filter(Boolean).length
+              }
+            />
           </div>
-          <TenantHealthRating
-            score={
-              [
-                draft.healthPagoAlDia,
-                draft.healthEntregaVentas,
-                draft.healthNivelVenta,
-                draft.healthNivelRenta,
-                draft.healthPercepcionAdmin,
-              ].filter(Boolean).length
-            }
-          />
-        </div>
+        ) : null}
 
         {isFeatureEnabled('scenarioModeling') ? (
           <ScenarioPanel contract={previewDraft} monthlySales={currentMonthSales} />
@@ -845,26 +885,32 @@ function MoneyField({
   value,
   currency,
   onChange,
+  disabled = false,
+  wide = false,
 }: {
   label: string;
   value: number;
   currency: CurrencyTag;
   onChange: (value: number, currency: CurrencyTag) => void;
+  disabled?: boolean;
+  wide?: boolean;
 }) {
   return (
-    <label className="block">
+    <label className={cn('block', wide && 'md:col-span-2', disabled && 'cursor-not-allowed opacity-60')}>
       <span className="mb-1 block text-xs text-[var(--sidebar-fg)]">{label}</span>
       <div className="flex gap-2">
         <input
           type="number"
           value={formatNumericInputValue(value)}
           onChange={(event) => onChange(parseNumericInputValue(event.target.value), currency)}
-          className="input-field flex-1"
+          disabled={disabled}
+          className="input-field flex-1 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <select
           value={currency}
           onChange={(event) => onChange(value, event.target.value as CurrencyTag)}
-          className="input-field w-[90px] shrink-0"
+          disabled={disabled}
+          className="input-field w-[72px] shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={`Moneda de ${label}`}
         >
           <option value="CLP">CLP</option>
@@ -908,7 +954,12 @@ function EvidenceRow({
 }
 
 function formatNumericInputValue(value: number): number | '' {
-  return Number.isFinite(value) ? value : '';
+  // Treat both NaN and 0 as "empty" so initial drafts render blank inputs and
+  // a leading zero clears when the user starts typing. Saved contracts that
+  // were genuinely 0 still display blank — they are sanitized to 0 again on
+  // save in normalizeDraftContract.
+  if (!Number.isFinite(value) || value === 0) return '';
+  return value;
 }
 
 function parseNumericInputValue(value: string): number {

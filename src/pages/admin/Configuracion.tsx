@@ -279,6 +279,15 @@ export function Configuracion() {
             </Field>
             <div className="rounded-2xl border border-[var(--border-color)] p-4">
               <p className="text-xs uppercase tracking-wide text-[var(--sidebar-fg)]">Backend compartido</p>
+              {!state.asset?.syncEnabled || !state.asset?.backendUrl ? (
+                <div className="mt-3 rounded-xl border border-amber-200/70 bg-amber-50/70 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                  <p className="font-semibold">Tus datos están sólo en este computador.</p>
+                  <p className="mt-1">
+                    Activa la sincronización en la nube para que los contratos, ventas y documentos también estén disponibles
+                    cuando entres desde otro dispositivo.
+                  </p>
+                </div>
+              ) : null}
               <div className="mt-3 space-y-3">
                 <Field label="URL API">
                   <input value={backendUrl} onChange={(event) => setBackendUrl(event.target.value)} className="input-field" />

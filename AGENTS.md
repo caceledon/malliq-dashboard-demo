@@ -29,7 +29,7 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 - **Icons**: `lucide-react`
 - **Backend**: Express 5 + SQLite + JWT + bcrypt + helmet (CSP same-origin) + multer + `express-rate-limit` + `undici` (Agent con DNS-pinning para SSRF guard)
 - **AI / OCR**: `openai` SDK con Moonshot (`kimi-k2.5`) preferido, `tesseract.js`, `pdf-parse v2`
-- **Tests**: Vitest + jsdom + `@testing-library/react` (248 tests · 32 archivos)
+- **Tests**: Vitest + jsdom + `@testing-library/react` (251 tests · 32 archivos)
 - **Producción**: AWS EC2 + Docker Compose + Caddy auto-HTTPS · `do-up.cl`
 
 ## Project Structure
@@ -67,7 +67,7 @@ UI y copy en **es-CL**. Código de dominio también en español (`locatarios`, `
 │   │   │   ├── TenantUsersSection.tsx   # Crear locatarios + CSV bulk import
 │   │   │   ├── UfOverrideModal.tsx      # Override manual fecha+valor
 │   │   │   ├── ActivityLogSection.tsx
-│   │   │   ├── ContractEditor.tsx       # Editor con scroll-preservation (K8) + AutofillNotice (primitive unificado para los 3 paneles del autofill: cambios/pendientes/evidencia, tonos violet/amber/sky) + AutofillSkeleton mientras `isAutofilling`. Responsive: single-col + max-w-3xl bajo 2xl, sticky side-by-side desde 2xl. Buttons tokenizados (`mq-btn mint` para Guardar, `mq-btn ghost` con `--accent` para Eliminar, `mq-btn violet sm` para Autocompletar IA). Sección headers usan `t-eyebrow` con `border-t border-[var(--hairline)] pt-4`.
+│   │   │   ├── ContractEditor.tsx       # Editor con scroll-preservation (K8) + AutofillNotice (primitive unificado para los 3 paneles del autofill: cambios/pendientes/evidencia, tonos violet/amber/sky) + AutofillSkeleton mientras `isAutofilling`. Responsive: single-col + max-w-3xl bajo 2xl, sticky side-by-side desde 2xl. Buttons tokenizados (`mq-btn mint` para Guardar, `mq-btn ghost` con `--accent` para Eliminar, `mq-btn violet sm` para Autocompletar IA). Sección headers usan `t-eyebrow` con `border-t border-[var(--hairline)] pt-4`. `baseRentUF` se muestra calculado (no input editable); `MoneyField` admite `disabled` y `wide` para que la renta fija quede gris cuando hay rentSteps y para que GC + Fondo de promoción ocupen ancho completo. Inputs numéricos arrancan vacíos (NaN) y `formatNumericInputValue` trata 0/NaN como ''.
 │   │   │   ├── ContractPreviewModal.tsx
 │   │   │   ├── DocumentManager.tsx SalesIngestionCenter.tsx
 │   │   │   ├── SetupWizard.tsx TenantHealthRating.tsx
@@ -268,16 +268,17 @@ heatFill(value, avg): string
 interface Contract {
   id, companyName, storeName, category, localIds[]
   startDate, endDate
-  fixedRent, fixedRentCurrency?: 'UF'|'CLP'  // monto pactado, default CLP
+  fixedRent, fixedRentCurrency?: 'UF'|'CLP'  // monto pactado, default CLP (INPUT principal del editor)
   variableRentPct                             // % sobre ventas
-  baseRentUF                                  // referencia UF/m² INFORMATIVA — no entra al cálculo
+  baseRentUF                                  // referencia UF/m² — NO editable, se muestra DERIVADA = fixedRent / (area × ufValue)
   commonExpenses + commonExpensesCurrency
   fondoPromocion + fondoPromocionCurrency
   garantiaMonto + garantiaMontoCurrency, garantiaVencimiento
   feeIngreso + feeIngresoCurrency
-  rentSteps: RentStep[]
+  noticePeriodDays?                           // días de aviso previo al término; dispara la alerta notice-${contract.id}
+  rentSteps: RentStep[]                       // mientras existan, el input "Renta fija mensual" del editor queda disabled
   signatureStatus: 'firmado'|'en_revision'|'pendiente'|'parcial'
-  // Salud
+  // Salud — la UI con estrellas + checks SOLO se muestra cuando el contrato ya existe en state.contracts
   healthPagoAlDia, healthEntregaVentas, healthNivelVenta, healthNivelRenta, healthPercepcionAdmin
   …
 }
@@ -286,15 +287,16 @@ interface Contract {
 ### KPIs
 
 ```
-fixedRent_clp     = convertAmountToClpAt(fixedRent, fixedRentCurrency, refDate, getUfFor)
-variableRent_clp  = ventas × variableRentPct / 100
-rentTotal_clp     = fixedRent_clp + variableRent_clp
-costoOcupacionPct = (rentTotal + GC + fondo) / ventas
-healthScorePct    = (#checks marcados) × 20            // 0/20/40/60/80/100
-healthBucket      = A(≥88) / B(≥76) / C(≥60) / D(≥44) / E(<44)
+fixedRent_clp        = convertAmountToClpAt(fixedRent, fixedRentCurrency, refDate, getUfFor)
+variableRent_clp     = ventas × variableRentPct / 100
+rentTotal_clp        = fixedRent_clp + variableRent_clp
+costoOcupacionPct    = (rentTotal + GC + fondo) / ventas
+healthScorePct       = (#checks marcados) × 20            // 0/20/40/60/80/100
+healthBucket         = A(≥88) / B(≥76) / C(≥60) / D(≥44) / E(<44)
+monthlyMinGuaranteed = Σ fixedRent_clp de contratos vigentes (NO incluye variable)
 ```
 
-`baseRentUF` no se multiplica por área. Si `baseRentUF > 0 && fixedRent === 0`, el `ContractEditor` muestra banner de revisión.
+`baseRentUF` no se multiplica por área — es una referencia comercial derivada. El editor la muestra en la caja informativa cuando hay superficie y renta fija (`Referencia UF/m² (calculada): X.XX`). `needsFixedRentReview=true` cuando un contrato legacy tiene `baseRentUF > 0 && fixedRent === 0`.
 
 ### Track 1+ extensions on Contract
 
@@ -334,6 +336,10 @@ broadcasts?: Broadcast[]
 ### Feature flags (`PortfolioState.featureFlags`)
 
 `PortfolioState` está en `version: 3`. Slot opcional `featureFlags?: Partial<Record<FeatureFlagKey, boolean>>` con migración v2→v3 automática (default: `sourceLinkedAbstracts: true`, resto off). Las claves válidas son los 12 tracks: `sourceLinkedAbstracts | asistenteIA | clausulasLedger | stackingPlan | renewalScoring | casualLicensing | tenantPwa | camReconciliation | crossShopping | crisisBroadcast | mallqIndex | scenarioModeling`. Acceso vía `useAppState().isFeatureEnabled(key)` o `useAppState().featureFlags[key]`. Toggle desde `Configuración → Etiquetas experimentales` (admin/member).
+
+### Sync por defecto
+
+`buildEmptyWorkspace` (en `src/store/appState.tsx`) inicializa activos nuevos con `backendUrl='/api'` y `syncEnabled=true`. Esto hace que el contrato ingresado desde un computador aparezca también desde otro mientras el server corra en el mismo origen. El operador puede desactivarlo desde Configuración; si lo apaga (o si el activo es legacy sin sync), Configuración muestra un banner ámbar advirtiendo que los datos viven sólo localmente.
 
 ### UF date-keyed
 
@@ -385,7 +391,7 @@ broadcasts?: Broadcast[]
 | GET | `/api/documents/:id/download` | sesión | |
 | POST | `/api/connectors/pos/proxy` | writer | SSRF blocking |
 | POST | `/api/connectors/fiscal/ingest` | writer | text/file/PDF/imagen |
-| POST | `/api/contracts/autofill` | writer | PDF → JSON normalizado. Track 1 v1: persiste el PDF como `documents` row y devuelve `evidencePages` (citas con `page`) + `sourceDocument` |
+| POST | `/api/contracts/autofill` | writer | PDF → JSON normalizado. Track 1 v1: persiste el PDF como `documents` row y devuelve `evidencePages` (citas con `page`) + `sourceDocument`. OCR fallback: si el PDF no tiene texto seleccionable (capa de texto vacía o < 40 chars/página), el server rasteriza con `pdf-to-png-converter` y corre `tesseract.js spa+eng` por página antes de mandar al LLM. |
 | POST | `/api/contracts/autofill/ask` | writer | Variante conversacional |
 | POST | `/api/contracts/:id/clauses/extract` | writer | Track 3 — segundo pase clasificador sobre el PDF fuente persistido |
 | POST | `/api/asistente/chat` | writer | Track 2 — chat IA con tool-calling (6 read-only tools) |
@@ -412,7 +418,7 @@ broadcasts?: Broadcast[]
 
 ```bash
 npm run lint
-npm run test        # 248 tests · 32 archivos
+npm run test        # 251 tests · 32 archivos
 ```
 
 - **Domain**: `src/lib/domain.test.ts`, `src/lib/anomalies.test.ts`, `src/lib/regressions.test.ts`
